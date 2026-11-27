@@ -13,7 +13,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 2 | done | 1fd390d | guards ok, test-guards ok (20 cases) |
 | 3 | done | 37e074a | linux workflow; version guard caught 6.4.2 first |
 | 4 | done | 75b8e5e | macos job on xcode-27; versions: pending first run |
-| 5 | done | (this commit) | review workflow; guard caught the missing same-repo condition first; proof run waits on the Actions blocker |
+| 5 | done | 365e2f4 | review workflow; guard caught the missing same-repo condition first; proof run waits on the Actions blocker |
+| 6 | done | (this commit) |  |
 
 ## Rulings
 
