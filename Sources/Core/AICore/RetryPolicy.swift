@@ -39,8 +39,12 @@ public struct RetryPolicy: Hashable, Sendable {
             // A monthly spend cap answers 429 with no retry-after; retrying can't help.
             if status == 429, errorCode == "enforced_spend_limit_reached" { return nil }
             if let retryAfter, let seconds = Double(retryAfter.trimmingCharacters(in: .whitespaces)), seconds >= 0 {
-                let wait = Duration.milliseconds(Int64((seconds * 1000).rounded(.up)))
-                return wait <= maxRetryAfter ? wait : nil
+                // Compare before converting: a huge or infinite header ("1e300", "inf") would trap in Int64(_:).
+                let maxSeconds =
+                    Double(maxRetryAfter.components.seconds)
+                    + Double(maxRetryAfter.components.attoseconds) / 1e18
+                guard seconds.isFinite, seconds <= maxSeconds else { return nil }
+                return .milliseconds(Int64((seconds * 1000).rounded(.up)))
             }
             return backoff(retriesSoFar)
         }

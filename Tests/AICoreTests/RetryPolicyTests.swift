@@ -36,6 +36,11 @@ import Testing
         #expect(policy.delay(after: status(429, retryAfter: "61"), retriesSoFar: 0) == nil)
     }
 
+    @Test(arguments: ["1e300", "inf", "infinity", "9223372036854775807"])
+    func anEnormousRetryAfterMeansGiveUpWithoutCrashing(header: String) {
+        #expect(policy.delay(after: status(429, retryAfter: header), retriesSoFar: 0) == nil)
+    }
+
     @Test func anUnreadableRetryAfterFallsBackToBackoff() {
         #expect(
             policy.delay(after: status(503, retryAfter: "Wed, 21 Oct 2026 07:28:00 GMT"), retriesSoFar: 0)
