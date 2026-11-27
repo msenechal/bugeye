@@ -16,6 +16,7 @@ _Round 1 + 2 · November 2026 · from the user's review of the dashboard_
 | R6 | Guide | **Record Guide produces a video walkthrough.** The guide's outcome is a video flow with zoom-ins and text/captions explaining every action. Today's output, a vertical HTML/PDF of every step, is judged poor. | Changes the M11 guide recorder's primary output (doc 10). The step document becomes a secondary export at most. |
 | R7 | Collections | **Claude writes the presentation's HTML/CSS itself.** Freeform: Claude writes its own HTML/CSS, in the style of its artifacts. Not deterministic and hard to test, and that's fine: test that it generates something, and have a small agent score the output against the inputs. | Settles the R5 open question against the spec-renderer recommendation. Testing moves from golden outputs to structural checks plus an AI judge score. |
 | R8 | Development | **No paid CI runners.** No GitHub-hosted macOS runner and no self-hosted runner: you don't have them and don't want to pay for them. | Replaces doc 13 §3 Tiers 1 and 2. Private repo: CI on GitHub is Linux only. Public repo (you don't mind switching): free hosted macOS brings back the macOS build and unit tests. Either way, real-capture smoke tests, E2E and demos run on your own Mac, on demand, with your approval. |
+| R9 | Development | **Work from the phone with the Mac off.** You will sometimes start dev sessions from your phone while your Mac is off. | Nothing in the per-PR pipeline may wait on your Mac. macOS checks on PRs come from hosted runners (free if the repo is public); real-capture checks queue up and run in a batch when the Mac is back. A self-hosted runner doesn't help: it needs the same Mac to be on. |
 
 ## 2. Proposal: one motion engine for zoom, captions and guide video
 
@@ -112,15 +113,17 @@ Wave contents follow the README build order and the doc 12 dependencies; the exa
 4. **Claude review.** A fresh reviewer session reads the whole diff with the doc 11 checklist and posts findings.
 5. **Auto-fix.** The authoring session fixes Critical and Important findings as commits, each with a test that fails first.
 6. **Re-review.** The reviewer checks the delta. After two rounds without convergence it hands the PR to you.
-7. **Mac check (on demand).** When your Mac is on, a session asks to use your bugeye folder through Remote Control. You approve; it runs the macOS build, all tests, smoke tests on the fixture app, records a demo, and posts the results on the PR.
-8. **You merge.** Your manual pass (feel and taste only) and merge. A PR merges only after the Mac check has posted green.
+7. **Queue the Mac check.** PRs that touch capture, Accessibility, overlays or recording get a needs-mac-check label. They can still merge once GitHub CI is green: nothing waits for your Mac.
+8. **You merge.** From your phone if you like: read the review, watch the demo if there is one, merge. Your manual pass (feel and taste) happens per milestone, at the Mac.
+9. **Batch at the Mac.** When your Mac is on, one session asks to use your bugeye folder through Remote Control. You approve once; it works through every needs-mac-check PR, runs smoke tests and E2E on the fixture app, records demos, and opens fix PRs for anything that broke. A milestone isn't done until its queue is empty.
 
 - Fix commits on the same branch by default; stacked PRs only for large or contested fixes.
 - Loop limits: two auto-fix rounds per PR and one CI-fix attempt per failure, then you.
-- Batch the Mac check: run it once per slice before merge, not on every push. Your Mac answers only while the Claude app is running there.
-- Trade-off: AppKit compile errors and visual bugs surface only at the Mac check. Keep the macOS shell thin (doc 13 §2) so most code is tested on Linux on every push.
+- The Mac batch is the only step that needs your Mac, and it gates milestones, not PRs. Your Mac answers only while the Claude app is running there.
+- Trade-off: real-capture bugs (permissions, ScreenCaptureKit, Accessibility timing) can reach main and surface at the next Mac batch. Fix PRs from the batch keep that window short; keeping the macOS shell thin keeps it small.
+- If the repo stays private, PRs get no macOS check at all until the Mac batch, so AppKit compile errors also wait. That's the main argument for going public.
 
-## 5b. CI without paid runners (R8)
+## 5b. CI without paid runners (R8, R9)
 
 What the terms mean:
 
@@ -130,10 +133,10 @@ What the terms mean:
 
 | Option for macOS checks | Verdict | Cost | How |
 |---|---|---|---|
-| Make the repo public: GitHub-hosted macOS free | Recommended if you go public | Free (public repos) | Standard GitHub-hosted runners, macOS included, cost nothing on public repos. That brings back automatic macOS build and unit tests on every PR. Real capture still needs your Mac: hosted runners can't be granted Screen Recording or Accessibility. |
-| Your Mac through Remote Control | Recommended either way, for real capture | Free | A cloud session asks to use your bugeye folder on your Mac; you approve each time; it runs the checks there and reports back. No runner to install or secure, and nothing runs without you. |
+| Make the repo public: GitHub-hosted macOS free | Recommended | Free (public repos) | Standard GitHub-hosted runners, macOS included, cost nothing on public repos. It's the only free option that works with your Mac off: macOS build and unit tests on every PR, started from your phone. Real capture is assumed not to work there (permissions can't be granted through the normal prompts); worth one experiment, since GitHub's macOS images do preconfigure some permissions. |
+| Your Mac through Remote Control | For real capture, batched | Free | A cloud session asks to use your bugeye folder on your Mac; you approve each time; it runs the checks there and reports back. No runner to install or secure, and nothing runs without you. |
 | A local Claude Code session on your Mac | Fallback | Free | You start a session on the Mac and run a /verify-pr command that checks out the PR, runs the checks and comments. The same work, triggered by you. |
-| Self-hosted runner on your Mac | Later, if ever | Free, more setup | Fully automatic, but you maintain the runner, a dedicated account and the doc 13 safety rules. |
+| Self-hosted runner on your Mac | Doesn't help | Free, more setup | It runs on the same Mac, so it's down whenever the Mac is. It also must never be attached to a public repo. |
 | GitHub-hosted macOS runner, private repo | Not used | Paid | Excluded by R8. |
 
 What costs money:
