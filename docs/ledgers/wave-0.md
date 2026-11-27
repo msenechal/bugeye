@@ -12,7 +12,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 1 | done | ea0a6ea | 14 portable test targets, 14 tests on Linux |
 | 2 | done | 1fd390d | guards ok, test-guards ok (20 cases) |
 | 3 | done | 37e074a | linux workflow; version guard caught 6.4.2 first |
-| 4 | done | (this commit) | macos job on xcode-27; versions: pending first run |
+| 4 | done | 75b8e5e | macos job on xcode-27; versions: pending first run |
+| 5 | done | (this commit) | review workflow; guard caught the missing same-repo condition first; proof run waits on the Actions blocker |
 
 ## Rulings
 
@@ -27,4 +28,4 @@ Every deviation from the plan, as `Ruling: <what and why> (cost if wrong: …)`.
 
 ## Blockers
 
-None yet.
+- **GitHub Actions never start on this repository.** Every run of `linux` and `macos` since Task 3 (push and pull_request, e.g. https://github.com/msenechal/bugeye/actions/runs/46081329952) ends in `startup_failure` at once, with no jobs and no log. The YAML parses, `actions/checkout@v6` exists, and pinning it to a full SHA (88c74c2, reverted in 560011d) changed nothing, so the cause is a repository or account setting this session can't read: check Settings → Actions → General (Actions enabled, "Allow all actions", no SHA-pinning or allow-list policy that excludes `actions/checkout` / `anthropics/claude-code-action`), and the account's Actions billing / spending limit. Until it is fixed, no CI result exists for any task, and Task 5's review proof can't run. The portable tasks continue, verified locally.
