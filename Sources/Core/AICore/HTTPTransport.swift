@@ -9,12 +9,15 @@ public struct TransportRequest: Hashable, Sendable {
     public var method: String
     public var headers: [String: String]
     public var body: Data
+    /// Seconds to wait for the answer; nil uses the transport's default.
+    public var timeout: TimeInterval?
 
-    public init(url: URL, method: String, headers: [String: String], body: Data) {
+    public init(url: URL, method: String, headers: [String: String], body: Data, timeout: TimeInterval? = nil) {
         self.url = url
         self.method = method
         self.headers = headers
         self.body = body
+        self.timeout = timeout
     }
 }
 
@@ -50,14 +53,19 @@ public struct URLSessionTransport: HTTPTransport {
         self.timeout = timeout
     }
 
-    public func send(_ request: TransportRequest) async throws -> TransportResponse {
-        var urlRequest = URLRequest(url: request.url, timeoutInterval: timeout)
+    /// The `URLRequest` for one exchange: the request's own timeout wins over the transport's default.
+    public func urlRequest(for request: TransportRequest) -> URLRequest {
+        var urlRequest = URLRequest(url: request.url, timeoutInterval: request.timeout ?? timeout)
         urlRequest.httpMethod = request.method
         urlRequest.httpBody = request.body
         for (name, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
-        let (data, response) = try await session.data(for: urlRequest)
+        return urlRequest
+    }
+
+    public func send(_ request: TransportRequest) async throws -> TransportResponse {
+        let (data, response) = try await session.data(for: urlRequest(for: request))
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         var headers: [String: String] = [:]
         for (name, value) in http.allHeaderFields {

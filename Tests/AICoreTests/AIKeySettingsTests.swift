@@ -62,7 +62,9 @@ import Testing
         #expect(settings.status == .works)
         #expect(
             llm.requests == [
-                LLMRequest(model: "claude-haiku-5-5", messages: [.user("Reply with OK.")], maxTokens: 32, effort: .low)
+                LLMRequest(
+                    model: "claude-haiku-5-5", messages: [.user("Reply with OK.")], maxTokens: 32, effort: .low,
+                    timeout: 15)
             ])
         #expect(!settings.isTesting)
     }
@@ -102,6 +104,9 @@ import Testing
         (.http(status: 400, type: "invalid_request_error", message: "messages: roles must alternate"), .unreachable),
         (.transport("offline"), .unreachable),
         (.decoding("bad body"), .works),
+        // Anthropic answered, so the key works: a refusal is the "refused" line, a cut-off answer still works.
+        (.refused(category: "cyber"), .refused),
+        (.truncated, .works),
         (.missingKey, .noKey),
     ])
     func failuresMapToTheStatusLine(error: LLMError, expected: AIKeyStatus) async {

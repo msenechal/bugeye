@@ -24,7 +24,7 @@ public enum AnthropicWire {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let body = try encoder.encode(Body(request, fallback: usesFallback))
-        return TransportRequest(url: endpoint, method: "POST", headers: headers, body: body)
+        return TransportRequest(url: endpoint, method: "POST", headers: headers, body: body, timeout: request.timeout)
     }
 
     /// Decodes a 2xx body. Unknown content block types (thinking, fallback, future ones) are skipped.

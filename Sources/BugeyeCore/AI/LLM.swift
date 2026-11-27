@@ -38,14 +38,20 @@ public struct LLMRequest: Hashable, Sendable {
     public var messages: [LLMMessage]
     public var maxTokens: Int
     public var effort: LLMEffort?
+    /// Seconds to wait for each attempt's answer; nil uses the transport's default (long, for real
+    /// generation). Quick checks such as the key test set a short one, so a stalled connection fails fast.
+    public var timeout: TimeInterval?
 
-    public init(model: String, system: String? = nil, messages: [LLMMessage], maxTokens: Int, effort: LLMEffort? = nil)
-    {
+    public init(
+        model: String, system: String? = nil, messages: [LLMMessage], maxTokens: Int, effort: LLMEffort? = nil,
+        timeout: TimeInterval? = nil
+    ) {
         self.model = model
         self.system = system
         self.messages = messages
         self.maxTokens = maxTokens
         self.effort = effort
+        self.timeout = timeout
     }
 }
 

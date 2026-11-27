@@ -4,6 +4,22 @@ import Foundation
 import Testing
 
 @Suite struct AnthropicWireTests {
+    @Test func aRequestTimeoutReachesTheTransport() throws {
+        let quick = LLMRequest(model: "m", messages: [.user("hi")], maxTokens: 8, timeout: 15)
+        #expect(try AnthropicWire.httpRequest(for: quick, apiKey: "k").timeout == 15)
+        let plain = LLMRequest(model: "m", messages: [.user("hi")], maxTokens: 8)
+        #expect(try AnthropicWire.httpRequest(for: plain, apiKey: "k").timeout == nil)
+    }
+
+    @Test func theTransportUsesTheRequestTimeoutOverItsDefault() {
+        let transport = URLSessionTransport(timeout: 600)
+        let url = URL(string: "https://example.invalid/")!
+        let quick = TransportRequest(url: url, method: "POST", headers: [:], body: Data(), timeout: 15)
+        #expect(transport.urlRequest(for: quick).timeoutInterval == 15)
+        let plain = TransportRequest(url: url, method: "POST", headers: [:], body: Data())
+        #expect(transport.urlRequest(for: plain).timeoutInterval == 600)
+    }
+
     @Test func theKeyTestRequestMatchesItsFixture() throws {
         let request = LLMRequest(
             model: "claude-opus-5-5", messages: [.user("Reply with OK.")], maxTokens: 32, effort: .low)

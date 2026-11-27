@@ -29,7 +29,13 @@ public enum AIKeyStatus: Hashable, Sendable, CaseIterable {
             return .noKey
         case .failure(.http(let status, let type, let message, let code)):
             return afterHTTPError(status: status, type: type, message: message, code: code)
-        case .failure(.transport), .failure(.refused), .failure(.truncated):
+        // Anthropic answered: a refusal means the key works but the request was refused, and a cut-off
+        // answer still proves the key was accepted.
+        case .failure(.refused):
+            return .refused
+        case .failure(.truncated):
+            return .works
+        case .failure(.transport):
             return .unreachable
         }
     }
@@ -92,9 +98,14 @@ public final class AIKeySettings {
         status = Self.hasKey(secrets) ? .savedNotTested : .noKey
     }
 
+    /// Seconds each attempt of the key test waits. With the client's two retries, a stalled connection shows
+    /// "Couldn't reach Anthropic." after under a minute instead of the transport's 10-minute default per try.
+    public static let testTimeout: TimeInterval = 15
+
     /// The request "Test key" sends: the smallest that proves the key works.
     public func testRequest() -> LLMRequest {
-        LLMRequest(model: model(), messages: [.user("Reply with OK.")], maxTokens: 32, effort: .low)
+        LLMRequest(
+            model: model(), messages: [.user("Reply with OK.")], maxTokens: 32, effort: .low, timeout: Self.testTimeout)
     }
 
     public func testKey() async {
