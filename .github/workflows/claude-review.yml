@@ -11,6 +11,7 @@ on:
       pr:
         description: Pull request number to review
         required: true
+        type: number
 
 permissions: {}
 
@@ -33,6 +34,20 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      # Spec W6 on a manual run: the PR number could name a fork's PR, whose code and text must never reach
+      # the agent or the token. Look up its head repository and stop unless it is this repository.
+      - name: Refuse pull requests from forks
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          REPO: ${{ github.repository }}
+        run: |
+          head=$(gh api "repos/$REPO/pulls/$PR" --jq .head.repo.full_name)
+          if [ "$head" != "$REPO" ]; then
+            echo "PR $PR comes from '$head', not $REPO: refusing to review it." >&2
+            exit 1
+          fi
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1

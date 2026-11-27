@@ -65,6 +65,12 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
     if grep -qE 'secrets\.|anthropics/claude-code-action' <<<"$code" && ! grep -qF "$same_repo" <<<"$code"; then
         fail workflow "$wf uses secrets or an agent without the same-repository condition"
     fi
+    # A manual run of the agent takes a PR number, which could name a fork's PR: the workflow must look up
+    # the PR's head repository and refuse anything but this one (spec W6).
+    if grep -qE '^[[:space:]]*workflow_dispatch:' <<<"$code" && grep -qF 'anthropics/claude-code-action' <<<"$code" &&
+        ! grep -qF -- '--jq .head.repo.full_name' <<<"$code"; then
+        fail workflow "$wf runs the agent on a manual run without refusing fork pull requests"
+    fi
     # The user's rule (27 Nov 2026): pull request CI runs only for PRs that are ready, never drafts, and a
     # new push cancels the run it replaces.
     if grep -qE '^[[:space:]]*pull_request:' <<<"$code"; then

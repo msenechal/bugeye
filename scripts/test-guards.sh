@@ -58,6 +58,8 @@ expect no-permissions workflow "printf 'on: push\njobs: {}\n' > .github/workflow
 expect secret-without-guard workflow "printf 'permissions: {}\nx: \${{ secrets.TOKEN }}\n' > .github/workflows/bad.yml"
 expect guard-only-in-comment workflow "printf 'permissions: {}\n# if: github.event.pull_request.head.repo.full_name == github.repository\nuses: anthropics/claude-code-action@v1\n' > .github/workflows/review.yml"
 expect draft-only-in-comment workflow "printf 'on:\n  pull_request:\npermissions: {}\nconcurrency:\n  group: x\n# github.event.pull_request.draft == false\n' > .github/workflows/ci.yml"
+expect dispatch-agent-without-fork-check workflow "printf 'on:\n  workflow_dispatch:\npermissions: {}\nif: github.event_name == '\\''workflow_dispatch'\\'' || github.event.pull_request.head.repo.full_name == github.repository\nuses: anthropics/claude-code-action@v1\n' > .github/workflows/review.yml"
+expect dispatch-agent-with-fork-check pass "printf 'on:\n  workflow_dispatch:\npermissions: {}\nif: github.event_name == '\\''workflow_dispatch'\\'' || github.event.pull_request.head.repo.full_name == github.repository\nrun: gh api \"repos/\$REPO/pulls/\$PR\" --jq .head.repo.full_name\nuses: anthropics/claude-code-action@v1\n' > .github/workflows/review.yml"
 expect agent-with-guard pass "printf 'permissions: {}\nif: github.event.pull_request.head.repo.full_name == github.repository\nuses: anthropics/claude-code-action@v1\n' > .github/workflows/review.yml"
 expect pr-runs-on-drafts workflow "printf 'on:\n  pull_request:\npermissions: {}\nconcurrency:\n  group: x\n' > .github/workflows/ci.yml"
 expect pr-without-concurrency workflow "printf 'on:\n  pull_request:\npermissions: {}\nif: github.event.pull_request.draft == false\n' > .github/workflows/ci.yml"
