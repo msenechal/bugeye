@@ -20,7 +20,7 @@ Rulings I made (each can be overturned at approval; cost if wrong in brackets):
 | # | Ruling | Why |
 |---|---|---|
 | W1 | All targets use the Swift 6 language mode. A macOS adapter target may drop to Swift 5 mode only with a ledgered ruling naming the errors. | Newer Swift and Xcode reduce the concurrency noise that pushed the first build to Swift 5. [Low: switching one target's mode is a one-line change.] |
-| W2 | Swift 6.4, the version in the current Xcode (27.x), pinned in `.swift-version` and used on Linux too. Deployment target stays macOS 26. If Xcode 27 doesn't install on your macOS 26.7.1, fall back to Xcode 26.6 and Swift 6.3 everywhere. | One compiler everywhere avoids Linux-only or macOS-only surprises. [Low] |
+| W2 | Swift 6.4, the version in the current Xcode (27.x), pinned in `.swift-version` and used on Linux too. Deployment target stays macOS 26. Confirmed 27 Nov 2026: Xcode 27 needs macOS 26.6 or later on Apple silicon, which your Mac meets. CI builds on GitHub's `xcode-27` runner, because the `macos-26` image tops out at Xcode 26.6. | One compiler everywhere avoids Linux-only or macOS-only surprises. [Low] |
 | W3 | Every target the waves need is declared in `Package.swift` now, most of them empty. | Feature branches never edit the manifest (R1). [Medium: a missed target means one manifest edit later.] |
 | W4 | Specs in `docs/specs/`, plans in `docs/plans/`, execution ledgers in `docs/ledgers/`, backlog in `docs/backlog.md`, manual checklists in `docs/checklists/`. Ledgers are committed. | Shorter than the first build's `docs/superpowers/…`. Committed ledgers survive across cloud sessions and let parallel sessions see each other's progress. [Low] |
 | W5 | The process (brainstorm, spec, plan, execute, review, fix, checklist) is written down as repository skills in `.claude/skills/`, plus a root `CLAUDE.md`. | A session started from your phone has none of the first build's plugins or memory. The repo itself must carry the process. [Medium: without it, sessions drift.] |
@@ -129,11 +129,12 @@ Menu, top to bottom:
 Settings window, titled "Bugeye Settings", two panes:
 
 - **General:** "Save captures to" showing `~/Pictures/Bugeye/`, with a "Choose…" button. The folder is created on first launch if missing.
-- **AI:** an "Anthropic API key" field. Saving stores the key in the Keychain, never in `UserDefaults` or a file. A "Test key" button sends one minimal request through `LLMClient`. Status line, exactly one of:
+- **AI:** an "Anthropic API key" field and a "Save" button (Return also saves). Saving stores the key in the Keychain, never in `UserDefaults` or a file. A "Test key" button sends one minimal request through `LLMClient`. Status line, exactly one of:
   - "No key saved."
   - "Key saved. Not tested yet."
   - "Key works."
   - "Key was rejected. Check it and save it again."
+  - "Key works, but Anthropic refused the request. Check your plan and the model in Settings."
   - "Couldn't reach Anthropic. Check your connection."
 
 The AI pane states: "Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it."
@@ -169,7 +170,7 @@ Compiled only in debug builds: a Unix-domain socket in the app's temp directory.
 Required checks on `main` once green: `linux`, `macos`. The review is not a required check: it comments, the authoring session fixes, you merge.
 
 Facts checked while planning:
-- the `macos-26` runner label is generally available; the plan's first CI task confirms it offers Xcode 27 (W2);
+- the `macos-26` image only offers Xcode up to 26.6; Xcode 27 is on the `xcode-27` runner label, which the macOS job uses (W2);
 - the Claude Code Action accepts a subscription token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`, created by running `claude setup-token` once on a computer with Claude Code. That is a step for you (B4);
 - Swift 6.4 ships with the current Xcode (W2).
 
