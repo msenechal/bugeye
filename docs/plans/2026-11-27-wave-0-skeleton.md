@@ -7,7 +7,7 @@
 - **Ledger:** `docs/ledgers/wave-0.md`, created in Task 0, committed with every task. Record every deviation as `Ruling: <what and why> (cost if wrong: …)`.
 - **Commits:** one per task, with the message given in its Step 5, ending with the trailer lines your session's instructions give (Co-Authored-By, Claude-Session). Push after every commit.
 - **Pull request:** open it as a **draft** at the end of Task 3, right after the first CI workflow lands, so CI runs on every push. The PR description ends with the Claude Code line your session's instructions give. Never merge it: the user does.
-- **How to read a task:** Goal · Files · Step 1 the failing test · Step 2 the command and how it fails · Step 3 the implementation · Step 4 the command and the pass · Step 5 the commit. Content-only tasks give the full file text instead. Every code block is the complete file. Code for the portable targets (Tasks 1–22) was compiled and run on Linux with Swift 6.4.3, task by task in this order: each Step 2 failure quoted below is the real first error, and after Task 22 the suite is 116 tests (113 test functions), `make lint` and `make guards` green. Tasks marked **Not compiled here** are macOS-only; the `macos` CI job verifies them.
+- **How to read a task:** Goal · Files · Step 1 the failing test · Step 2 the command and how it fails · Step 3 the implementation · Step 4 the command and the pass · Step 5 the commit. Content-only tasks give the full file text instead. Every code block is the complete file. Code for the portable targets (Tasks 1–22) was compiled and run on Linux with Swift 6.4.3, task by task in this order: each Step 2 failure quoted below is the real first error, and after Task 22 the suite is 117 tests (114 test functions), `make lint` and `make guards` green. Tasks marked **Not compiled here** are macOS-only; the `macos` CI job verifies them.
 
 On Linux, run from the repository root. `swift test --filter X` takes a regex over `Target.Suite/test()` names.
 
@@ -17,9 +17,9 @@ On Linux, run from the repository root. `swift test --filter X` takes a regex ov
 
 Checked while writing this plan (27 November 2026). Use them; don't re-research them.
 
-1. **Toolchains.** The current Xcode is 27.x with Swift 6.4; Xcode 26.6 has Swift 6.3 (spec W2). This Linux environment has Swift 6.4.3 at `/usr/local/bin/swift`, with `swift format` 6.4.3; Docker is installed but its daemon isn't running. There is no Xcode or macOS here.
+1. **Toolchains.** The current Xcode is 27.x with Swift 6.4 (spec W2). Confirmed with the user on 27 Nov 2026: Xcode 27 needs macOS 26.6 or later on Apple silicon, and the user's Mac (Apple silicon, macOS 26.7.1) meets it. The deployment target stays macOS 26. This Linux environment has Swift 6.4.3 at `/usr/local/bin/swift`, with `swift format` 6.4.3; Docker is installed but its daemon isn't running. There is no Xcode or macOS here.
 2. **Linux image.** Docker Hub has `swift:6.4.3-noble` (and `6.4.3`, `6.4-noble`, …). Source: `https://hub.docker.com/v2/repositories/library/swift/tags?name=6.4`.
-3. **macOS runner.** The `macos-26` label is generally available, but its image (version 20261123.0526.1, macOS 26.7.2) lists only Xcode 26.0.1 to 26.6, with 26.6 the default: no Xcode 27. Source: `https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md`. Xcode 27 is on a separate label, `xcode-27` (preview from July 2026, called GA in the issue's comments of 31 Oct and 6 Nov 2026; its base OS may be macOS 27; at preview time Xcode lived at `/Applications/Xcode_27_beta_3.app` and `/Applications/Xcode.app` pointed at it). Source: `https://github.com/actions/runner-images/issues/14404`. Ruling P2 handles this.
+3. **macOS runner.** The `macos-26` image (version 20261123.0526.1, macOS 26.7.2) lists only Xcode 26.0.1 to 26.6, with 26.6 the default: no Xcode 27. Source: `https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md`. Xcode 27 is on the separate `xcode-27` label (preview from July 2026, called GA in the issue's comments of 31 Oct and 6 Nov 2026; its base OS may be macOS 27; at preview time Xcode lived at `/Applications/Xcode_27_beta_3.app` and `/Applications/Xcode.app` pointed at it). Source: `https://github.com/actions/runner-images/issues/14404`. The updated spec (W2, §7) puts the `macos` job on `xcode-27`.
 4. **Claude Code GitHub Action** `anthropics/claude-code-action@v1` (tag `v1` = `c148296601107048fe24605a3dfb32a317a6f4c7` today). Inputs used here, all present in its `action.yml`: `claude_code_oauth_token`, `github_token`, `prompt`, `claude_args`. It skips pull requests from forks unless `allow_fork_prs: "true"` (default `"false"`), and by default denies code-running commands on PRs whose author lacks write access (`restrict_untrusted_prs`, default `"true"`). Review examples allow `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`), `Bash(gh pr comment:*)`, `Bash(gh pr diff:*)` and `Bash(gh pr view:*)`. Without `github_token`, the action authenticates as the Claude GitHub App through OIDC and needs `id-token: write`; `github_token` is "optional if using GitHub App". Sources: `https://github.com/anthropics/claude-code-action/blob/v1/action.yml`, `…/docs/solutions.md`, `…/docs/setup.md`, `…/docs/security.md`. The token is created with `claude setup-token` and stored as the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (done, see below).
 5. **Repository.** `msenechal/bugeye` is public. `main` holds `design/` but not yet `docs/specs/` or this plan (they are on the branch the plan was written on). Spec W6: anything with a secret or an agent runs only when `github.event.pull_request.head.repo.full_name == github.repository`; minimal `permissions:` per job; never `pull_request_target`.
 6. **Claude API, from the `claude-api` skill (cached 3 Nov 2026):**
@@ -35,12 +35,16 @@ Checked while writing this plan (27 November 2026). Use them; don't re-research 
 Each decides a gap or ambiguity; cost if wrong in brackets.
 
 - **P1 · Install to `~/Applications`, not `/Applications`.** The spec says `make install` copies to `/Applications`, but the first build's app is `/Applications/Bugeye.app` and must keep running alongside (B2, §9.3.6). `make install` therefore installs to `~/Applications/Bugeye.app` (`INSTALL_DIR` overrides it) and `scripts/install.sh` refuses to overwrite a bundle with another bundle id. It quits only its own copy by path, because both processes are called `Bugeye`. [Low: `make install INSTALL_DIR=/Applications` once the old app is retired.]
-- **P2 · macOS runner.** Task 4 targets `macos-26` as the spec says, and `scripts/select-xcode.sh` fails loudly when no Xcode 27 is present. Fact 3 says it will fail. When it does: ledger it, change `runs-on` to `xcode-27`, push, and keep the same select step (it checks the Swift version against `.swift-version`). If `xcode-27` also fails, stop work on the macOS job, ledger it as a blocker for the user and continue with the portable tasks; don't fall back to Swift 6.3 on your own (W2's fallback is the user's call). [Low: one line.]
+- **P2 · macOS runner.** The `macos` job runs on `runs-on: xcode-27` from the start (spec W2, §7); `macos-26` is never probed. Its first step, `scripts/select-xcode.sh`, lists the runner's Xcodes, selects the newest 27.x, prints `xcodebuild -version` and `swift --version`, and fails loudly if there is no Xcode 27 or its Swift isn't 6.4. If it fails, ledger it as a blocker with the log lines, tell the user, and continue with the portable tasks; never switch to another Xcode or Swift version yourself. [Low: one line.]
 - **P3 · Where the AI types live.** The port and its value types (`LLMClient`, `LLMRequest`, `LLMResponse`, `LLMError`) are in `BugeyeCore` with every other port, because `FakeLLM` in `BugeyeTestSupport` needs them and TestSupport depends on `BugeyeCore` only. `AICore` holds the Anthropic wire format (`AnthropicWire`), the HTTP transport, the retry policy, `AnthropicClient` and the key-settings model. The spec's "AICore: the HTTP adapter and request types" is read as the wire request types. [Low]
 - **P4 · Names.** Portable geometry and drawing types are `Point2D`, `Size2D`, `Rect2D`, `RGBAColor`, `VectorPath`; OCR results are `OCRLine`; transport values are `TransportRequest`/`TransportResponse` (fact 7). [Low: a rename.]
 - **P5 · The AI pane is the shell's.** `FeatureModule.settingsSection()` returns one section, so the `general` module contributes the General pane and the shell adds the AI pane after all module panes (`SettingsLayout`), because the key serves every future AI feature. [Low]
-- **P6 · Saving the key.** The spec names no Save button, so no new string: pressing Return in the "Anthropic API key" field saves it (trimmed). An empty field changes nothing: removing a key is not in the spec, and a stray Return must not delete it. The field never shows the stored key. The status shown at launch is "Key saved. Not tested yet." whenever a key is stored (test results aren't persisted). [Low: add a button and its string in a later spec.]
-- **P7 · Key-test results.** 2xx → "Key works." (also when the body can't be read: the key was accepted); 401 and 403 → "Key was rejected. Check it and save it again."; no key → "No key saved."; everything else (offline, 429 after retries, 5xx, 400, 402 billing, 404 unknown model) → "Couldn't reach Anthropic. Check your connection." The spec has no line for "key fine but the account or model can't be used". [Low: one string in a later spec.]
+- **P6 · Saving the key.** The "Save" button beside the "Anthropic API key" field, and Return in the field, both save the typed key (trimmed). Saving an empty field changes nothing, status included: removing a key is not in the spec, and a stray click or Return must not delete it. The button stays enabled (no extra state to test). The field never shows the stored key. At launch the status is "Key saved. Not tested yet." whenever a key is stored (test results aren't persisted). [Low]
+- **P7 · Key-test results** (`AIKeyStatus.afterTest`, every row tested):
+  - 2xx → "Key works.", also when the body can't be read (the key was accepted). No key → "No key saved."
+  - Authentication failures → "Key was rejected. Check it and save it again.": 401, and 403 unless its `error.type` is `permission_error` (403 with `authentication_error` or no type).
+  - The key authenticated but the account or model can't serve the request → "Key works, but Anthropic refused the request. Check your plan and the model in Settings.": 403 `permission_error`; 400 whose message mentions the model or the `anthropic-beta` header (the account not enabled for the fallback beta, P8); 402 (billing); 404 (model not found); 429 with `error.details.error_code` = `enforced_spend_limit_reached` (spend cap). To tell the spend cap from a rate limit, `LLMError.http` now carries the error code (`code:`, default nil).
+  - Everything else → "Couldn't reach Anthropic. Check your connection.": offline and other transport errors, 429 rate limits and 5xx after the retries, and a 400 about anything but the model (a malformed request is a bug in Bugeye, not the user's plan; the reviewer may prefer "refused" here). [Low]
 - **P8 · The test request.** Model = the `ai.model` setting (default `claude-opus-5-5`), one user message `Reply with OK.`, `max_tokens` 32, `effort: low`, no system prompt. With models in fact 6's fallback list the client sends `"fallbacks": "default"` and the beta header, as the skill says to by default; tell the user this in the PR description. [Low]
 - **P9 · Retries.** At most 2 retries (3 attempts). Backoff 0.5 s, 1 s, … capped at 8 s, no jitter (one user, deterministic tests). `retry-after` in seconds wins; above 60 s the client gives up instead of blocking a feature; an unreadable `retry-after` (an HTTP date) falls back to backoff. `x-should-retry: false` stops; `true` doesn't make other statuses retryable. Never 408/409 (the SDKs retry them; spec §5.4 says never other 4xx, and the spec wins). Cancellation is reported as `.transport("cancelled")`, not retried. [Low]
 - **P10 · Disagreements with `design/13` §5, where the skill wins.** (a) A 429 with `enforced_spend_limit_reached` is not retried. (b) `x-should-retry: false` is honoured. (c) Server-side fallbacks are on by default for the models that accept them, not just "considered". (d) Responses can carry `thinking` and `fallback` blocks, and `stop_details.category` on refusals; decoding skips unknown blocks and keeps the category. Agreements: `anthropic-version: 2026-10-21`, `claude-opus-5-5` default, effort default `medium`, no `temperature`/`budget_tokens`/`thinking: disabled`.
@@ -687,9 +691,9 @@ Wave 0 task 3: Linux CI job
 
 ---
 
-## Task 4: macOS CI and the Xcode 27 probe
+## Task 4: macOS CI on the xcode-27 runner
 
-**Goal:** the `macos` job selects Xcode 27 (or fails loudly), builds every target and runs every test.
+**Goal:** the `macos` job runs on the `xcode-27` runner (spec W2, §7, P2), selects Xcode 27 and prints its version (or fails loudly), builds every target and runs every test.
 
 **Files:** `scripts/select-xcode.sh`, `.github/workflows/macos.yml`.
 
@@ -697,8 +701,9 @@ Wave 0 task 3: Linux CI job
 
 ```bash
 #!/usr/bin/env bash
-# CI (macOS job): lists the Xcodes on the runner, selects the newest Xcode 27 and checks that its Swift
-# matches .swift-version (spec W2). Fails when there is none: never fall back silently.
+# CI (macOS job, `xcode-27` runner): lists the Xcodes on the runner, selects the newest Xcode 27, prints
+# its version and checks that its Swift matches .swift-version (spec W2). Fails loudly when there is no
+# Xcode 27: never fall back to another version.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -718,7 +723,7 @@ while IFS= read -r app; do
 done < <(ls -d /Applications/Xcode*.app 2>/dev/null)
 
 if [ -z "$best" ]; then
-    echo "select-xcode: no Xcode 27 on this runner. Spec W2 needs Swift 6.4; stop and ledger it." >&2
+    echo "select-xcode: no Xcode 27 on this runner (spec W2 needs Xcode 27.x and Swift 6.4)." >&2
     exit 1
 fi
 echo "Selecting $best ($best_version)"
@@ -751,7 +756,7 @@ permissions: {}
 
 jobs:
   macos:
-    runs-on: macos-26
+    runs-on: xcode-27  # the macos-26 image stops at Xcode 26.6 (spec W2)
     timeout-minutes: 60
     permissions:
       contents: read
@@ -769,14 +774,14 @@ jobs:
 
 **Step 3.** `make guards` passes. Commit (Step 5) and push. Watch the `macos` check as in Task 3.
 
-**Step 4 (expected).** Read the "Select Xcode 27" step's log: it lists the Xcodes on the runner. Per fact 3, expect it to fail with `select-xcode: no Xcode 27 on this runner`. Then apply P2: ledger `Ruling: macos-26 has no Xcode 27 (Xcodes listed: …); runs-on switched to xcode-27 (cost if wrong: low)`, change `runs-on: macos-26` to `runs-on: xcode-27`, commit `Wave 0 task 4: run the macOS job on the xcode-27 image`, push, and watch again. Success means: Xcode 27 selected, `swift --version` shows 6.4, `make build` and `make test` pass (15 marker tests plus the two placeholders). If `xcode-27` fails too, follow P2 (ledger a blocker, continue with portable tasks).
+**Step 4 (expected).** The "Select Xcode 27" step's log lists the runner's Xcodes, then `Selecting /Applications/Xcode….app (27.…)`, `Xcode 27.…` from `xcodebuild -version` and `Swift version 6.4…`; record the exact Xcode and Swift versions in the ledger. `make build` and `make test` pass (15 marker tests plus the two placeholders). If the step fails (`select-xcode: no Xcode 27 on this runner …`, or a Swift that isn't 6.4), follow P2: ledger a blocker with the log lines and continue with the portable tasks.
 
 Once `linux` and `macos` are both green, the user can make them required checks (see "Steps only the user can do"); ledger that under "Waiting on user".
 
 **Step 5.**
 
 ```
-Wave 0 task 4: macOS CI job with an Xcode 27 check
+Wave 0 task 4: macOS CI job on the xcode-27 runner
 ```
 
 ---
@@ -1997,7 +2002,8 @@ public enum LLMError: Error, Hashable, Sendable {
     /// No API key is saved.
     case missingKey
     /// The API answered with an error status that was not retried, or still failed after the retries.
-    case http(status: Int, type: String?, message: String?)
+    /// `type` is `error.type` and `code` is `error.details.error_code` from the body, when present.
+    case http(status: Int, type: String?, message: String?, code: String? = nil)
     /// The request never got an HTTP answer (offline, DNS, timeout), after the retries.
     case transport(String)
     /// The answer wasn't the JSON we expect.
@@ -2169,7 +2175,7 @@ import Testing
 **Step 2.** `swift build --build-tests` fails:
 
 ```
-Tests/BugeyeTestSupportTests/FakeFileMetadataStoreTests.swift:8:23: error: cannot find 'TempDirectory' in scope
+Tests/BugeyeTestSupportTests/FakeServicesTests.swift:8:19: error: cannot find 'FakeLLM' in scope
 ```
 
 **Step 3 (implementation).** `Sources/BugeyeTestSupport/TempDirectory.swift`:
@@ -3250,7 +3256,7 @@ Wave 0 task 15: feature modules and their registry
 
 ## Task 16: Status menu, Settings panes, the general module, shell strings
 
-**Goal:** the menu of spec §5.3 as data (About Bugeye, Settings… ⌘,, Quit Bugeye ⌘Q, module items between them), the Settings panes (General from the `general` module, then AI, P5), and every shell string exactly as the spec writes it.
+**Goal:** the menu of spec §5.3 as data (About Bugeye, Settings… ⌘,, Quit Bugeye ⌘Q, module items between them), the Settings panes (General from the `general` module, then AI, P5), and every shell string exactly as the spec writes it, the AI pane's "Save" button included.
 
 **Files:** `Sources/BugeyeFeatures/StatusMenu.swift`, `Tests/BugeyeFeaturesTests/StatusMenuTests.swift`.
 
@@ -3306,6 +3312,7 @@ import Testing
         #expect(ShellStrings.saveCapturesTo == "Save captures to")
         #expect(ShellStrings.choose == "Choose\u{2026}")
         #expect(ShellStrings.apiKeyField == "Anthropic API key")
+        #expect(ShellStrings.saveKey == "Save")
         #expect(ShellStrings.testKey == "Test key")
         #expect(
             ShellStrings.aiPrivacyNote
@@ -3384,6 +3391,7 @@ public enum ShellStrings {
     public static let saveCapturesTo = "Save captures to"
     public static let choose = "Choose…"
     public static let apiKeyField = "Anthropic API key"
+    public static let saveKey = "Save"
     public static let testKey = "Test key"
     public static let aiPrivacyNote =
         "Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it."
@@ -4322,7 +4330,13 @@ import Testing
 
     @Test func aSpendCapIsNotRetried() async throws {
         let transport = RecordedTransport([try .json(429, "error-429-spend-cap"), try .json(200, "response-end-turn")])
-        await #expect(throws: LLMError.self) { try await client(transport).send(request) }
+        await #expect(
+            throws: LLMError.http(
+                status: 429, type: "rate_limit_error", message: "You have reached your monthly spend limit.",
+                code: "enforced_spend_limit_reached")
+        ) {
+            try await client(transport).send(request)
+        }
         #expect(transport.requests.count == 1)
     }
 
@@ -4401,7 +4415,8 @@ public struct AnthropicClient: LLMClient {
                     return try AnthropicWire.response(from: response.body)
                 }
                 let apiError = AnthropicWire.apiError(from: response.body)
-                failure = .http(status: response.status, type: apiError.type, message: apiError.message)
+                failure = .http(
+                    status: response.status, type: apiError.type, message: apiError.message, code: apiError.code)
                 outcome = .status(
                     response.status, retryAfter: response.header("retry-after"),
                     shouldRetry: response.header("x-should-retry"), errorCode: apiError.code)
@@ -4438,9 +4453,9 @@ Wave 0 task 20: AnthropicClient with retries
 
 ## Task 21: AICore — the AI pane's model
 
-**Goal:** the AI pane's logic, portable and tested (spec §5.3 AI, P6, P7, P8): save the key in the `SecretStore`, test it with one tiny request, show exactly one of the five status lines, and ignore a test result that arrives after a newer save (the late-result bug class, `design/11` §6).
+**Goal:** the AI pane's logic, portable and tested (spec §5.3 AI, P6, P7, P8): save the key in the `SecretStore` (Save button or Return), test it with one tiny request, show exactly one of the six status lines with every mapping of P7 covered, and ignore a test result that arrives after a newer save (the late-result bug class, `design/11` §6).
 
-**Files:** `Sources/Core/AICore/AIKeySettings.swift`, `Tests/AICoreTests/AIKeySettingsTests.swift`.
+**Files:** `Sources/Core/AICore/AIKeySettings.swift`, `Tests/AICoreTests/AIKeySettingsTests.swift`. (`LLMError.http`'s `code:` comes from Task 11; Task 20's client fills it.)
 
 **Step 1 (failing test).** `Tests/AICoreTests/AIKeySettingsTests.swift`. `GatedLLM` orders events with streams, never sleeps:
 
@@ -4448,6 +4463,7 @@ Wave 0 task 20: AnthropicClient with retries
 import AICore
 import BugeyeCore
 import BugeyeTestSupport
+import Foundation
 import Testing
 
 @MainActor @Suite struct AIKeySettingsTests {
@@ -4458,6 +4474,7 @@ import Testing
                 "Key saved. Not tested yet.",
                 "Key works.",
                 "Key was rejected. Check it and save it again.",
+                "Key works, but Anthropic refused the request. Check your plan and the model in Settings.",
                 "Couldn't reach Anthropic. Check your connection.",
             ])
     }
@@ -4521,11 +4538,31 @@ import Testing
     }
 
     @Test(arguments: [
-        (LLMError.http(status: 401, type: "authentication_error", message: nil), AIKeyStatus.rejected),
-        (.http(status: 403, type: "permission_error", message: nil), .rejected),
+        // Authentication failures: the key is wrong.
+        (LLMError.http(status: 401, type: "authentication_error", message: "invalid x-api-key"), AIKeyStatus.rejected),
+        (.http(status: 403, type: "authentication_error", message: nil), .rejected),
+        (.http(status: 403, type: nil, message: nil), .rejected),
+        // The key works, but the account or the model can't serve the request.
+        (.http(status: 403, type: "permission_error", message: "not allowed for this credential"), .refused),
+        (.http(status: 400, type: "invalid_request_error", message: "model: claude-nope is not supported"), .refused),
+        (
+            .http(
+                status: 400, type: "invalid_request_error",
+                message: "Unexpected value(s) for the `anthropic-beta` header"), .refused
+        ),
+        (.http(status: 402, type: "billing_error", message: "Your credit balance is too low"), .refused),
+        (.http(status: 404, type: "not_found_error", message: "model: claude-nope"), .refused),
+        (
+            .http(
+                status: 429, type: "rate_limit_error", message: "monthly spend limit",
+                code: "enforced_spend_limit_reached"), .refused
+        ),
+        // Nothing to do with the key or the plan: the network, load, or our own request.
+        (.http(status: 429, type: "rate_limit_error", message: "per-minute rate limit"), .unreachable),
+        (.http(status: 529, type: "overloaded_error", message: "Overloaded"), .unreachable),
+        (.http(status: 500, type: "api_error", message: nil), .unreachable),
+        (.http(status: 400, type: "invalid_request_error", message: "messages: roles must alternate"), .unreachable),
         (.transport("offline"), .unreachable),
-        (.http(status: 529, type: "overloaded_error", message: nil), .unreachable),
-        (.http(status: 404, type: "not_found_error", message: nil), .unreachable),
         (.decoding("bad body"), .works),
         (.missingKey, .noKey),
     ])
@@ -4534,6 +4571,18 @@ import Testing
             secrets: FakeSecretStore([.anthropicAPIKey: "sk"]), client: FakeLLM([.failure(error)]), model: { "m" })
         await settings.testKey()
         #expect(settings.status == expected)
+    }
+
+    @Test func theSpendCapCodeReachesTheStatusLineThroughTheClient() async throws {
+        let body =
+            #"{"type":"error","error":{"type":"rate_limit_error","message":"cap","details":{"error_code":"enforced_spend_limit_reached"}}}"#
+        let transport = RecordedTransport([.response(TransportResponse(status: 429, body: Data(body.utf8)))])
+        let secrets = FakeSecretStore([.anthropicAPIKey: "sk"])
+        let settings = AIKeySettings(
+            secrets: secrets, client: AnthropicClient(secrets: secrets, transport: transport, sleep: { _ in }),
+            model: { "claude-opus-5-5" })
+        await settings.testKey()
+        #expect(settings.status == .refused)
     }
 
     @Test func aTestThatFinishesAfterANewSaveIsIgnored() async {
@@ -4574,7 +4623,7 @@ final class GatedLLM: LLMClient {
 **Step 2.** `swift build --build-tests` fails:
 
 ```
-Tests/AICoreTests/AIKeySettingsTests.swift:77:82: error: cannot find 'AIKeyStatus' in scope
+Tests/AICoreTests/AIKeySettingsTests.swift:80:98: error: cannot find 'AIKeyStatus' in scope
 ```
 
 **Step 3 (implementation).** `Sources/Core/AICore/AIKeySettings.swift` (`@Observable` builds on Linux too; the SwiftUI pane renders it in Task 26):
@@ -4586,7 +4635,7 @@ import Observation
 
 /// The AI pane's status line. Exactly one is shown (spec §5.3).
 public enum AIKeyStatus: Hashable, Sendable, CaseIterable {
-    case noKey, savedNotTested, works, rejected, unreachable
+    case noKey, savedNotTested, works, rejected, refused, unreachable
 
     public var message: String {
         switch self {
@@ -4594,19 +4643,47 @@ public enum AIKeyStatus: Hashable, Sendable, CaseIterable {
         case .savedNotTested: "Key saved. Not tested yet."
         case .works: "Key works."
         case .rejected: "Key was rejected. Check it and save it again."
+        case .refused: "Key works, but Anthropic refused the request. Check your plan and the model in Settings."
         case .unreachable: "Couldn't reach Anthropic. Check your connection."
         }
     }
 
-    /// The status a finished key test shows.
+    /// The status a finished key test shows (plan ruling P7).
     public static func afterTest(_ result: Result<LLMResponse, LLMError>) -> AIKeyStatus {
         switch result {
-        case .success: .works
+        case .success:
+            return .works
         // A 2xx answer we couldn't read still proves the key was accepted.
-        case .failure(.decoding): .works
-        case .failure(.missingKey): .noKey
-        case .failure(.http(let status, _, _)) where status == 401 || status == 403: .rejected
-        case .failure: .unreachable
+        case .failure(.decoding):
+            return .works
+        case .failure(.missingKey):
+            return .noKey
+        case .failure(.http(let status, let type, let message, let code)):
+            return afterHTTPError(status: status, type: type, message: message, code: code)
+        case .failure(.transport), .failure(.refused), .failure(.truncated):
+            return .unreachable
+        }
+    }
+
+    /// Authentication failures say the key is wrong; account and model problems say the key works but the
+    /// request was refused; everything else (rate limits and 5xx after the retries) is "couldn't reach".
+    static func afterHTTPError(status: Int, type: String?, message: String?, code: String?) -> AIKeyStatus {
+        switch status {
+        case 401:
+            return .rejected
+        case 403:
+            // A permission error means the key authenticated but may not do this; anything else is an auth failure.
+            return type == "permission_error" ? .refused : .rejected
+        case 400:
+            // Only a request the account or model can't serve; a malformed request is a bug, not the user's plan.
+            let text = (message ?? "").lowercased()
+            return text.contains("model") || text.contains("anthropic-beta") ? .refused : .unreachable
+        case 402, 404:
+            return .refused
+        case 429:
+            return code == "enforced_spend_limit_reached" ? .refused : .unreachable
+        default:
+            return .unreachable
         }
     }
 }
@@ -4631,8 +4708,8 @@ public final class AIKeySettings {
         status = Self.hasKey(secrets) ? .savedNotTested : .noKey
     }
 
-    /// Saves the typed key (trimmed). An empty field changes nothing: removing a key is not a Wave 0
-    /// feature, and an accidental Return must not delete it. If the Keychain refuses, the status shows
+    /// Saves the typed key (trimmed), from the Save button or Return. An empty field changes nothing:
+    /// removing a key is not a Wave 0 feature, and a stray click or Return must not delete it. If the Keychain refuses, the status shows
     /// whatever is still stored.
     public func save(_ typed: String) {
         let key = typed.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4677,12 +4754,12 @@ public final class AIKeySettings {
 }
 ```
 
-**Step 4.** `swift test --filter AIKeySettingsTests` passes (10 tests), then `make test-core lint guards`.
+**Step 4.** `swift test --filter AIKeySettingsTests` passes (11 tests), then `make test-core lint guards`.
 
 **Step 5.**
 
 ```
-Wave 0 task 21: AI pane model with the five status lines
+Wave 0 task 21: AI pane model with the six status lines
 ```
 
 ---
@@ -4794,7 +4871,7 @@ public enum FixtureContent {
 }
 ```
 
-**Step 4.** `swift test --filter FixtureContentTests` passes (3 tests). Then the whole portable suite: `make test-core lint guards` reports **116 tests** in total (113 test functions; Swift Testing counts per target), all passing.
+**Step 4.** `swift test --filter FixtureContentTests` passes (3 tests). Then the whole portable suite: `make test-core lint guards` reports **117 tests** in total (114 test functions; Swift Testing counts per target), all passing.
 
 **Step 5.**
 
@@ -6244,14 +6321,18 @@ struct GeneralPane: View {
 
 struct AIPane: View {
     let model: AIKeySettings
-    /// What the user typed. Return saves it; the field never shows the stored key.
+    /// What the user typed. Save (or Return) stores it; the field never shows the stored key. Saving an
+    /// empty field changes nothing (plan ruling P6).
     @State private var typedKey = ""
 
     var body: some View {
         Form {
             Section {
-                SecureField(ShellStrings.apiKeyField, text: $typedKey)
-                    .onSubmit { model.save(typedKey) }
+                HStack {
+                    SecureField(ShellStrings.apiKeyField, text: $typedKey)
+                        .onSubmit { model.save(typedKey) }
+                    Button(ShellStrings.saveKey) { model.save(typedKey) }
+                }
                 HStack {
                     Button(ShellStrings.testKey) {
                         Task { await model.testKey() }
@@ -6645,10 +6726,11 @@ Wave 0 builds no capture feature: this pass checks that the new app installs, sh
 
 ## Before you start
 
-1. Install Xcode 27 from the App Store (or, if it won't install on your macOS, Xcode 26.6) and open it once so it finishes installing its components. Then:
+1. Install Xcode 27 from the App Store (it needs macOS 26.6 or later; your Mac has 26.7.1) and open it once so it finishes installing its components. Then:
    ```sh
    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-   swift --version        # Swift 6.4 (6.3 with Xcode 26.6)
+   xcodebuild -version    # Xcode 27.x
+   swift --version        # Swift 6.4
    ```
 2. Get the branch:
    ```sh
@@ -6664,7 +6746,7 @@ Wave 0 builds no capture feature: this pass checks that the new app installs, sh
 |---|---|---|
 | Settings… (⌘,) | the new Bugeye menu | opens "Bugeye Settings" |
 | Quit Bugeye (⌘Q) | the new Bugeye menu | quits the new app only |
-| Return | in the "Anthropic API key" field | saves the key |
+| Save (or Return) | next to the "Anthropic API key" field | saves the key |
 
 ## How to check
 
@@ -6719,12 +6801,14 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'
 ### 4. Settings: AI
 
 1. Click the **AI** tab.
-   **Expected:** an `Anthropic API key` field, a `Test key` button that is greyed out, the line `No key saved.`, and below them `Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it.`
-2. Optional, only if you have a key: paste it into the field and press Return.
+   **Expected:** an `Anthropic API key` field with a `Save` button beside it, a `Test key` button that is greyed out, the line `No key saved.`, and below them `Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it.`
+2. Click **Save** with the field empty.
+   **Expected:** nothing changes: still `No key saved.`
+3. Optional, only if you have a key: paste it into the field and click **Save** (Return does the same).
    **Expected:** `Key saved. Not tested yet.`, and `Test key` becomes clickable.
-3. Click **Test key**.
-   **Expected:** after a second or two, `Key works.` The `security find-generic-password` command above finds the item; `defaults read dev.msenechal.bugeye` shows no key.
-4. Optional: turn Wi-Fi off, click **Test key**, then turn Wi-Fi back on.
+4. Click **Test key**.
+   **Expected:** after a second or two, `Key works.` (If you see `Key works, but Anthropic refused the request. Check your plan and the model in Settings.`, the key is fine but the account can't use the model or the fallback beta: note it in your report.) The `security find-generic-password` command above finds the item; `defaults read dev.msenechal.bugeye` shows no key.
+5. Optional: turn Wi-Fi off, click **Test key**, then turn Wi-Fi back on.
    **Expected:** `Couldn't reach Anthropic. Check your connection.` (after a few seconds of retries).
 
 ### 5. Side by side
@@ -6773,11 +6857,11 @@ For the final reviewer: what the tests don't exercise, or exercise only through 
 3. **The writer's temp file** lives next to the target as `.<name>.<uuid>.tmp`: a crash between write and rename leaves it behind, and the folder watcher of later waves must ignore dot-files. Permissions and creation date of the original are not kept.
 4. **Keychain in practice:** first access after `make install` with a re-signed binary (the ACL names the signing identity: does a new "Bugeye Dev" certificate after a second `make cert` cause a prompt?), a locked login keychain, and a key with trailing newline pasted from a terminal (trimmed, tested).
 5. **Real HTTP:** `URLSessionTransport` is never exercised in tests. Header case from `HTTPURLResponse.allHeaderFields` (lowercased by `TransportResponse`), a `retry-after` with fractions, HTTP/2 connection reuse, the 600 s timeout, proxies. The key-test request against the real API is only in checklist test 4.
-6. **The model setting** has no UI in Wave 0; an invalid stored model falls back to the default. A user-chosen model that doesn't take `effort` (an older Haiku) would 400 and show "Couldn't reach Anthropic…" (P7).
-7. **The fallback beta** (`server-side-fallback-2026-07-01`) is sent for the key test on Opus 5.5. If the account isn't enabled for it, the API answers 400 and the key test says "Couldn't reach Anthropic…". Worth one real check in the manual pass.
+6. **The model setting** has no UI in Wave 0; an invalid stored model falls back to the default. A user-chosen model that doesn't take `effort` (an older Haiku) answers 400; whether that shows "refused" or "couldn't reach" depends on whether the message mentions the model (P7's text match on the 400 message is the weakest mapping).
+7. **The fallback beta** (`server-side-fallback-2026-07-01`) is sent for the key test on Opus 5.5. If the account isn't enabled for it, the API answers 400 naming the `anthropic-beta` header and the key test shows the "refused" line. Worth one real check in the manual pass. 403 bodies without an `error.type` are treated as authentication failures.
 8. **Status item and Settings window lifecycle:** opening Settings repeatedly, closing it with ⌘W, the window's autosaved frame from a previous run being smaller than the content, dark mode, the Settings window opened while another app is full screen.
 9. **Debug channel:** a client that connects and never sends a newline (5 s receive timeout, 4 KB cap), two clients at once (served one after the other), a stale socket file from a crashed run (`unlink` before `bind`), `$TMPDIR` paths longer than 104 bytes (start throws and logs).
 10. **Two Bugeye apps at once:** both are called `Bugeye` in the menu bar, Activity Monitor and `pkill -x`. `scripts/install.sh` quits by path; check that nothing else (LaunchServices, `open -b`) can pick the old app for `dev.msenechal.bugeye` or the new one for `dev.msenechal.cleanshotcopy`.
 11. **Guards are regexes:** a multi-line `import` attribute, `UserDefaults` reached through a typealias, or `.atomic` built at runtime would slip through. They catch mistakes, not intent.
 12. **Workflows:** that `claude-review` never runs for a fork's PR (also covered by the action's own `allow_fork_prs: false`), that its `GITHUB_TOKEN` can't approve (the repository setting "Allow GitHub Actions to create and approve pull requests" must stay off), and that a PR editing `.github/workflows/claude-review.yml` itself is reviewed with the edited file (`pull_request` runs the PR's version: acceptable only because the head must be a branch of this repository).
-13. **Strings:** `ShellStrings` and `AIKeyStatus.message` are tested character for character; the menu's "Settings…" and the button "Choose…" use U+2026. The menu-bar fallback title "Bugeye" and the fixture's labels are plan rulings, not spec strings.
+13. **Strings:** `ShellStrings` (with "Save") and the six `AIKeyStatus.message` lines are tested character for character; the menu's "Settings…" and the button "Choose…" use U+2026. The SwiftUI pane itself (that the Save button calls `save`, that it sits beside the field) is checked only by the manual pass. The menu-bar fallback title "Bugeye" and the fixture's labels are plan rulings, not spec strings.
