@@ -62,10 +62,12 @@ Every deviation from the plan, as `Ruling: <what and why> (cost if wrong: …)`.
 - Ruling (third review, Minor, not changed): `CaptureFileWriter` doesn't keep the original's POSIX mode and doesn't fsync before the rename. Both are known limits of P11 (Review Focus #3); logged in `docs/backlog.md` for the final review. (cost if wrong: low.)
 - Ruling (fourth review, Important): `RetryPolicy` compares a `retry-after` against the 60 s cap as a `Double` before converting it, so a huge or infinite header (`1e300`, `inf`) means "give up" instead of trapping in `Int64(_:)` and crashing the app. The parameterized test `anEnormousRetryAfterMeansGiveUpWithoutCrashing` crashed the test process first. (cost if wrong: none.)
 - Ruling (sixth review, Important, security): a manual `claude-review` run first looks up the PR's head repository (`gh api … --jq .head.repo.full_name`) and stops unless it is this repository, so a fork's PR can't reach the agent or the token through `workflow_dispatch` (spec W6). The PR number input is typed `number` and reaches the script through `env:`, never interpolated. `scripts/guards.sh` now fails a workflow that runs the agent on a manual run without that check; its self-test case failed first. (cost if wrong: low; a manual run of a fork PR is refused instead of reviewed.)
+- Ruling (decided by this session at the user's request, 27 Nov 2026, who asked for technical calls to be made for them): (1) the Keychain stays on the main actor in Wave 0, as ruled above, and goes to the final review via the backlog. (2) A failed Keychain save shows a seventh status line, "Couldn't save the key. Try again.", added to spec §5.3 and `AIKeyStatus`; any key stored before stays. Tests (the string list and both failed-save tests) failed first. (3) The fork-PR security thread is closed by this session once the fix is green. (cost if wrong: low; a string change.)
+- Ruling (sixth review, Minor, not changed): the debug channel's socket gets mode 0600 just after `bind` instead of at creation, and `stop()` closes the listener while the accept thread may still poll it. Debug builds only; in `docs/backlog.md`. (cost if wrong: low.)
 
 ## Waiting on user
 
-- Decide on the third review's Keychain finding: move Keychain calls off the main actor in Wave 0 (an async `SecretStore`), or leave it for a later wave (current ruling). And approve a status line for a failed save, for example "Couldn't save the key to the Keychain." (spec §5.3 settles every string).
+- (Decided, see the rulings below: the user asked the executing session to make the technical calls.)
 
 - Done by the user, 27 Nov 2026: `oven-sh/setup-bun@*` allowed; the `review` job on b810686 ran and posted its review (Task 5's proof; the `CLAUDE_CODE_OAUTH_TOKEN` secret works).
 
