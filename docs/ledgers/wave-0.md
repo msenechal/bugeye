@@ -16,7 +16,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 5 | done | 365e2f4 | review workflow; guard caught the missing same-repo condition first; proof run waits on the Actions blocker |
 | 6 | done | feb2072 |  |
 | 7 | done | a2f5b94 | 6 BugeyeCore tests |
-| 8 | done | (this commit) |  |
+| 8 | done | fcc05fe |  |
+| 9 | done | (this commit) |  |
 
 ## Rulings
 
