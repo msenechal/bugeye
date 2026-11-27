@@ -52,6 +52,8 @@ Every deviation from the plan, as `Ruling: <what and why> (cost if wrong: …)`.
 
 ## Waiting on user
 
+- **Allow `oven-sh/setup-bun@*` in the repository's allowed-actions list** (Settings → Actions → General, next to `anthropics/claude-code-action@*`), then re-run `claude-review`. The review job (run 46082525800) stops with: `The action oven-sh/setup-bun@0c5077e… is not allowed in msenechal/bugeye because all actions must be from a repository owned by msenechal, created by GitHub, or match the pattern: anthropics/claude-code-action@*.` The Claude action installs Bun internally. Spec §9.1 (a posted review) and Task 5's proof wait on this. Posted on the PR: https://github.com/msenechal/bugeye/pull/2#issuecomment-7230151695
+
 - Add `linux` and `macos` as required checks in the `main` ruleset once both are green (plan, "Steps only the user can do").
 
 ## Blockers
