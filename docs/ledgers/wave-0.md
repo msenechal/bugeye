@@ -29,7 +29,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 18 | done | d2d4b92 | wire format against hand-written fixtures; facts re-checked with the claude-api skill |
 | 19 | done | 25ad613 |  |
 | 20 | done | 927d324 |  |
-| 21 | done | (this commit) |  |
+| 21 | done | 52c088e |  |
+| 22 | done | (this commit) |  |
 
 ## Rulings
 
