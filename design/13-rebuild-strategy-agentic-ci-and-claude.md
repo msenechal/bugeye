@@ -85,6 +85,8 @@ Target: about 60–70 % of tests run on Linux in seconds, and the rest run on ma
 
 ## 3. CI/CD in three tiers
 
+> **Superseded in part (Nov 2026):** no paid runners. Tiers 1 and 2 change per `14-direction-changes-and-agentic-proposals.md` R8: Linux CI on GitHub (plus free hosted macOS if the repo goes public), and real-capture checks on the user's Mac through Remote Control.
+
 | Tier | Where | When | What |
 |---|---|---|---|
 | 0 | the Claude cloud environment (Linux) | every agent edit | `swift build`, `swift test` for portable targets; format and lint (`swift-format`); fast, under a minute |

@@ -26,7 +26,7 @@ The user rejected these. Don't propose them in a rebuild.
   - Retention policy and stars
   - Instant replay (a rolling screen buffer)
   - Watch a region; live region mirror
-  - Auto-zoom recordings
+  - ~~Auto-zoom recordings~~ (reversed Nov 2026: now wanted, see `14` R3)
   - Onion-skin a design over the screen
   - Measure and pick colours in the loupe
   - Contrast and accessibility audit
