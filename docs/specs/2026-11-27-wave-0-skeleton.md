@@ -136,6 +136,7 @@ Settings window, titled "Bugeye Settings", two panes:
   - "Key was rejected. Check it and save it again."
   - "Key works, but Anthropic refused the request. Check your plan and the model in Settings."
   - "Couldn't reach Anthropic. Check your connection."
+  - "Couldn't save the key. Try again." (the Keychain refused the key; added during execution, 27 Nov 2026)
 
 The AI pane states: "Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it."
 

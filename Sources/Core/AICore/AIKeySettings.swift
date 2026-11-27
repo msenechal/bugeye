@@ -4,7 +4,7 @@ import Observation
 
 /// The AI pane's status line. Exactly one is shown (spec §5.3).
 public enum AIKeyStatus: Hashable, Sendable, CaseIterable {
-    case noKey, savedNotTested, works, rejected, refused, unreachable
+    case noKey, savedNotTested, works, rejected, refused, unreachable, saveFailed
 
     public var message: String {
         switch self {
@@ -14,6 +14,7 @@ public enum AIKeyStatus: Hashable, Sendable, CaseIterable {
         case .rejected: "Key was rejected. Check it and save it again."
         case .refused: "Key works, but Anthropic refused the request. Check your plan and the model in Settings."
         case .unreachable: "Couldn't reach Anthropic. Check your connection."
+        case .saveFailed: "Couldn't save the key. Try again."
         }
     }
 
@@ -85,14 +86,14 @@ public final class AIKeySettings {
 
     /// Saves the typed key (trimmed), from the Save button or Return. An empty field changes nothing:
     /// removing a key is not a Wave 0 feature, and a stray click or Return must not delete it. If the Keychain
-    /// refuses, nothing changes either: the status still describes the key that is stored (the spec has no
-    /// "couldn't save" line yet).
+    /// refuses, the status says so and any key stored before stays.
     public func save(_ typed: String) {
         let key = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
         do {
             try secrets.setSecret(key, for: .anthropicAPIKey)
         } catch {
+            status = .saveFailed
             return
         }
         generation += 1

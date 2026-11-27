@@ -15,6 +15,7 @@ import Testing
                 "Key was rejected. Check it and save it again.",
                 "Key works, but Anthropic refused the request. Check your plan and the model in Settings.",
                 "Couldn't reach Anthropic. Check your connection.",
+                "Couldn't save the key. Try again.",
             ])
     }
 
@@ -47,12 +48,12 @@ import Testing
         #expect(try secrets.secret(for: .anthropicAPIKey) == "new")
     }
 
-    @Test func aKeychainFailureShowsWhatIsStillStored() {
+    @Test func aKeychainFailureSaysTheKeyWasNotSaved() {
         let secrets = FakeSecretStore()
         let settings = AIKeySettings(secrets: secrets, client: FakeLLM(), model: { "m" })
         secrets.failNextWrite()
         settings.save("sk")
-        #expect(settings.status == .noKey)
+        #expect(settings.status == .saveFailed)
     }
 
     @Test func aFailedSaveOverAnOlderKeyDoesNotClaimTheNewOneWasSaved() async throws {
@@ -63,8 +64,8 @@ import Testing
         #expect(settings.status == .works)
         secrets.failNextWrite()
         settings.save("new")
-        // The old key is still the one stored and it still works: nothing changed, so the status doesn't either.
-        #expect(settings.status == .works)
+        // Never "Key saved." for a key that wasn't stored; the old key stays.
+        #expect(settings.status == .saveFailed)
         #expect(try secrets.secret(for: .anthropicAPIKey) == "old")
     }
 
