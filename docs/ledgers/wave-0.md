@@ -34,7 +34,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 23 | done | ebdc505 | not compiled here; waits on the macos job (blocked) |
 | 24 | done | 7f8877a | not compiled here |
 | 25 | done | 44bfe66 | not compiled here |
-| 26 | done | (this commit) | not compiled here |
+| 26 | done | 4d4f658 | not compiled here |
+| 27 | done | (this commit) | not compiled here |
 
 ## Rulings
 

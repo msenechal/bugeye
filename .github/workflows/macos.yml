@@ -29,3 +29,5 @@ jobs:
         run: make test
       - name: Bundle (ad hoc signed)
         run: make bundle
+      - name: Release build has no debug channel
+        run: make check-release-symbols
