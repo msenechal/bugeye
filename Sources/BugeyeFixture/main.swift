@@ -1,4 +1,5 @@
 import AppKit
+import BugeyeTestSupport
 import SwiftUI
 
 // The fixture app (spec §5.5): a window with known content for smoke and end-to-end tests. Test-only:

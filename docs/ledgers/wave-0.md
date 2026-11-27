@@ -46,6 +46,7 @@ Every deviation from the plan, as `Ruling: <what and why> (cost if wrong: …)`.
 
 - Ruling: Task 0 reset the session's pre-existing local `feat/wave-0` (which held the spec and plan commits on top of `main`) to `origin/main` and copied the two files in, exactly as the plan's Step 1 does; the remote branch did not exist yet. (cost if wrong: none; the original commits stay on `claude/bold-davinci-spj824`.)
 - Ruling: the draft PR was opened, and GitHub is read, through the session's GitHub MCP tools instead of `gh api`, because this cloud session only allows `gh` for search. Same request, same result. (cost if wrong: none.)
+- Ruling: `Sources/BugeyeFixture/main.swift` imports `BugeyeTestSupport`. The plan's file used `FixtureContent` while importing only AppKit and SwiftUI; Xcode 27.2 (Swift 6.4) doesn't let a file use a module only another file imports (`macos` run 46082154668: `main.swift:12:20: error: cannot find 'FixtureContent' in scope`). A scan of every macOS-only file found no other gap. (cost if wrong: none; one import line.)
 
 ## Waiting on user
 
