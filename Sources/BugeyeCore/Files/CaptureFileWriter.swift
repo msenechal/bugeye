@@ -13,7 +13,8 @@ public enum CaptureIdentity: Hashable, Sendable {
 /// It writes a temp file next to the target, copies every `dev.msenechal.bugeye.*` attribute and
 /// `com.apple.metadata:kMDItemWhereFroms` from the previous version onto it, then renames it over the
 /// target. The rename is atomic and keeps the temp file's attributes, so the target never exists
-/// without them. `scripts/guards.sh` fails CI if `.atomic` or `replaceItemAt` appears anywhere else.
+/// without them. A rewrite also keeps the file's POSIX permissions. `scripts/guards.sh` fails CI if `.atomic`
+/// or `replaceItemAt` appears anywhere else.
 public struct CaptureFileWriter: Sendable {
     public static let attributePrefix = "dev.msenechal.bugeye."
     public static let identityAttribute = "dev.msenechal.bugeye.id"
@@ -48,6 +49,10 @@ public struct CaptureFileWriter: Sendable {
             try data.write(to: temp, options: .withoutOverwriting)
             for (name, value) in kept.sorted(by: { $0.key < $1.key }) {
                 try metadata.setValue(value, name, at: temp)
+            }
+            // A rewrite keeps the file's permissions: the temp file starts at the umask's default.
+            if let mode = try? FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] {
+                try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: temp.path)
             }
             guard rename(temp.path, url.path) == 0 else { throw RenameFailed(errno: errno) }
         } catch {

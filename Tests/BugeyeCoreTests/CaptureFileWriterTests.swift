@@ -44,6 +44,15 @@ import Testing
         #expect(try store.value("dev.msenechal.bugeye.provenance", at: url) == Data(#"{"app":"Arc"}"#.utf8))
     }
 
+    @Test func aRewriteKeepsTheFilesPermissions() throws {
+        defer { dir.remove() }
+        let url = try makeCapture()
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        try writer.write(Data("new".utf8), to: url)
+        let mode = try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber
+        #expect(mode?.intValue == 0o600)
+    }
+
     @Test func otherAttributesAreNotCopied() throws {
         defer { dir.remove() }
         let url = try makeCapture()
