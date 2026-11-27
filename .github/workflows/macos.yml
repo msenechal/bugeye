@@ -20,7 +20,7 @@ jobs:
     env:
       BUGEYE_KEYCHAIN_TESTS: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
       - name: Select Xcode 27
         run: scripts/select-xcode.sh
       - name: Build
