@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.services = services
         services.general.ensureFolderExists()
+        // Reads the Keychain off the main actor; the AI pane shows "No key saved." until it answers.
+        Task { await services.aiKey.load() }
 
         let settingsWindow = SettingsWindowController(
             panes: SettingsLayout.panes(for: services.registry), general: services.general, ai: services.aiKey)

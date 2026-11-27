@@ -19,40 +19,56 @@ import Testing
             ])
     }
 
-    @Test func startsFromWhatTheKeychainHolds() {
-        #expect(AIKeySettings(secrets: FakeSecretStore(), client: FakeLLM(), model: { "m" }).status == .noKey)
-        let saved = FakeSecretStore([.anthropicAPIKey: "sk"])
-        #expect(AIKeySettings(secrets: saved, client: FakeLLM(), model: { "m" }).status == .savedNotTested)
+    @Test func loadingShowsWhatTheKeychainHolds() async {
+        let empty = AIKeySettings(secrets: FakeSecretStore(), client: FakeLLM(), model: { "m" })
+        await empty.load()
+        #expect(empty.status == .noKey)
+        let saved = AIKeySettings(
+            secrets: FakeSecretStore([.anthropicAPIKey: "sk"]), client: FakeLLM(), model: { "m" })
+        await saved.load()
+        #expect(saved.status == .savedNotTested)
     }
 
-    @Test func savingStoresTheTrimmedKeyInTheSecretStore() throws {
+    @Test func theKeychainIsNeverCalledOnTheMainActor() async {
+        let store = MainActorProbeSecretStore(FakeSecretStore([.anthropicAPIKey: "old"]))
+        let settings = AIKeySettings(
+            secrets: store, client: FakeLLM([.success(FakeLLM.reply("OK"))]), model: { "m" })
+        await settings.load()
+        await settings.save("new")
+        await settings.testKey()
+        #expect(store.mainActorWasFree.count >= 3)
+        #expect(store.mainActorWasFree.allSatisfy { $0 }, "a SecretStore call blocked the main actor")
+    }
+
+    @Test func savingStoresTheTrimmedKeyInTheSecretStore() async throws {
         let secrets = FakeSecretStore()
         let settings = AIKeySettings(secrets: secrets, client: FakeLLM(), model: { "m" })
-        settings.save("  sk-ant-123 \n")
+        await settings.save("  sk-ant-123 \n")
         #expect(try secrets.secret(for: .anthropicAPIKey) == "sk-ant-123")
         #expect(settings.status == .savedNotTested)
     }
 
-    @Test func savingAnEmptyFieldChangesNothing() throws {
+    @Test func savingAnEmptyFieldChangesNothing() async throws {
         let secrets = FakeSecretStore([.anthropicAPIKey: "sk"])
         let settings = AIKeySettings(secrets: secrets, client: FakeLLM(), model: { "m" })
-        settings.save("   ")
+        await settings.load()
+        await settings.save("   ")
         #expect(try secrets.secret(for: .anthropicAPIKey) == "sk")
         #expect(settings.status == .savedNotTested)
     }
 
-    @Test func savingANewKeyReplacesTheOldOne() throws {
+    @Test func savingANewKeyReplacesTheOldOne() async throws {
         let secrets = FakeSecretStore([.anthropicAPIKey: "old"])
         let settings = AIKeySettings(secrets: secrets, client: FakeLLM(), model: { "m" })
-        settings.save("new")
+        await settings.save("new")
         #expect(try secrets.secret(for: .anthropicAPIKey) == "new")
     }
 
-    @Test func aKeychainFailureSaysTheKeyWasNotSaved() {
+    @Test func aKeychainFailureSaysTheKeyWasNotSaved() async {
         let secrets = FakeSecretStore()
         let settings = AIKeySettings(secrets: secrets, client: FakeLLM(), model: { "m" })
         secrets.failNextWrite()
-        settings.save("sk")
+        await settings.save("sk")
         #expect(settings.status == .saveFailed)
     }
 
@@ -63,7 +79,7 @@ import Testing
         await settings.testKey()
         #expect(settings.status == .works)
         secrets.failNextWrite()
-        settings.save("new")
+        await settings.save("new")
         // Never "Key saved." for a key that wasn't stored; the old key stays.
         #expect(settings.status == .saveFailed)
         #expect(try secrets.secret(for: .anthropicAPIKey) == "old")
@@ -148,7 +164,7 @@ import Testing
         let settings = AIKeySettings(secrets: FakeSecretStore([.anthropicAPIKey: "old"]), client: gate, model: { "m" })
         let test = Task { await settings.testKey() }
         await gate.waitUntilCalled()
-        settings.save("new")
+        await settings.save("new")
         gate.release(.failure(.http(status: 401, type: nil, message: nil)))
         await test.value
         #expect(settings.status == .savedNotTested)
@@ -159,7 +175,7 @@ import Testing
         let settings = AIKeySettings(secrets: FakeSecretStore([.anthropicAPIKey: "old"]), client: llm, model: { "m" })
         let old = Task { await settings.testKey() }
         await llm.waitUntilCalled()
-        settings.save("new")
+        await settings.save("new")
         // Without this, the second press would wait for a stale answer that may never come.
         try #require(!settings.isTesting)
         let new = Task { await settings.testKey() }
@@ -233,5 +249,38 @@ final class GatedLLM: LLMClient {
 
     func release(_ answer: Result<LLMResponse, LLMError>) {
         answers.continuation.yield(answer)
+    }
+}
+
+/// A SecretStore that records, for every call, whether the main actor was free while it ran: it schedules a
+/// main-actor job and waits up to a second for it. A call made on the main actor blocks that job, so it records
+/// false. Works on Linux, where the main actor need not be the main thread.
+final class MainActorProbeSecretStore: SecretStore {
+    private let inner: FakeSecretStore
+    private let log = Mutex<[Bool]>([])
+    var mainActorWasFree: [Bool] { log.withLock { $0 } }
+
+    init(_ inner: FakeSecretStore) { self.inner = inner }
+
+    private func record() {
+        let ran = DispatchSemaphore(value: 0)
+        Task { @MainActor in ran.signal() }
+        let free = ran.wait(timeout: .now() + 1) == .success
+        log.withLock { $0.append(free) }
+    }
+
+    func secret(for key: SecretKey) throws -> String? {
+        record()
+        return try inner.secret(for: key)
+    }
+
+    func setSecret(_ value: String, for key: SecretKey) throws {
+        record()
+        try inner.setSecret(value, for: key)
+    }
+
+    func removeSecret(for key: SecretKey) throws {
+        record()
+        try inner.removeSecret(for: key)
     }
 }

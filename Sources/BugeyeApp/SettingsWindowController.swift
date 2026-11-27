@@ -92,8 +92,8 @@ struct AIPane: View {
             Section {
                 HStack {
                     SecureField(ShellStrings.apiKeyField, text: $typedKey)
-                        .onSubmit { model.save(typedKey) }
-                    Button(ShellStrings.saveKey) { model.save(typedKey) }
+                        .onSubmit { save() }
+                    Button(ShellStrings.saveKey) { save() }
                 }
                 HStack {
                     Button(ShellStrings.testKey) {
@@ -108,5 +108,11 @@ struct AIPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// The Keychain write runs off the main actor inside `AIKeySettings.save`.
+    private func save() {
+        let typed = typedKey
+        Task { await model.save(typed) }
     }
 }

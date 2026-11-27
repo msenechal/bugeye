@@ -74,32 +74,48 @@ public final class AIKeySettings {
     @ObservationIgnored private let secrets: any SecretStore
     @ObservationIgnored private let client: any LLMClient
     @ObservationIgnored private let model: @MainActor () -> String
-    /// Bumped by every save, so a test that finishes after a new key was saved doesn't report on it.
+    /// Bumped by every save, so a load or test that finishes after a new key was saved doesn't report on it.
     @ObservationIgnored private var generation = 0
 
+    /// Touches nothing slow: the status starts at "No key saved." and `load()` reads the Keychain.
     public init(secrets: any SecretStore, client: any LLMClient, model: @escaping @MainActor () -> String) {
         self.secrets = secrets
         self.client = client
         self.model = model
-        status = Self.hasKey(secrets) ? .savedNotTested : .noKey
+        status = .noKey
+    }
+
+    /// Reads whether a key is stored, off the main actor (the Keychain can block on a prompt or a locked
+    /// keychain). The app calls it once at launch. Ignored if a key was saved meanwhile.
+    public func load() async {
+        let started = generation
+        let stored = await Self.hasKey(secrets)
+        guard generation == started else { return }
+        status = stored ? .savedNotTested : .noKey
     }
 
     /// Saves the typed key (trimmed), from the Save button or Return. An empty field changes nothing:
     /// removing a key is not a Wave 0 feature, and a stray click or Return must not delete it. If the Keychain
-    /// refuses, the status says so and any key stored before stays.
-    public func save(_ typed: String) {
+    /// refuses, the status says so and any key stored before stays. The Keychain write runs off the main actor;
+    /// if another save starts meanwhile, the later one decides the status.
+    public func save(_ typed: String) async {
         let key = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        do {
-            try secrets.setSecret(key, for: .anthropicAPIKey)
-        } catch {
-            status = .saveFailed
-            return
-        }
         generation += 1
+        let started = generation
         // A test still running is about the old key: its answer is ignored, so the new key can be tested now.
         isTesting = false
-        status = .savedNotTested
+        let secrets = secrets
+        let stored = await Self.offMainActor {
+            do {
+                try secrets.setSecret(key, for: .anthropicAPIKey)
+                return true
+            } catch {
+                return false
+            }
+        }
+        guard generation == started else { return }
+        status = stored ? .savedNotTested : .saveFailed
     }
 
     /// Seconds each attempt of the key test waits. With the client's two retries, a stalled connection shows
@@ -114,14 +130,15 @@ public final class AIKeySettings {
 
     public func testKey() async {
         guard !isTesting else { return }
-        guard Self.hasKey(secrets) else {
-            status = .noKey
-            return
-        }
         isTesting = true
         let started = generation
         // A stale test (a new key was saved meanwhile) must not end the test that replaced it.
         defer { if generation == started { isTesting = false } }
+        guard await Self.hasKey(secrets) else {
+            if generation == started { status = .noKey }
+            return
+        }
+        guard generation == started else { return }
         let result: Result<LLMResponse, LLMError>
         do {
             result = .success(try await client.send(testRequest()))
@@ -132,8 +149,16 @@ public final class AIKeySettings {
         status = AIKeyStatus.afterTest(result)
     }
 
-    private static func hasKey(_ secrets: any SecretStore) -> Bool {
-        guard let key = (try? secrets.secret(for: .anthropicAPIKey)) ?? nil else { return false }
-        return !key.isEmpty
+    /// Whether a non-empty key is stored, read off the main actor.
+    private static func hasKey(_ secrets: any SecretStore) async -> Bool {
+        await offMainActor {
+            guard let key = (try? secrets.secret(for: .anthropicAPIKey)) ?? nil else { return false }
+            return !key.isEmpty
+        }
+    }
+
+    /// Runs blocking work (Keychain calls) on the cooperative pool, never on the main actor.
+    private nonisolated static func offMainActor<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await Task.detached(operation: work).value
     }
 }
