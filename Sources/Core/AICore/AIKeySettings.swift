@@ -90,6 +90,8 @@ public final class AIKeySettings {
         let key = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
         generation += 1
+        // A test still running is about the old key: its answer is ignored, so the new key can be tested now.
+        isTesting = false
         do {
             try secrets.setSecret(key, for: .anthropicAPIKey)
         } catch {
@@ -115,8 +117,9 @@ public final class AIKeySettings {
             return
         }
         isTesting = true
-        defer { isTesting = false }
         let started = generation
+        // A stale test (a new key was saved meanwhile) must not end the test that replaced it.
+        defer { if generation == started { isTesting = false } }
         let result: Result<LLMResponse, LLMError>
         do {
             result = .success(try await client.send(testRequest()))

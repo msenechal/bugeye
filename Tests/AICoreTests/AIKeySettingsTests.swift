@@ -2,6 +2,7 @@ import AICore
 import BugeyeCore
 import BugeyeTestSupport
 import Foundation
+import Synchronization
 import Testing
 
 @MainActor @Suite struct AIKeySettingsTests {
@@ -137,6 +138,65 @@ import Testing
         gate.release(.failure(.http(status: 401, type: nil, message: nil)))
         await test.value
         #expect(settings.status == .savedNotTested)
+    }
+
+    @Test func aNewKeyCanBeTestedWhileAnOldTestIsStillRunning() async throws {
+        let llm = SequencedLLM()
+        let settings = AIKeySettings(secrets: FakeSecretStore([.anthropicAPIKey: "old"]), client: llm, model: { "m" })
+        let old = Task { await settings.testKey() }
+        await llm.waitUntilCalled()
+        settings.save("new")
+        // Without this, the second press would wait for a stale answer that may never come.
+        try #require(!settings.isTesting)
+        let new = Task { await settings.testKey() }
+        await llm.waitUntilCalled()
+        #expect(settings.isTesting)
+        llm.release(call: 0, .failure(.http(status: 401, type: nil, message: nil)))
+        await old.value
+        // The stale answer neither changes the status nor ends the new test.
+        #expect(settings.isTesting)
+        #expect(settings.status == .savedNotTested)
+        llm.release(call: 1, .success(FakeLLM.reply("OK")))
+        await new.value
+        #expect(settings.status == .works)
+        #expect(!settings.isTesting)
+    }
+}
+
+/// An LLM whose calls each wait for their own answer, released by the test in any order.
+final class SequencedLLM: LLMClient {
+    private let called = AsyncStream<Void>.makeStream()
+    private let pending = Mutex<[Int: CheckedContinuation<Result<LLMResponse, LLMError>, Never>]>([:])
+    private let early = Mutex<[Int: Result<LLMResponse, LLMError>]>([:])
+    private let count = Mutex(0)
+
+    func send(_ request: LLMRequest) async throws(LLMError) -> LLMResponse {
+        let index = count.withLock { n in
+            defer { n += 1 }
+            return n
+        }
+        let answer = await withCheckedContinuation { continuation in
+            if let ready = early.withLock({ $0.removeValue(forKey: index) }) {
+                continuation.resume(returning: ready)
+            } else {
+                pending.withLock { $0[index] = continuation }
+            }
+            called.continuation.yield()
+        }
+        return try answer.get()
+    }
+
+    func waitUntilCalled() async {
+        var iterator = called.stream.makeAsyncIterator()
+        _ = await iterator.next()
+    }
+
+    func release(call index: Int, _ answer: Result<LLMResponse, LLMError>) {
+        if let continuation = pending.withLock({ $0.removeValue(forKey: index) }) {
+            continuation.resume(returning: answer)
+        } else {
+            early.withLock { $0[index] = answer }
+        }
     }
 }
 
