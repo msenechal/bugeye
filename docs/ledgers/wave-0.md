@@ -17,7 +17,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 6 | done | feb2072 |  |
 | 7 | done | a2f5b94 | 6 BugeyeCore tests |
 | 8 | done | fcc05fe |  |
-| 9 | done | (this commit) |  |
+| 9 | done | c671cfc |  |
+| 10 | done | (this commit) |  |
 
 ## Rulings
 
