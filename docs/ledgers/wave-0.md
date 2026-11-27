@@ -25,7 +25,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 14 | done | d07226b |  |
 | 15 | done | a641b6b |  |
 | 16 | done | acf7f83 |  |
-| 17 | done | (this commit) |  |
+| 17 | done | 10ce7b0 |  |
+| 18 | done | (this commit) | wire format against hand-written fixtures; facts re-checked with the claude-api skill |
 
 ## Rulings
 
