@@ -41,6 +41,15 @@ import Testing
         #expect(sleeper.recorded == [.milliseconds(500), .seconds(2)])
     }
 
+    @Test func aCancelledRequestIsNotRetried() async {
+        let transport = RecordedTransport([.cancelled])
+        await #expect(throws: LLMError.transport("cancelled")) {
+            try await client(transport).send(request)
+        }
+        #expect(transport.requests.count == 1)
+        #expect(sleeper.recorded.isEmpty)
+    }
+
     @Test func givesUpAfterTwoRetries() async throws {
         let transport = RecordedTransport([
             try .json(529, "error-529"), try .json(529, "error-529"), try .json(529, "error-529"),

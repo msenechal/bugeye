@@ -40,6 +40,8 @@ final class RecordedTransport: HTTPTransport {
     enum Answer {
         case response(TransportResponse)
         case offline
+        /// What URLSession throws when the task making the request is cancelled.
+        case cancelled
     }
 
     private let state: Mutex<(answers: [Answer], requests: [TransportRequest])>
@@ -58,6 +60,7 @@ final class RecordedTransport: HTTPTransport {
         switch answer {
         case .response(let response): return response
         case .offline, nil: throw URLError(.notConnectedToInternet)
+        case .cancelled: throw URLError(.cancelled)
         }
     }
 }

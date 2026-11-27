@@ -50,6 +50,9 @@ public struct AnthropicClient: LLMClient {
                 throw error
             } catch is CancellationError {
                 throw .transport("cancelled")
+            } catch let error as URLError where error.code == .cancelled {
+                // URLSession reports a cancelled task this way: stop, never retry.
+                throw .transport("cancelled")
             } catch {
                 failure = .transport(String(describing: error))
                 outcome = .connectionFailed
