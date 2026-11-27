@@ -15,7 +15,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 4 | done | 75b8e5e | macos job on xcode-27; versions: pending first run |
 | 5 | done | 365e2f4 | review workflow; guard caught the missing same-repo condition first; proof run waits on the Actions blocker |
 | 6 | done | feb2072 |  |
-| 7 | done | (this commit) | 6 BugeyeCore tests |
+| 7 | done | a2f5b94 | 6 BugeyeCore tests |
+| 8 | done | (this commit) |  |
 
 ## Rulings
 
