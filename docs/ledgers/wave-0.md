@@ -37,7 +37,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 26 | done | 4d4f658 | not compiled here |
 | 27 | done | 42c11a9 | not compiled here |
 | 28 | done | c31f93a | not compiled here |
-| 29 | done | (this commit) |  |
+| 29 | done | 7a78313 |  |
+| 30 | done | (this commit) | strings checked against spec and sources |
 
 ## Rulings
 
