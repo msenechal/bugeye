@@ -55,6 +55,19 @@ import Testing
         #expect(settings.status == .noKey)
     }
 
+    @Test func aFailedSaveOverAnOlderKeyDoesNotClaimTheNewOneWasSaved() async throws {
+        let secrets = FakeSecretStore([.anthropicAPIKey: "old"])
+        let settings = AIKeySettings(
+            secrets: secrets, client: FakeLLM([.success(FakeLLM.reply("OK"))]), model: { "m" })
+        await settings.testKey()
+        #expect(settings.status == .works)
+        secrets.failNextWrite()
+        settings.save("new")
+        // The old key is still the one stored and it still works: nothing changed, so the status doesn't either.
+        #expect(settings.status == .works)
+        #expect(try secrets.secret(for: .anthropicAPIKey) == "old")
+    }
+
     @Test func testingSendsOneTinyRequestWithTheChosenModel() async {
         let llm = FakeLLM([.success(FakeLLM.reply("OK"))])
         let settings = AIKeySettings(

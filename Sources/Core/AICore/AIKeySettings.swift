@@ -84,20 +84,21 @@ public final class AIKeySettings {
     }
 
     /// Saves the typed key (trimmed), from the Save button or Return. An empty field changes nothing:
-    /// removing a key is not a Wave 0 feature, and a stray click or Return must not delete it. If the Keychain refuses, the status shows
-    /// whatever is still stored.
+    /// removing a key is not a Wave 0 feature, and a stray click or Return must not delete it. If the Keychain
+    /// refuses, nothing changes either: the status still describes the key that is stored (the spec has no
+    /// "couldn't save" line yet).
     public func save(_ typed: String) {
         let key = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        generation += 1
-        // A test still running is about the old key: its answer is ignored, so the new key can be tested now.
-        isTesting = false
         do {
             try secrets.setSecret(key, for: .anthropicAPIKey)
         } catch {
-            // Fall through: the status below shows what the Keychain holds.
+            return
         }
-        status = Self.hasKey(secrets) ? .savedNotTested : .noKey
+        generation += 1
+        // A test still running is about the old key: its answer is ignored, so the new key can be tested now.
+        isTesting = false
+        status = .savedNotTested
     }
 
     /// Seconds each attempt of the key test waits. With the client's two retries, a stalled connection shows
