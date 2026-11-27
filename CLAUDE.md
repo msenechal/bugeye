@@ -58,7 +58,7 @@ design/                    the design atlas (read-only)
 
 ## Git and process
 
-- Work on a branch (`feat/<wave>-<slice>`), never on `main`. Push and open a draft pull request early; CI (`linux`, `macos`) runs on every push, and `claude-review` comments when the PR is opened or marked ready. Never merge: the user merges.
+- Work on a branch (`feat/<wave>-<slice>`), never on `main`. Push and open a draft pull request early. CI (`linux`, `macos`, `claude-review`) never runs on drafts: while the PR is a draft, `make test-core lint guards` is your check and you batch commits into few pushes. Mark the PR ready (or start a manual `workflow_dispatch` run) when you need the `macos` job; every push to a ready PR re-runs CI and the review. Never merge: the user merges.
 - Commit messages end with the trailer lines your session's instructions give (Co-Authored-By, Claude-Session). Pull request descriptions end with the Claude Code line they give.
 - The process is in `.claude/skills/`: `brainstorm` → `write-spec` → `write-plan` → `execute-plan` → `final-review` → fix pass → `manual-checklist`. During execution, decide ambiguities yourself, record each as `Ruling:` in the ledger (`docs/ledgers/`) and keep going.
 - Leave `docs/rd/` and `t.md` untracked and untouched: they are the user's notes.

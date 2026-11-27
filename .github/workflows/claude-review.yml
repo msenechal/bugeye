@@ -4,21 +4,29 @@ name: claude-review
 # as comments. It never approves. Authenticated with the subscription token in CLAUDE_CODE_OAUTH_TOKEN.
 on:
   pull_request:
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to review
+        required: true
 
 permissions: {}
 
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number }}
+  group: claude-review-${{ github.event.pull_request.number || inputs.pr }}
   cancel-in-progress: true
 
 jobs:
   review:
     # Spec W6: the repository is public, so only pull requests whose branch lives in this repository reach
-    # the agent and the token. Drafts are reviewed when opened and when marked ready, not on every push.
+    # the agent and the token. Drafts are never reviewed (the user's rule, 27 Nov 2026). A manual run
+    # (workflow_dispatch, write access only) reviews the PR number it is given.
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.action != 'synchronize' || github.event.pull_request.draft == false)
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -34,7 +42,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
 
             You review a pull request in Bugeye, a personal macOS 26 menu-bar screenshot app that Claude
             agents build from the design docs in design/. The PR branch is checked out in the working directory.

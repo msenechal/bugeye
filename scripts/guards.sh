@@ -63,6 +63,12 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
     if grep -qE 'secrets\.|anthropics/claude-code-action' "$wf" && ! grep -qF "$same_repo" "$wf"; then
         fail workflow "$wf uses secrets or an agent without the same-repository condition"
     fi
+    # The user's rule (27 Nov 2026): pull request CI runs only for PRs that are ready, never drafts, and a
+    # new push cancels the run it replaces.
+    if grep -qE '^[[:space:]]*pull_request:' "$wf"; then
+        grep -qF 'github.event.pull_request.draft == false' "$wf" || fail workflow "$wf runs on draft pull requests"
+        grep -qE '^[[:space:]]*concurrency:' "$wf" || fail workflow "$wf has no concurrency group"
+    fi
 done
 
 # 6. One compiler everywhere (spec W2): the Linux image matches .swift-version.

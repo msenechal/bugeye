@@ -163,9 +163,11 @@ Compiled only in debug builds: a Unix-domain socket in the app's temp directory.
 
 | Workflow | Runs on | Trigger | Does |
 |---|---|---|---|
-| `linux.yml` | GitHub-hosted Linux, `swift` Docker image at the pinned version | push, pull request | `make test-core`, `swift-format lint`, `scripts/guards.sh` |
-| `macos.yml` | GitHub-hosted macOS with the macOS 26 SDK | pull request, push to `main` | `make test`, `make bundle` |
-| `claude-review.yml` | GitHub-hosted Linux | pull request opened or updated, head branch in this repo only (W6) | Claude Code Action reviews the diff against `CLAUDE.md` and the `design/11` §6 bug classes; posts findings as review comments, never an approval |
+| `linux.yml` | GitHub-hosted Linux, `swift` Docker image at the pinned version | ready pull request to `main`, push to `main`, manual | `make test-core`, `swift-format lint`, `scripts/guards.sh` |
+| `macos.yml` | GitHub-hosted macOS (`xcode-27` runner) | ready pull request to `main`, push to `main`, manual | `make test`, `make bundle` |
+| `claude-review.yml` | GitHub-hosted Linux | ready pull request to `main`, head branch in this repo only (W6); manual with a PR number | Claude Code Action reviews the diff against `CLAUDE.md` and the `design/11` §6 bug classes; posts findings as review comments, never an approval |
+
+CI never runs for draft pull requests (your rule, 27 Nov 2026): a pull request's jobs run when it is opened ready, marked ready, or pushed to while ready, and a new push cancels the run it replaces. While a PR is a draft, the session's own `make test-core lint guards` is the only check; it batches commits into fewer pushes, and marks the PR ready (or starts a manual run) when it needs the `macos` job. `scripts/guards.sh` fails any pull-request workflow without the draft condition or a concurrency group.
 
 Required checks on `main` once green: `linux`, `macos`. The review is not a required check: it comments, the authoring session fixes, you merge.
 

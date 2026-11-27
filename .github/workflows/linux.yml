@@ -1,19 +1,29 @@
 name: linux
 
 # Tier 0 on GitHub: the portable core, format and bug-class guards, in the pinned Swift image.
-# No secrets and read-only, so it runs for every push and pull request.
+# Read-only and no secrets. Runs for ready pull requests to main, pushes to main and manual runs.
 on:
-  push:
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: linux-${{ github.event_name }}-${{ github.ref }}
+  group: linux-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   linux:
+    # Ready pull requests to main from branches of this repository only, never drafts (the user's rule,
+    # 27 Nov 2026; spec W6); pushes to main and manual runs always.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.draft == false &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     container: swift:6.4.3-noble  # must match .swift-version (scripts/guards.sh checks)
     timeout-minutes: 30
