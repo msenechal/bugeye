@@ -1,0 +1,29 @@
+name: macos
+
+# Tier 1: every target, including AppKit and the adapters, on a GitHub-hosted Mac (free: the repo is
+# public). No real capture here: hosted runners can't be granted Screen Recording or Accessibility.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+# No concurrency group on purpose: every push keeps its own result, so each task's commit is checked.
+
+jobs:
+  macos:
+    runs-on: xcode-27  # the macos-26 image stops at Xcode 26.6 (spec W2)
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      BUGEYE_KEYCHAIN_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select Xcode 27
+        run: scripts/select-xcode.sh
+      - name: Build
+        run: make build
+      - name: All tests
+        run: make test
