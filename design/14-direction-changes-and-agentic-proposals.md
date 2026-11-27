@@ -2,7 +2,7 @@
 
 Feedback from the user after the first read of the design docs, and proposals that follow from it. **Rulings** (§1) are the user's decisions and override earlier docs where they conflict. Everything else is a **proposal** for the next brainstorm, not a decision.
 
-_Round 1 · November 2026 · from the user's review of the dashboard overview_
+_Round 1 + 2 · November 2026 · from the user's review of the dashboard_
 
 ## 1. Rulings from the user
 
@@ -14,6 +14,8 @@ _Round 1 · November 2026 · from the user's review of the dashboard overview_
 | R4 | Recording | **Auto subtitles and captions, enhanced with AI.** Recordings get automatic subtitles/captions, perhaps enhanced with AI. | M13 (doc 12 §3) already commits to on-device captions from SpeechTranscriber. New: an optional Claude pass on the transcript, and captions treated as a core recording feature. |
 | R5 | Collections | **Collections export as a designed presentation.** Instead of a plain document, collections become a beautiful HTML/PDF/doc presentation, like the pages Claude generates. | Replaces the M11 exporters' plain layout (doc 10). Uses Claude through the API, under the doc 13 §5 rules. |
 | R6 | Guide | **Record Guide produces a video walkthrough.** The guide's outcome is a video flow with zoom-ins and text/captions explaining every action. Today's output, a vertical HTML/PDF of every step, is judged poor. | Changes the M11 guide recorder's primary output (doc 10). The step document becomes a secondary export at most. |
+| R7 | Collections | **Claude writes the presentation's HTML/CSS itself.** Freeform: Claude writes its own HTML/CSS, in the style of its artifacts. Not deterministic and hard to test, and that's fine: test that it generates something, and have a small agent score the output against the inputs. | Settles the R5 open question against the spec-renderer recommendation. Testing moves from golden outputs to structural checks plus an AI judge score. |
+| R8 | Development | **No paid CI runners.** No GitHub-hosted macOS runner and no self-hosted runner: you don't have them and don't want to pay for them. | Replaces doc 13 §3 Tiers 1 and 2. Private repo: CI on GitHub is Linux only. Public repo (you don't mind switching): free hosted macOS brings back the macOS build and unit tests. Either way, real-capture smoke tests, E2E and demos run on your own Mac, on demand, with your approval. |
 
 ## 2. Proposal: one motion engine for zoom, captions and guide video
 
@@ -50,27 +52,38 @@ Auto-zoom (R3), captions (R4) and the guide video (R6) are one pipeline with thr
 - Chapters per step in the MP4. A secondary export renders the steps through the presentation engine (R5), not the old vertical page.
 - Privacy rules stay: typed text and secure fields never reach captions, video overlays or Claude.
 
-## 3. Proposal: collections as designed presentations (R5)
+## 3. Collections as designed presentations (R5, R7)
 
-Claude composes, Bugeye renders. Claude returns a structured presentation spec (structured outputs, JSON schema) that picks layouts, writes titles, intros and captions, and orders content. A local renderer turns the spec into a self-contained HTML page or slides, and a PDF.
+Claude designs each export as a complete, self-contained HTML document, in the style of its artifacts: its own layout, type and CSS, optional inline script for slide navigation. Bugeye's job shrinks to preparing the inputs, locking the output down, checking it, and printing it to PDF.
 
-Why a spec rather than model-written HTML:
+| Step | What happens |
+|---|---|
+| Prepare | Run the M8 sweep and blur findings; downscale images; collect text blocks and captions. Images go to Claude once, as images, and come back only as placeholders (img-1.png …). |
+| Generate | One Claude call with a cached design brief (the style you like) plus an optional style hint: report, keynote, onboarding guide, dark. Long output streams. |
+| Lock down | Swap placeholders for the real embedded images, strip any external URL, and inject a Content-Security-Policy that blocks all network access. Whatever Claude wrote, the file can't load or send anything. |
+| Check | Structural checks, then a small judge model scores it (below). A failed check retries once with the error, then falls back to the plain local layout. |
+| Show and export | In-app preview in a WebKit view with networking off. Export the HTML file, a PDF printed by WebKit, or both. ‘Adjust…’ takes a short note (‘more minimal’, ‘bigger images’) and regenerates from the previous version. |
 
-- Deterministic and testable: the spec is plain data, golden-tested on Linux; the renderer is tested once.
-- Safe: no model-written script runs in the app or in exports.
-- Works offline: without a key, a default layout renders the same spec shape from the collection as is.
-- Consistent quality: a small set of curated themes and components looks designed every time.
+Structural checks (the ‘it generated something’ test):
 
-Components: Title / cover, Image with numbered callouts, Before / after (pairs with M12), Step (image + caption), Text block, Code / log block, Comparison grid, Summary / next steps.
+- Parses as HTML and stays under a size cap.
+- Every input image placeholder is used; no image is invented.
+- No external URLs after lock-down; the CSP is present.
+- Renders in WebKit with no script errors; the PDF has at least one page.
+- Text from the collection appears in the page (fuzzy match).
 
-Outputs:
+Judge criteria:
 
-- Scrolling HTML page (single file, images embedded)
-- Slides HTML (arrow keys)
-- PDF (rendered by WebKit)
-- Markdown stays as a plain fallback
+- **Fidelity:** All images and text are present, captions match their images, nothing is invented.
+- **Privacy:** Nothing the sweep blurred is readable; no typed text appears.
+- **Legibility:** Contrast, text size, nothing clipped or overlapping, in a screenshot of the render.
+- **Design:** Hierarchy, consistency, fits the requested style.
 
-Brainstorm question: allow a ‘freeform’ mode where Claude writes the HTML/CSS itself (closer to Claude's own artifacts, less predictable), sanitised to no script? Recommendation: ship the spec renderer first; add freeform only if the themes feel limiting.
+A cheaper model (a setting, e.g. Haiku) gets the inputs, the final HTML and screenshots of the render, and returns a structured score per criterion (0–10) with one-line reasons. In the app, a low fidelity or privacy score regenerates once, then warns. In CI, a nightly eval over a fixed set of collections tracks the average; a drop opens an issue.
+
+Tests: On Linux: the sanitiser, CSP injection, placeholder swap, size cap and judge-score parsing, all with FakeLLM fixtures. On your Mac: WebKit rendering and PDF. Real-API evals run on demand.
+
+Fallback: With no key, offline, or after a refusal or two failed checks: the plain local layout (today's M11 exporter, tidied up). The guide's secondary export (R6) uses the same pipeline.
 
 ## 4. Proposal: scoping for parallel cloud sessions (R1)
 
@@ -93,18 +106,41 @@ Wave contents follow the README build order and the doc 12 dependencies; the exa
 
 ## 5. Proposal: the PR pipeline (R2)
 
-1. **Session works.** A cloud session implements its plan task with TDD and keeps Tier 0 (Linux build and tests) green.
-2. **Push + open PR.** The session pushes feat/<epic>-<slice> and opens a draft PR linked to its issue, then watches the PR for activity.
-3. **Tier 1 CI.** Hosted macOS runner: full build, all unit tests, rasterisation goldens, CLT-only build check. The PR leaves draft when green.
-4. **Claude review.** A fresh reviewer reads the whole diff with the doc 11 bug-class checklist and posts findings as review comments.
-5. **Auto-fix.** The authoring session fixes Critical and Important findings as new commits, each with a test that fails first. Large or disputed fixes go to a stacked PR onto the feature branch.
-6. **Re-review.** The reviewer checks only the delta. After two fix rounds without convergence it hands the PR to you.
-7. **Tier 2 E2E.** Self-hosted Mac runner: smoke tests, scenario runs on the fixture app, screenshots and a short demo video attached to the PR.
-8. **You merge.** Your manual pass (feel and taste only) and merge through a merge queue. Docs and CLAUDE.md update in the same merge.
+1. **Session works.** A cloud session implements its plan task with TDD and keeps Tier 0 (Linux build and tests in the session) green.
+2. **Push + open PR.** The session pushes feat/<epic>-<slice>, opens a draft PR linked to its issue, and watches it.
+3. **GitHub CI.** Linux job: build and test the portable core, format, lint and the bug-class guards. If the repo is public, a free macOS job also builds the app and runs every unit test, including AppKit view models and render goldens.
+4. **Claude review.** A fresh reviewer session reads the whole diff with the doc 11 checklist and posts findings.
+5. **Auto-fix.** The authoring session fixes Critical and Important findings as commits, each with a test that fails first.
+6. **Re-review.** The reviewer checks the delta. After two rounds without convergence it hands the PR to you.
+7. **Mac check (on demand).** When your Mac is on, a session asks to use your bugeye folder through Remote Control. You approve; it runs the macOS build, all tests, smoke tests on the fixture app, records a demo, and posts the results on the PR.
+8. **You merge.** Your manual pass (feel and taste only) and merge. A PR merges only after the Mac check has posted green.
 
-- Recommendation: fix commits on the same branch by default (the reviewer sees a small delta); stacked PRs only for large or contested fixes. Stacks multiply rebases when several sessions run at once.
-- Loop limits: two auto-fix rounds per PR and one CI-fix attempt per failure, then a human (doc 13 guardrail).
-- Cost: Anthropic's managed Code Review averages $15–25 per review by its own figures; the Claude Code GitHub Action is lighter. Use the deep review on milestone PRs and the light one on slices.
+- Fix commits on the same branch by default; stacked PRs only for large or contested fixes.
+- Loop limits: two auto-fix rounds per PR and one CI-fix attempt per failure, then you.
+- Batch the Mac check: run it once per slice before merge, not on every push. Your Mac answers only while the Claude app is running there.
+- Trade-off: AppKit compile errors and visual bugs surface only at the Mac check. Keep the macOS shell thin (doc 13 §2) so most code is tested on Linux on every push.
+
+## 5b. CI without paid runners (R8)
+
+What the terms mean:
+
+- **GitHub-hosted runner.** A virtual machine GitHub starts for each CI job. Linux, Windows and macOS are offered. Free for public repos; bugeye is private, so jobs spend a small monthly credit and then cost money. macOS is about ten times the price of Linux ($0.062 vs $0.006 per minute).
+- **Self-hosted runner.** GitHub's runner program installed on a machine you own (here, your Mac), which then picks up CI jobs from the repo. No GitHub fee by most sources (a planned per-minute fee was postponed), but it runs repo code automatically under your account and needs a dedicated macOS user to be safe.
+- **Why doc 13 wanted them.** A macOS app can't be built on Linux. Something with macOS must compile the app target and run AppKit, ScreenCaptureKit and Accessibility tests.
+
+| Option for macOS checks | Verdict | Cost | How |
+|---|---|---|---|
+| Make the repo public: GitHub-hosted macOS free | Recommended if you go public | Free (public repos) | Standard GitHub-hosted runners, macOS included, cost nothing on public repos. That brings back automatic macOS build and unit tests on every PR. Real capture still needs your Mac: hosted runners can't be granted Screen Recording or Accessibility. |
+| Your Mac through Remote Control | Recommended either way, for real capture | Free | A cloud session asks to use your bugeye folder on your Mac; you approve each time; it runs the checks there and reports back. No runner to install or secure, and nothing runs without you. |
+| A local Claude Code session on your Mac | Fallback | Free | You start a session on the Mac and run a /verify-pr command that checks out the PR, runs the checks and comments. The same work, triggered by you. |
+| Self-hosted runner on your Mac | Later, if ever | Free, more setup | Fully automatic, but you maintain the runner, a dedicated account and the doc 13 safety rules. |
+| GitHub-hosted macOS runner, private repo | Not used | Paid | Excluded by R8. |
+
+What costs money:
+
+- GitHub, private repo: Linux CI only, within the free monthly allowance for short jobs. Public repo: standard Linux and macOS runners are free.
+- Claude reviews and fixes run as cloud sessions on your Claude plan. Running them inside GitHub Actions (Claude Code Action, gh-aw) needs an API key billed per token, or a subscription token if the action accepts one: check before adopting.
+- In-app AI features (presentations, captions, guide prose, the judge) call the API with your key and cost tokens. The judge uses a cheaper model.
 
 ## 6. More agentic coding ideas
 
@@ -118,8 +154,8 @@ Wave contents follow the README build order and the doc 12 dependencies; the exa
 | Quality | Spec reviewer | Before planning, a fresh agent reads the spec for unsettled user-visible strings, missing error states and untestable claims. This is the cheapest place to catch the doc 11 ‘settle every string’ lesson. | Claude Code Action on spec PRs |
 | Quality | Flake hunter | When a test fails then passes, an agent reruns it N times on the same commit, records the failure rate, and opens a quarantine issue with the data, never a silent skip. | gh-aw scheduled workflow |
 | Dogfooding | Bugeye files its own bugs | Point the bug report composer (RD-08) at the bugeye repo: a hotkey files a GitHub issue with screenshot, source and env. A triage agent labels it and the dispatcher starts a fix session. | RD-08 + gh-aw triage |
-| Dogfooding | Every PR ships a demo video | On Tier 2, the guide recorder (R6) records the new feature running in the fixture app and attaches the captioned, zoomed MP4 to the PR. Your review starts by watching it. | Tier 2 runner + Bugeye itself |
-| Dogfooding | Visual diffs with M12 | UI changes get before/after screenshots from the fixture app, compared with Bugeye's own diff engine, posted on the PR. | Tier 2 runner + M12 |
+| Dogfooding | Every PR ships a demo video | On Tier 2, the guide recorder (R6) records the new feature running in the fixture app and attaches the captioned, zoomed MP4 to the PR. Your review starts by watching it. | Mac check + Bugeye itself |
+| Dogfooding | Visual diffs with M12 | UI changes get before/after screenshots from the fixture app, compared with Bugeye's own diff engine, posted on the PR. | Mac check + M12 |
 | Maintenance | Nightly triage | Labels new issues by severity, groups duplicates, proposes the next fix batch from docs/backlog.md. Never closes your issues. | gh-aw scheduled (add-labels, add-comment) |
 | Maintenance | Docs gardener | On each merge, updates CLAUDE.md, the code map, the affected design doc, and regenerates this atlas's data, then opens a PR. | gh-aw on push to main (create-pull-request) |
 | Maintenance | Checklist writer | From the spec and the merged diff, writes your manual checklist in the doc 11 format, limited to what agents could not verify. | Claude Code Action |
@@ -140,3 +176,5 @@ Sources:
 - [gh-aw: Using Claude Code](https://github.github.com/gh-aw/engines/claude/)
 - [gh-aw: Safe outputs (pull requests)](https://github.github.com/gh-aw/reference/safe-outputs-pull-requests/)
 - [Anthropic: Bringing Code Review to Claude Code](https://claude.com/blog/code-review)
+- [GitHub Changelog: update to Actions pricing](https://github.blog/changelog/2025-12-16-coming-soon-simpler-pricing-and-a-better-experience-for-github-actions/)
+- [GitHub Actions pricing changes 2026 (postponed self-hosted fee)](https://cicdcost.com/github-actions-pricing-changes-2026)
