@@ -10,7 +10,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 |---|---|---|---|
 | 0 | done | ca06dd6 | |
 | 1 | done | ea0a6ea | 14 portable test targets, 14 tests on Linux |
-| 2 | done | (this commit) | guards ok, test-guards ok (20 cases) |
+| 2 | done | 1fd390d | guards ok, test-guards ok (20 cases) |
+| 3 | done | (this commit) | linux workflow; version guard caught 6.4.2 first |
 
 ## Rulings
 

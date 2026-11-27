@@ -1,0 +1,31 @@
+name: linux
+
+# Tier 0 on GitHub: the portable core, format and bug-class guards, in the pinned Swift image.
+# No secrets and read-only, so it runs for every push and pull request.
+on:
+  push:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: linux-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    container: swift:6.4.3-noble  # must match .swift-version (scripts/guards.sh checks)
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Install make
+        run: command -v make || (apt-get update && apt-get install -y --no-install-recommends make)
+      - uses: actions/checkout@v6
+      - name: Portable tests
+        run: make test-core
+      - name: Format
+        run: make lint
+      - name: Bug-class guards
+        run: make guards
