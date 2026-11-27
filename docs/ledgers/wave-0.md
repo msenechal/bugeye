@@ -38,7 +38,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 27 | done | 42c11a9 | not compiled here |
 | 28 | done | c31f93a | not compiled here |
 | 29 | done | 7a78313 |  |
-| 30 | done | (this commit) | strings checked against spec and sources |
+| 30 | done | 4d933c3 | strings checked against spec and sources |
+| 31 | done | (this commit) | PR description rewritten; PR marked ready; five claude-review rounds: every Critical/Important fixed with a failing test (or ruled and asked, Keychain); last round no Critical or Important. `linux`, `macos`, `review` green on 0f8d1aa. |
 
 ## Rulings
 
