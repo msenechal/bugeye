@@ -23,7 +23,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | 12 | done | 3d807f7 |  |
 | 13 | done | b28a87b |  |
 | 14 | done | d07226b |  |
-| 15 | done | (this commit) |  |
+| 15 | done | a641b6b |  |
+| 16 | done | (this commit) |  |
 
 ## Rulings
 
