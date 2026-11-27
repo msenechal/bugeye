@@ -56,6 +56,8 @@ expect debug-unguarded debug-only "printf 'let x = 1\n' > Sources/BugeyeApp/Debu
 expect pr-target workflow "printf 'on: pull_request_target\npermissions: {}\n' > .github/workflows/bad.yml"
 expect no-permissions workflow "printf 'on: push\njobs: {}\n' > .github/workflows/bad.yml"
 expect secret-without-guard workflow "printf 'permissions: {}\nx: \${{ secrets.TOKEN }}\n' > .github/workflows/bad.yml"
+expect guard-only-in-comment workflow "printf 'permissions: {}\n# if: github.event.pull_request.head.repo.full_name == github.repository\nuses: anthropics/claude-code-action@v1\n' > .github/workflows/review.yml"
+expect draft-only-in-comment workflow "printf 'on:\n  pull_request:\npermissions: {}\nconcurrency:\n  group: x\n# github.event.pull_request.draft == false\n' > .github/workflows/ci.yml"
 expect agent-with-guard pass "printf 'permissions: {}\nif: github.event.pull_request.head.repo.full_name == github.repository\nuses: anthropics/claude-code-action@v1\n' > .github/workflows/review.yml"
 expect pr-runs-on-drafts workflow "printf 'on:\n  pull_request:\npermissions: {}\nconcurrency:\n  group: x\n' > .github/workflows/ci.yml"
 expect pr-without-concurrency workflow "printf 'on:\n  pull_request:\npermissions: {}\nif: github.event.pull_request.draft == false\n' > .github/workflows/ci.yml"

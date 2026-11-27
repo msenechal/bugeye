@@ -58,16 +58,18 @@ done < <(find Sources -name 'Debug*.swift' 2>/dev/null | sort)
 same_repo='github.event.pull_request.head.repo.full_name == github.repository'
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
     [ -e "$wf" ] || continue
-    grep -q 'pull_request_target' "$wf" && fail workflow "$wf uses pull_request_target"
-    grep -qE '^[[:space:]]*permissions:' "$wf" || fail workflow "$wf has no permissions: block"
-    if grep -qE 'secrets\.|anthropics/claude-code-action' "$wf" && ! grep -qF "$same_repo" "$wf"; then
+    # Conditions must be in code: YAML comment lines don't count (a comment can't guard anything).
+    code=$(grep -vE '^[[:space:]]*#' "$wf" || true)
+    grep -q 'pull_request_target' <<<"$code" && fail workflow "$wf uses pull_request_target"
+    grep -qE '^[[:space:]]*permissions:' <<<"$code" || fail workflow "$wf has no permissions: block"
+    if grep -qE 'secrets\.|anthropics/claude-code-action' <<<"$code" && ! grep -qF "$same_repo" <<<"$code"; then
         fail workflow "$wf uses secrets or an agent without the same-repository condition"
     fi
     # The user's rule (27 Nov 2026): pull request CI runs only for PRs that are ready, never drafts, and a
     # new push cancels the run it replaces.
-    if grep -qE '^[[:space:]]*pull_request:' "$wf"; then
-        grep -qF 'github.event.pull_request.draft == false' "$wf" || fail workflow "$wf runs on draft pull requests"
-        grep -qE '^[[:space:]]*concurrency:' "$wf" || fail workflow "$wf has no concurrency group"
+    if grep -qE '^[[:space:]]*pull_request:' <<<"$code"; then
+        grep -qF 'github.event.pull_request.draft == false' <<<"$code" || fail workflow "$wf runs on draft pull requests"
+        grep -qE '^[[:space:]]*concurrency:' <<<"$code" || fail workflow "$wf has no concurrency group"
     fi
 done
 
