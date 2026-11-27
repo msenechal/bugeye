@@ -56,8 +56,13 @@ Every deviation from the plan, as `Ruling: <what and why> (cost if wrong: …)`.
 - Ruling (second review, Minor): saving a key while a test runs ends that test's busy state, and the stale test no longer clears the flag of the test that replaced it, so "Test key" works on the new key at once. Test `aNewKeyCanBeTestedWhileAnOldTestIsStillRunning` (with a per-call `SequencedLLM`) failed first and passed 20 runs in a row. (cost if wrong: low.)
 - Ruling (second review, Minor): a manual `claude-review` run checks out `refs/pull/<pr>/head`, so the agent reads the PR's tree as its prompt says. Dispatch needs write access. (cost if wrong: low.)
 - CI facts: the `macos` runner selects `/Applications/Xcode_27.2.app` (SDK MacOSX27.2), Swift 6.4 (checked by `select-xcode.sh`). First fully green `macos` run: aef1566.
+- Ruling (third review, Important, part 2): a Keychain write that fails changes nothing: the status keeps describing the stored key, instead of claiming "Key saved. Not tested yet." for a key that wasn't stored. The spec has no "couldn't save" line, so none is shown; a new line is proposed under Waiting on user. Test `aFailedSaveOverAnOlderKeyDoesNotClaimTheNewOneWasSaved` failed first. (cost if wrong: low; the user gets no visible error on a failed save until a string is approved.)
+- Ruling (third review, Important, part 1, not changed): `SecretStore` stays synchronous and `AIKeySettings` calls it on the main actor in Wave 0. Making it async changes the port, its fake, the Keychain adapter, the AI pane and the SwiftUI view. The item is a generic password the app itself created, signed with the stable "Bugeye Dev" identity, so reads and writes normally return at once without a prompt; the risk is a locked login keychain or an access prompt blocking the UI. Logged in `docs/backlog.md` and asked of the user. (cost if wrong: medium; the Settings pane can freeze while the Keychain waits on a prompt.)
+- Ruling (third review, Minor, not changed): `CaptureFileWriter` doesn't keep the original's POSIX mode and doesn't fsync before the rename. Both are known limits of P11 (Review Focus #3); logged in `docs/backlog.md` for the final review. (cost if wrong: low.)
 
 ## Waiting on user
+
+- Decide on the third review's Keychain finding: move Keychain calls off the main actor in Wave 0 (an async `SecretStore`), or leave it for a later wave (current ruling). And approve a status line for a failed save, for example "Couldn't save the key to the Keychain." (spec §5.3 settles every string).
 
 - Done by the user, 27 Nov 2026: `oven-sh/setup-bun@*` allowed; the `review` job on b810686 ran and posted its review (Task 5's proof; the `CLAUDE_CODE_OAUTH_TOKEN` secret works).
 
