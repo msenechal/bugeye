@@ -12,7 +12,7 @@ From the brainstorm (your answers):
 |---|---|---|
 | B1 | The first build's source code | **Unavailable.** The design docs are the whole specification; gaps are decided in brainstorms and written into specs. |
 | B2 | App identity | **Bugeye everywhere.** Package `Bugeye`, app `Bugeye.app`, bundle id `dev.msenechal.bugeye`, signing identity "Bugeye Dev". The old app keeps running side by side until the rebuild replaces it. |
-| B3 | Mac toolchain | **Install Xcode.** SwiftUI macros, Foundation Models and App Intents are allowed. Local and CI builds both use Xcode. |
+| B3 | Mac toolchain | **Install Xcode** (the current release; see W2). SwiftUI macros, Foundation Models and App Intents are allowed. Local and CI builds both use Xcode. |
 | B4 | Claude reviews | **Claude Code GitHub Action, authenticated with a token from your Claude subscription.** No API key for reviews. |
 
 Rulings I made (each can be overturned at approval; cost if wrong in brackets):
@@ -20,7 +20,7 @@ Rulings I made (each can be overturned at approval; cost if wrong in brackets):
 | # | Ruling | Why |
 |---|---|---|
 | W1 | All targets use the Swift 6 language mode. A macOS adapter target may drop to Swift 5 mode only with a ledgered ruling naming the errors. | Newer Swift and Xcode reduce the concurrency noise that pushed the first build to Swift 5. [Low: switching one target's mode is a one-line change.] |
-| W2 | Swift version: the one that ships with the current Xcode 26 release, pinned in `.swift-version` and used for Linux too. The plan's first task records the number. | One compiler everywhere avoids Linux-only or macOS-only surprises. [Low] |
+| W2 | Swift 6.4, the version in the current Xcode (27.x), pinned in `.swift-version` and used on Linux too. Deployment target stays macOS 26. If Xcode 27 doesn't install on your macOS 26.7.1, fall back to Xcode 26.6 and Swift 6.3 everywhere. | One compiler everywhere avoids Linux-only or macOS-only surprises. [Low] |
 | W3 | Every target the waves need is declared in `Package.swift` now, most of them empty. | Feature branches never edit the manifest (R1). [Medium: a missed target means one manifest edit later.] |
 | W4 | Specs in `docs/specs/`, plans in `docs/plans/`, execution ledgers in `docs/ledgers/`, backlog in `docs/backlog.md`, manual checklists in `docs/checklists/`. Ledgers are committed. | Shorter than the first build's `docs/superpowers/…`. Committed ledgers survive across cloud sessions and let parallel sessions see each other's progress. [Low] |
 | W5 | The process (brainstorm, spec, plan, execute, review, fix, checklist) is written down as repository skills in `.claude/skills/`, plus a root `CLAUDE.md`. | A session started from your phone has none of the first build's plugins or memory. The repo itself must carry the process. [Medium: without it, sessions drift.] |
@@ -168,10 +168,10 @@ Compiled only in debug builds: a Unix-domain socket in the app's temp directory.
 
 Required checks on `main` once green: `linux`, `macos`. The review is not a required check: it comments, the authoring session fixes, you merge.
 
-Things to confirm in the plan's first tasks (not decisions, facts to check):
-- the macOS runner label that ships the macOS 26 SDK;
-- that the Claude Code Action accepts a subscription token, and the exact secret name. If it doesn't, the session stops and asks you (B4);
-- the current Swift version (W2).
+Facts checked while planning:
+- the `macos-26` runner label is generally available; the plan's first CI task confirms it offers Xcode 27 (W2);
+- the Claude Code Action accepts a subscription token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`, created by running `claude setup-token` once on a computer with Claude Code. That is a step for you (B4);
+- Swift 6.4 ships with the current Xcode (W2).
 
 ## 8. The process in the repo (W5)
 
