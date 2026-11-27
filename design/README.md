@@ -42,6 +42,7 @@ A personal macOS 26 menu-bar replacement for CleanShot X, for one user on one Ap
 | `11-process-and-testing-lessons.md` | Toolchain traps, test architecture, flakes, the milestone process, recurring bug classes, working with the user |
 | `12-committed-roadmap-and-product-decisions.md` | Global product rulings, the never-build list, the committed but unbuilt milestones |
 | `13-rebuild-strategy-agentic-ci-and-claude.md` | **Read before writing code.** Linux cloud development for a macOS app (portable Swift core plus a macOS shell), three-tier CI/CD, agentic testing and fixing, Claude API features and the privacy rules around them |
+| `14-direction-changes-and-agentic-proposals.md` | **The user's later rulings, which override earlier docs where they conflict** (parallel agent sessions, auto PR pipeline, auto-zoom, AI captions, presentation-style collections, guide as video), plus proposals for the next brainstorm |
 
 Each feature file follows the same shape:
 1. What it does
@@ -52,7 +53,7 @@ Each feature file follows the same shape:
 
 ## How to use this for a rebuild
 
-1. **Read `13`, `11` and `12` first.** `13` changes the shape of the rebuild: it's developed by agents in a Linux cloud environment, so the code is split into a portable core and a thin macOS shell, and AI features call Claude. The toolchain traps alone (no Xcode, no SwiftUI macros, the testing plugin flag, a stable signing identity) cost days the first time.
+1. **Read `14`, then `13`, `11` and `12`.** `14` holds the user's newest rulings; where it conflicts with an earlier doc, `14` wins. `13` changes the shape of the rebuild: it's developed by agents in a Linux cloud environment, so the code is split into a portable core and a thin macOS shell, and AI features call Claude. The toolchain traps alone (no Xcode, no SwiftUI macros, the testing plugin flag, a stable signing identity) cost days the first time.
 2. **Read `01` and set up the skeleton:**
    - the package with pure Swift 6 targets and Swift 5 framework-wrapper targets;
    - the bundle script, `Info.plist`, the signing identity and `make install`;

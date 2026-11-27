@@ -1,5 +1,7 @@
 # 10: Collections and the Guide Recorder (M11)
 
+> **Superseded in part (Nov 2026):** the user wants collections exported as designed presentations and the guide recorder to produce a zoomed, captioned video. See `14-direction-changes-and-agentic-proposals.md` R5 and R6.
+
 M11 adds one new kind of document, the **collection**: an ordered page of image blocks and text blocks, saved as a reopenable `.bugeye` package and exported as an image, a PDF, Markdown or HTML. Two features fill it:
 - **Collections (RD-25):** combine captures, with text between them, into one editable document ("annotated screen, explanation, next screen").
 - **Guide recorder (RD-18):** ⇧⌘9 records a how-to. Each click becomes a numbered step: the screen just before the click, a marker on the click point, and a caption read from the clicked element ("Click **Save**").

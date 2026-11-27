@@ -1,5 +1,7 @@
 # 04 — Recording, trim and GIF
 
+> **Extended (Nov 2026):** recordings gain auto-zoom and AI-enhanced captions. See `14-direction-changes-and-agentic-proposals.md` R3 and R4.
+
 Covers M3 (recording core), M4 (overlays and window recording), M5 (trim and GIF), and the recording/trim/GIF items fixed in M6 part 4. Recording provenance (M7) is in `06-provenance-and-clipboard.md`; the selection overlay itself in `02-capture-and-quick-access.md`.
 
 Sources: `Sources/CSRecording/*`, `Sources/CleanShotCopy/Recording/*`, `Sources/CleanShotCopy/Media/*`, CSCore `Recording*.swift`, `Keystrokes.swift`, `ClickRings.swift`, `BubbleLayout.swift`, `WindowFollow.swift`, `GifPreset.swift`, `TrimRange.swift`, `DiskGuard.swift`, `OptionsBarPlacement.swift`; spec §7 (+ M3/M4/M5 clarifications) of `2026-10-16-cleanshot-copy-design.md`, `2026-10-21-backlog-design.md` §4.3–4.5; plans m3, m4, m5, m6d; checklists m3–m5, m6-backlog; git history.
