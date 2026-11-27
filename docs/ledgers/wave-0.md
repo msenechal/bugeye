@@ -9,7 +9,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 | Task | Status | Commit | CI / notes |
 |---|---|---|---|
 | 0 | done | ca06dd6 | |
-| 1 | done | (this commit) | 14 portable test targets, 14 tests on Linux |
+| 1 | done | ea0a6ea | 14 portable test targets, 14 tests on Linux |
+| 2 | done | (this commit) | guards ok, test-guards ok (20 cases) |
 
 ## Rulings
 
