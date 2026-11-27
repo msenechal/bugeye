@@ -8,7 +8,8 @@ Trust this file and `git log` over memory. Update it at the end of every task, a
 
 | Task | Status | Commit | CI / notes |
 |---|---|---|---|
-| 0 | done | (this commit) | |
+| 0 | done | ca06dd6 | |
+| 1 | done | (this commit) | 14 portable test targets, 14 tests on Linux |
 
 ## Rulings
 
