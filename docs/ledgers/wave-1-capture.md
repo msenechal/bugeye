@@ -18,6 +18,7 @@ Trust this file and `git log` over memory.
 | 8–11 | done | b61184c | slice 2 (`feat/wave1-capture-controller`) |
 | 12 | done | 0018f34 | see ruling on test order |
 | 13 | done | 2e4ea30 | see ruling on test order |
+| 14–15 | done | 12a155e | slice 3 (`feat/wave1-capture-mac`), not compiled here; manual macOS run https://github.com/msenechal/bugeye/actions/runs/46124357539 built and passed every test first time |
 
 ## Rulings
 
@@ -57,6 +58,20 @@ Final review of PR #20 (slice 2, fresh reviewer): 0 Critical, 2 Important, 7 Min
 - Ruling (review M1): with the folder unusable and the temp write failing too, only `Capture failed` is posted and nothing logs `kept in temp`. Test failed first. (cost if wrong: none.)
 - Ruling (review M2–M7): finished tasks leave `inFlight`; the frame crop runs off the main actor in `prepare`; a refused Esc logs `escape taken`; `HotkeyRegistrar` documents that callers record outcomes (C27); the area test asserts close before reactivate; `waitUntil` documents that it sees only the next entry into a phase. (cost if wrong: none.)
 
+Slice 3 (macOS adapters):
+
+- Ruling: `displays()` reads `NSScreen` (number, Cocoa frame, backing scale); the flow still takes each frame's scale from its image. Window captures keep ScreenCaptureKit's default background and child-window settings; transparency and sheets are checked in the Mac batch (§9.4.2). (cost if wrong: low.)
+- Ruling: hotkey letters register at their US (ANSI) key positions, as the first build did; the defaults are digits, which sit at the same positions on every layout. Backlog item below. (cost if wrong: low; a letter binding on AZERTY lands on another key.)
+
+Final review of PR #21 (slice 3, fresh reviewer): 0 Critical, 1 Important, 8 Minor. Fix pass:
+
+- Ruling (review I1, Important): a real `CarbonHotkeyRegistrar` test registers an unlikely combo, re-registers the same id (release first), checks another id can't take a key this process holds until it's released, and unregisters. (cost if wrong: none; if Carbon allows in-process duplicates the test says so and the fake changes with it.)
+- Ruling (review M2): the Carbon callback holds a retained `Relay` that points back weakly, so a press after a registrar is released finds nil instead of a dangling pointer; `installStatus` records `InstallEventHandler`'s status. (cost if wrong: none; a few bytes per registrar.)
+- Ruling (review M3, M7): `ScreenCaptureKitSource.targets` skips a display ScreenCaptureKit lists before `NSScreen` knows it (just plugged in) instead of failing the whole freeze; asked-for ids must exist. It and `pixelSize` are pure and tested. (cost if wrong: none.)
+- Ruling (review M4, M6, M8, M9): `CFPreferencesAppSynchronize` before reading `com.apple.symbolichotkeys`; the live window-list test that couldn't fail is gone; `Unchecked` is private to the source file; downscale keeps alpha (tested). M5 (layouts) is the backlog item below. (cost if wrong: none.)
+
 ## Waiting on user
 
 ## Backlog:
+
+- Hotkey letters use US key positions (`kVK_ANSI_*`); resolve them through the current keyboard layout (`UCKeyTranslate`) so a letter binding works on AZERTY (slice 3 review M5).

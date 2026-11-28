@@ -13,6 +13,14 @@ public final class CarbonHotkeyRegistrar: HotkeyRegistrar {
     private var handlers: [UInt32: @MainActor () -> Void] = [:]
     private var nextNumber: UInt32 = 1
     private var eventHandler: EventHandlerRef?
+    /// What the Carbon callback holds: retained for the process's life and pointing back weakly, so a press after
+    /// this registrar is gone finds nil instead of a dangling pointer.
+    private final class Relay: @unchecked Sendable {
+        weak var registrar: CarbonHotkeyRegistrar?
+    }
+    private let relay = Relay()
+    /// The `InstallEventHandler` status (noErr when presses can arrive).
+    public private(set) var installStatus: OSStatus = noErr
 
     public init() {
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
@@ -25,13 +33,14 @@ public final class CarbonHotkeyRegistrar: HotkeyRegistrar {
             guard status == noErr, hotKeyID.signature == CarbonHotkeyRegistrar.signature else {
                 return OSStatus(eventNotHandledErr)
             }
-            let registrar = Unmanaged<CarbonHotkeyRegistrar>.fromOpaque(userData).takeUnretainedValue()
+            let relay = Unmanaged<Relay>.fromOpaque(userData).takeUnretainedValue()
             let number = hotKeyID.id
-            MainActor.assumeIsolated { registrar.fire(number) }
+            MainActor.assumeIsolated { relay.registrar?.fire(number) }
             return noErr
         }
-        InstallEventHandler(
-            GetApplicationEventTarget(), callback, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
+        relay.registrar = self
+        installStatus = InstallEventHandler(
+            GetApplicationEventTarget(), callback, 1, &spec, Unmanaged.passRetained(relay).toOpaque(), &eventHandler)
     }
 
     public func register(_ id: String, key: GlobalKey, onPress: @escaping @MainActor () -> Void) -> Bool {

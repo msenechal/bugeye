@@ -34,31 +34,24 @@ public struct ScreenCaptureKitSource: ScreenSource {
             let own = getpid()
             let excluded = content.windows.filter { $0.owningApplication?.processID == own }
             let infos = await MainActor.run { Self.screens() }
-            var targets: [SCDisplay] = []
-            if let wanted {
-                for id in wanted {
-                    guard let display = content.displays.first(where: { $0.displayID == id.rawValue }) else {
-                        throw ScreenSourceError.displayNotFound
-                    }
-                    targets.append(display)
-                }
-            } else {
-                targets = content.displays
-            }
+            let order = try Self.targets(
+                wanted: wanted, available: content.displays.map { DisplayID($0.displayID) }, screens: infos.map(\.id))
             var jobs:
                 [(
                     index: Int, info: DisplayInfo, filter: Unchecked<SCContentFilter>,
                     config: Unchecked<SCStreamConfiguration>
                 )] = []
-            for (index, display) in targets.enumerated() {
-                guard let info = infos.first(where: { $0.id.rawValue == display.displayID }) else {
-                    throw ScreenSourceError.displayNotFound
-                }
+            for (index, id) in order.enumerated() {
+                guard let display = content.displays.first(where: { $0.displayID == id.rawValue }),
+                    let info = infos.first(where: { $0.id == id })
+                else { throw ScreenSourceError.displayNotFound }
                 let filter = SCContentFilter(display: display, excludingWindows: excluded)
                 let config = SCStreamConfiguration()
-                let scale = Double(filter.pointPixelScale)
-                config.width = Int((Double(filter.contentRect.width) * scale).rounded())
-                config.height = Int((Double(filter.contentRect.height) * scale).rounded())
+                let size = Self.pixelSize(
+                    pointWidth: Double(filter.contentRect.width), pointHeight: Double(filter.contentRect.height),
+                    scale: Double(filter.pointPixelScale))
+                config.width = size.width
+                config.height = size.height
                 config.showsCursor = false
                 config.captureResolution = .best
                 jobs.append((index, info, Unchecked(value: filter), Unchecked(value: config)))
@@ -104,6 +97,26 @@ public struct ScreenCaptureKitSource: ScreenSource {
         }
     }
 
+    /// The displays to freeze, in ScreenCaptureKit's order. Asked-for ids must all be there; with none asked, a display
+    /// ScreenCaptureKit lists before `NSScreen` knows it (just plugged in) is skipped rather than failing the freeze.
+    public static func targets(wanted: [DisplayID]?, available: [DisplayID], screens: [DisplayID]) throws -> [DisplayID]
+    {
+        if let wanted {
+            for id in wanted where !available.contains(id) || !screens.contains(id) {
+                throw ScreenSourceError.displayNotFound
+            }
+            return available.filter { wanted.contains($0) }
+        }
+        let known = available.filter { screens.contains($0) }
+        guard !known.isEmpty else { throw ScreenSourceError.displayNotFound }
+        return known
+    }
+
+    /// The frame's pixel size: its points × the display's point-pixel scale, rounded (design/02 §2.4).
+    public static func pixelSize(pointWidth: Double, pointHeight: Double, scale: Double) -> (width: Int, height: Int) {
+        (Int((pointWidth * scale).rounded()), Int((pointHeight * scale).rounded()))
+    }
+
     /// `userDeclined` → `permissionDenied` (the alert); `ScreenSourceError` passes through; anything else is
     /// `failed(localizedDescription)` (`Capture failed`).
     public static func map(_ error: any Error) -> ScreenSourceError {
@@ -114,4 +127,10 @@ public struct ScreenCaptureKitSource: ScreenSource {
         }
         return .failed(error.localizedDescription)
     }
+}
+
+/// Lets a ScreenCaptureKit filter or configuration (never mutated once built, but not marked `Sendable` by the SDK)
+/// cross into the freeze's child tasks. Private so nothing else can use it to hide a non-Sendable value.
+private struct Unchecked<Value>: @unchecked Sendable {
+    let value: Value
 }

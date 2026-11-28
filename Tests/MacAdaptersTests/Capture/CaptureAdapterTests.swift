@@ -22,6 +22,41 @@ import Testing
     }
 }
 
+@Suite struct ScreenCaptureKitFreezePlanTests {
+    @Test func everyKnownDisplayInScreenCaptureKitsOrder() throws {
+        #expect(
+            try ScreenCaptureKitSource.targets(
+                wanted: nil, available: [DisplayID(2), DisplayID(1)], screens: [DisplayID(1), DisplayID(2)])
+                == [DisplayID(2), DisplayID(1)])
+    }
+
+    @Test func aDisplayNSScreenDoesNotKnowYetIsSkippedNotFatal() throws {
+        #expect(
+            try ScreenCaptureKitSource.targets(
+                wanted: nil, available: [DisplayID(1), DisplayID(3)], screens: [DisplayID(1)])
+                == [DisplayID(1)])
+        #expect(throws: ScreenSourceError.displayNotFound) {
+            try ScreenCaptureKitSource.targets(wanted: nil, available: [DisplayID(3)], screens: [DisplayID(1)])
+        }
+    }
+
+    @Test func anAskedForDisplayMustExist() throws {
+        #expect(
+            try ScreenCaptureKitSource.targets(
+                wanted: [DisplayID(1)], available: [DisplayID(2), DisplayID(1)], screens: [DisplayID(1), DisplayID(2)])
+                == [DisplayID(1)])
+        #expect(throws: ScreenSourceError.displayNotFound) {
+            try ScreenCaptureKitSource.targets(
+                wanted: [DisplayID(9)], available: [DisplayID(1)], screens: [DisplayID(1)])
+        }
+    }
+
+    @Test func pixelSizeIsPointsTimesScale() {
+        #expect(ScreenCaptureKitSource.pixelSize(pointWidth: 1512, pointHeight: 982, scale: 2) == (3024, 1964))
+        #expect(ScreenCaptureKitSource.pixelSize(pointWidth: 1920, pointHeight: 1080, scale: 1) == (1920, 1080))
+    }
+}
+
 @Suite struct CGWindowListReaderTests {
     @Test func parsesNumberOwnerBoundsLayerAndAlphaInOrder() {
         let list: [[String: Any]] = [
@@ -45,12 +80,6 @@ import Testing
                     id: WindowID(44), ownerPID: 8, bounds: Rect2D(x: -5, y: -6, width: 1, height: 2), layer: 0, alpha: 1
                 ),
             ])
-    }
-
-    @Test func theLiveListParses() async {
-        // Whatever is on screen: the call must not crash and every entry has an id.
-        let windows = await CGWindowListReader().windows()
-        #expect(windows.allSatisfy { $0.id.rawValue > 0 })
     }
 }
 
@@ -86,6 +115,15 @@ func stripes(_ space: CGColorSpace) throws -> CGImage {
         #expect(small.cgImage?.colorSpace?.name == CGColorSpace.displayP3)
     }
 
+    @Test func downscaleKeepsTransparency() throws {
+        // Half-transparent grey, premultiplied: alpha 128.
+        let buffer = try PixelBuffer(width: 4, height: 4, fill: RGBA8(red: 128, green: 128, blue: 128, alpha: 128))
+        let image = CapturedImage(cgImage: try #require(PixelBufferImages.cgImage(buffer)))
+        let small = try #require(ImageIOPipeline().downscale(image, by: 0.5))
+        let alpha = try #require(ImageIOPipeline().pixelBuffer(small)?.pixel(x: 0, y: 0)?.alpha)
+        #expect(abs(Int(alpha) - 128) <= 2)
+    }
+
     @Test func pngRoundTripsWithTheColourSpaceKept() throws {
         let data = try #require(ImageIOPipeline().pngData(CapturedImage(cgImage: try stripes(p3))))
         #expect(data.starts(with: [0x89, 0x50, 0x4E, 0x47]))
@@ -104,6 +142,30 @@ func stripes(_ space: CGColorSpace) throws -> CGImage {
     @Test func aFakesPixelBufferStorageWorksToo() throws {
         let buffer = try PixelBuffer(width: 3, height: 3, fill: RGBA8(red: 9, green: 9, blue: 9))
         #expect(ImageIOPipeline().pngData(CapturedImage(pixelBuffer: buffer)) != nil)
+    }
+}
+
+@MainActor @Suite struct CarbonHotkeyRegistrarRegistrationTests {
+    // An unlikely combo, so the test never collides with a real shortcut on the runner.
+    let key = GlobalKey("9", command: true, option: true, control: true, shift: true)
+
+    @Test func reRegisteringAnIdReleasesItsOldKeyFirst() {
+        let registrar = CarbonHotkeyRegistrar()
+        #expect(registrar.installStatus == 0)
+        #expect(registrar.register("test.a", key: key) {})
+        // Same id, same key: the old registration is released first, so this succeeds.
+        #expect(registrar.register("test.a", key: key) {})
+        // Another id can't take a key this process already holds (Carbon refuses an in-process duplicate)…
+        #expect(!registrar.register("test.b", key: key) {})
+        // …until the first id lets it go.
+        registrar.unregister("test.a")
+        #expect(registrar.register("test.b", key: key) {})
+        registrar.unregister("test.b")
+        registrar.unregister("test.never")
+    }
+
+    @Test func anUnknownKeyIsRefused() {
+        #expect(!CarbonHotkeyRegistrar().register("test.c", key: GlobalKey("?", command: true)) {})
     }
 }
 

@@ -24,9 +24,3 @@ extension CapturedImage {
         return nil
     }
 }
-
-/// Lets a value the SDK hasn't marked `Sendable` (ScreenCaptureKit filters and configurations, which are never
-/// mutated after they're built) cross into a child task.
-struct Unchecked<Value>: @unchecked Sendable {
-    let value: Value
-}

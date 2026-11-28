@@ -7,6 +7,8 @@ public struct SystemShortcutDefaultsReader: SystemShortcutReader {
     public init() {}
 
     public func symbolicHotkeys() -> [Int: SymbolicHotkey]? {
+        // Drop this process's cached copy, so a shortcut turned off in System Settings meanwhile is seen.
+        CFPreferencesAppSynchronize("com.apple.symbolichotkeys" as CFString)
         guard
             let value = CFPreferencesCopyAppValue(
                 "AppleSymbolicHotKeys" as CFString, "com.apple.symbolichotkeys" as CFString),
