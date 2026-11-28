@@ -71,7 +71,16 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 
   Tests for M1, M2 and M4 failed first. The others pinned behaviour that was already correct, and each was seen failing against its mutant. (cost if wrong: none.)
 
+- Finding (28 Nov 2026, macos runs 46123418407 and 46124635587): **Vision's `.accurate` text recognition does not run on the hosted macOS runner.** The runner is a VM with an "Apple Paravirtual device" GPU and a CPU, and no Neural Engine. `RecognizeTextRequest(.accurate)` fails with `CRImageReaderError.unknownError`. The legacy `VNRecognizeTextRequest` fails with `nilError` on the default device, the GPU and the CPU. Only `.fast` works, and it misreads code (`foo(bar)` → `foolbar)`), so T5's `.accurate` stays. This contradicts T13 ("Vision runs on hosted runners"). The six tests that call Vision (three in `VisionTextReaderTests`, two in `TextPipelineTests`, and `TextWiringTests.installReadsANewScreenshotFromTheBus`) therefore fail in hosted CI. Every other macOS test, ImageIO's included, passes. Skipping or gating tests is the user's decision, so it is under `Waiting on`. The probe branch `feat/wave1-ocr-vision-probe` was deleted.
+
 ## Waiting on
+
+- **The user: how PR 4's Vision-backed tests should behave in hosted CI**, where `.accurate` OCR can't run (finding above). Options:
+  - (a) Gate the six tests on a one-time availability check, so they run on the Mac batch and are reported as not run on the hosted runner.
+  - (b) Move them behind an opt-in environment variable that the Mac batch sets, like `BUGEYE_RECORD_OCR`.
+  - (c) Keep them as they are, and accept that PR 4's `macos` job stays red until it runs on a self-hosted Apple-silicon Mac.
+
+  Until then PR 4 stays a draft. It can't merge before Capture's and Quick Access's wiring PRs anyway.
 
 - Capture's and Quick Access's wiring PRs, before PR 4 (wiring) can merge and its Mac batch can run (contracts §9).
 
