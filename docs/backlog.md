@@ -2,6 +2,11 @@
 
 Minor findings from final reviews, and work noticed but out of scope. Newest first. Each entry: date, source (PR or review), the finding, where.
 
+Final review of the Wave 1 contracts (PR #3, 28 Nov 2026), Minor findings not fixed in its fix pass:
+- M1: `CaptureFileWriter` failure paths without a test: a cross-volume `move` whose final source removal fails (the placed copy must be removed and the source kept), a failed `copy` leaving its source untouched, and `write(requireExisting: true)` failing part-way (temp removed, target untouched). Add a seam for the source removal and the three assertions. Where: `Tests/BugeyeCoreTests/CaptureFileWriterContractTests.swift`.
+- M5 (noted, not fixed): `TerminationGate` has no timeout; a participant that never returns keeps the app in `.terminateLater`. The spec asks for none; the doc comment now says participants must not rely on default-mode run-loop sources. Consider logging a participant that takes longer than a few seconds. Where: `Sources/BugeyeFeatures/TerminationGate.swift`.
+- M6 (partly): `AppServicesTests` still uses `"/Users/m"` as its home (Wave 0's precedent; nothing writes there today). Once epic installs run inside `AppServices`, pass a `TempDirectory` home. Where: `Tests/BugeyeAppTests/AppServicesTests.swift`.
+
 - 27 Nov 2026, PR #2 claude-review: `scripts/guards.sh` checks workflow conditions by substring (comment lines now excluded). Parse the YAML per job (e.g. `yq`) and require the same-repository and draft conditions on each job's `if:`, so a weakening `||` branch can't pass. Where: `scripts/guards.sh` rule 5.
 
 - 27 Nov 2026, PR #2 claude-review (round 3, Minor): `CaptureFileWriter` doesn't fsync the temp file before `rename(2)` (the POSIX mode is now kept; creation date and ACLs are not). Where: `Sources/BugeyeCore/Files/CaptureFileWriter.swift`.
@@ -11,7 +16,7 @@ Minor findings from final reviews, and work noticed but out of scope. Newest fir
 Final review of Wave 0 (PR #2, 28 Nov 2026), Minor findings:
 - M1: `AIKeySettings` saves aren't serialized: two quick saves can reach the Keychain in either order while the status follows the later one, and a "Test key" press during a save can test the old key. Keep the in-flight save `Task` and await it in the next save and in `testKey`, or route Keychain calls through one actor; disable Test during a save. Where: `Sources/Core/AICore/AIKeySettings.swift`.
 - M2: `CaptureFileWriter` turns a symlinked capture path into a regular file with the link's mode and leaves the target stale. Resolve symlinks at the top of `write`; test with a symlink. Where: `Sources/BugeyeCore/Files/CaptureFileWriter.swift`.
-- M3: the writer's temp name `.<name>.<uuid>.tmp` adds 42 bytes, so names over 213 bytes fail with ENAMETOOLONG. Use `.bugeye-<uuid>.tmp`. Same file.
+- M3 (resolved in PR #3, 28 Nov 2026): the writer's temp name is now `.bugeye-<uuid>.tmp`, so long names no longer fail with ENAMETOOLONG.
 - M4: the AI key field keeps the typed key after Save, and a second Save resets "Key works." Clear `typedKey` after a successful save. Where: `Sources/BugeyeApp/SettingsWindowController.swift`.
 - M5: `claude-review.yml` uses moving tags for `actions/checkout` and `anthropics/claude-code-action` in the secret-bearing job; pin full SHAs, and add `persist-credentials: false` to the checkout.
 - M6: `FeatureRegistry` doesn't reserve the shell's own claims (the `ai` pane id, ⌘, and ⌘Q); seed `conflicts(in:)` with them. Where: `Sources/BugeyeFeatures/FeatureRegistry.swift`.

@@ -8,11 +8,13 @@ struct StubModule: FeatureModule {
     var keys: [HotkeySpec] = []
     var section: SettingsSectionSpec? = nil
     var actions: [QuickAccessActionSpec] = []
+    var mainMenu: [MainMenuItemSpec] = []
 
     func menuItems() -> [MenuItemSpec] { menu }
     func hotkeys() -> [HotkeySpec] { keys }
     func settingsSection() -> SettingsSectionSpec? { section }
     func quickAccessActions() -> [QuickAccessActionSpec] { actions }
+    func mainMenuItems() -> [MainMenuItemSpec] { mainMenu }
 }
 
 @Suite struct FeatureRegistryTests {
@@ -38,8 +40,10 @@ struct StubModule: FeatureModule {
     }
 
     @Test func twoModulesCannotClaimTheSameHotkey() {
-        let a = StubModule(id: "a", keys: [HotkeySpec(id: "a.area", defaultKey: areaKey, settingKey: "hotkey.a")])
-        let b = StubModule(id: "b", keys: [HotkeySpec(id: "b.area", defaultKey: areaKey, settingKey: "hotkey.b")])
+        let a = StubModule(
+            id: "a", keys: [HotkeySpec(id: "a.area", title: "T", defaultKey: areaKey, settingKey: "hotkey.a")])
+        let b = StubModule(
+            id: "b", keys: [HotkeySpec(id: "b.area", title: "T", defaultKey: areaKey, settingKey: "hotkey.b")])
         #expect(throws: FeatureRegistryError(conflicts: [.hotkeyTaken(areaKey, ids: ["a.area", "b.area"])])) {
             try FeatureRegistry([a, b])
         }
@@ -47,9 +51,11 @@ struct StubModule: FeatureModule {
 
     @Test func modifierOrderDoesNotHideAHotkeyClash() {
         let a = StubModule(
-            id: "a", keys: [HotkeySpec(id: "a.k", defaultKey: KeyCombo("4", [.command, .shift]), settingKey: "a")])
+            id: "a",
+            keys: [HotkeySpec(id: "a.k", title: "T", defaultKey: KeyCombo("4", [.command, .shift]), settingKey: "a")])
         let b = StubModule(
-            id: "b", keys: [HotkeySpec(id: "b.k", defaultKey: KeyCombo("4", [.shift, .command]), settingKey: "b")])
+            id: "b",
+            keys: [HotkeySpec(id: "b.k", title: "T", defaultKey: KeyCombo("4", [.shift, .command]), settingKey: "b")])
         #expect(FeatureRegistry.conflicts(in: [a, b]).count == 1)
     }
 
@@ -65,14 +71,14 @@ struct StubModule: FeatureModule {
     @Test func everyOtherKindOfClashIsReported() {
         let a = StubModule(
             id: "a", menu: [MenuItemSpec(id: "same", title: "A", slot: MenuSlot(.capture, order: 0))],
-            keys: [HotkeySpec(id: "k", defaultKey: KeyCombo("1", [.command]), settingKey: "hotkey")],
+            keys: [HotkeySpec(id: "k", title: "T", defaultKey: KeyCombo("1", [.command]), settingKey: "hotkey")],
             section: SettingsSectionSpec(id: "pane", title: "A", order: 0),
             actions: [QuickAccessActionSpec(id: "copy", title: "Copy", order: 0)])
         let b = StubModule(
             id: "b", menu: [MenuItemSpec(id: "same", title: "B", slot: MenuSlot(.record, order: 0))],
             keys: [
-                HotkeySpec(id: "k2", defaultKey: KeyCombo("2", [.command]), settingKey: "hotkey"),
-                HotkeySpec(id: "k", defaultKey: KeyCombo("3", [.command]), settingKey: "hotkey.other"),
+                HotkeySpec(id: "k2", title: "T", defaultKey: KeyCombo("2", [.command]), settingKey: "hotkey"),
+                HotkeySpec(id: "k", title: "T", defaultKey: KeyCombo("3", [.command]), settingKey: "hotkey.other"),
             ],
             section: SettingsSectionSpec(id: "pane", title: "B", order: 1),
             actions: [QuickAccessActionSpec(id: "copy", title: "Copy", order: 1)])

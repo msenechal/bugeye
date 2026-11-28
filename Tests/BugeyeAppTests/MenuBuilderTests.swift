@@ -10,7 +10,8 @@ import Testing
     }
 
     @Test func theMenuMatchesSpecSection5_3() throws {
-        let registry = try FeatureRegistry(AppServices.modules)
+        // K20: the shell's own menu, never the live module list, so an epic filling its wiring breaks nothing here.
+        let registry = try FeatureRegistry([GeneralModule()])
         let target = Target()
         let menu = MenuBuilder.menu(
             StatusMenu.entries(for: registry), target: target, action: #selector(Target.chosen(_:)))

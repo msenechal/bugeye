@@ -1,5 +1,7 @@
 #if DEBUG
+    import BugeyeCore
     import BugeyeFeatures
+    import BugeyeTestSupport
     import Darwin
     import Foundation
     import Testing
@@ -39,15 +41,67 @@
             return String(decoding: received, as: UTF8.self).split(separator: "\n").map(String.init)
         }
 
-        @Test func answersPingAndModules() throws {
-            let channel = DebugChannel(path: path, handler: DebugCommandHandler(moduleIDs: ["general"]))
+        /// The handler and its shell objects, made on the main actor. The test itself stays off the main actor:
+        /// the channel answers on the main thread, which a blocking `ask` must not hold.
+        struct Shell: Sendable {
+            let handler: DebugCommandHandler
+            let router: ActionRouter
+            let bus: CaptureEventBus
+            let settings: InMemorySettingsStore
+        }
+
+        func shell(moduleIDs: [String] = ["general"]) async -> Shell {
+            await MainActor.run {
+                let router = ActionRouter()
+                let bus = CaptureEventBus()
+                let settings = InMemorySettingsStore()
+                let commands = DebugCommands()
+                commands.register("recording.state") { "idle\($0.isEmpty ? "" : " " + $0)" }
+                let handler = DebugCommandHandler(
+                    moduleIDs: moduleIDs, router: router, settings: settings, bus: bus,
+                    registered: { commands.handler(for: $0) })
+                return Shell(handler: handler, router: router, bus: bus, settings: settings)
+            }
+        }
+
+        @Test func answersPingAndModules() async throws {
+            let channel = DebugChannel(path: path, handler: await shell().handler)
             try channel.start()
             defer { channel.stop() }
             #expect(try ask(["ping", "modules"]) == ["pong", "general"])
         }
 
-        @Test func aClientThatHangsUpBeforeTheReplyDoesNotKillTheApp() throws {
-            let channel = DebugChannel(path: path, handler: DebugCommandHandler(moduleIDs: []))
+        @Test func answersTheWaveOneCommandsOnTheMainActor() async throws {
+            let shell = await shell()
+            await MainActor.run {
+                shell.router.onHotkey("capture.area") { MainActor.assertIsolated() }
+                shell.router.onMenuItem("capture.window") {}
+                shell.bus.publish(
+                    CaptureEvent(
+                        change: .created,
+                        item: CaptureItem(
+                            id: CaptureID(string: "e621e1f8-c36c-495a-93fc-0c247a3e6e5f")!,
+                            fileURL: URL(fileURLWithPath: "/tmp/a.png"), isSaved: false, kind: .screenshot,
+                            createdAt: Date(), pixelsPerPoint: 2),
+                        origin: "capture"))
+            }
+            let channel = DebugChannel(path: path, handler: shell.handler)
+            try channel.start()
+            defer { channel.stop() }
+            #expect(
+                try ask([
+                    "hotkey capture.area", "menu capture.window", "set capture.saveToFolder false",
+                    "get capture.saveToFolder", "events", "recording.state", "hotkey nope",
+                ]) == [
+                    "ok", "ok", "ok", "false",
+                    #"[{"change":"created","file":"a.png","id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","origin":"capture"}]"#,
+                    "idle", "error: no hotkey nope",
+                ])
+            #expect(shell.settings.value(forKey: "capture.saveToFolder") == .bool(false))
+        }
+
+        @Test func aClientThatHangsUpBeforeTheReplyDoesNotKillTheApp() async throws {
+            let channel = DebugChannel(path: path, handler: await shell(moduleIDs: []).handler)
             try channel.start()
             defer { channel.stop() }
             // Send a command and close at once: the reply is written to a closed socket (SIGPIPE by default).
@@ -68,8 +122,8 @@
             #expect(try ask(["ping"]) == ["pong"])
         }
 
-        @Test func theSocketIsPrivateAndRemovedOnStop() throws {
-            let channel = DebugChannel(path: path, handler: DebugCommandHandler(moduleIDs: []))
+        @Test func theSocketIsPrivateAndRemovedOnStop() async throws {
+            let channel = DebugChannel(path: path, handler: await shell(moduleIDs: []).handler)
             try channel.start()
             let attributes = try FileManager.default.attributesOfItem(atPath: path)
             #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)

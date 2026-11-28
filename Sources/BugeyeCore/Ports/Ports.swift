@@ -13,7 +13,7 @@ public struct DisplayID: Hashable, Codable, Sendable {
 
 public struct DisplayInfo: Hashable, Codable, Sendable {
     public var id: DisplayID
-    /// The display's frame in global points.
+    /// Cocoa global points: origin at the bottom-left of the primary display, y up (Capture C8).
     public var frame: Rect2D
     /// Pixels per point: 2 on a Retina display, 1 on the user's external 1080p monitor.
     public var scale: Double
@@ -25,32 +25,13 @@ public struct DisplayInfo: Hashable, Codable, Sendable {
     }
 }
 
-/// Screen pixels (ScreenCaptureKit on macOS).
-public protocol ScreenSource: Sendable {
-    func displays() async throws -> [DisplayInfo]
-    /// Captures `rect` (in the display's points; nil for the whole display) at the display's full scale.
-    func capture(display: DisplayID, rect: Rect2D?) async throws -> PixelBuffer
+/// A window server window id (CGWindowID). Capture's window list, the selector, Recording.
+public struct WindowID: Hashable, Codable, Sendable {
+    public var rawValue: UInt32
+    public init(_ rawValue: UInt32) { self.rawValue = rawValue }
 }
 
 // MARK: Vision
-
-/// A line of recognised text. `bounds` is in the image's pixels, top-left origin.
-public struct OCRLine: Hashable, Codable, Sendable {
-    public var text: String
-    public var bounds: Rect2D
-    public var confidence: Double
-
-    public init(text: String, bounds: Rect2D, confidence: Double) {
-        self.text = text
-        self.bounds = bounds
-        self.confidence = confidence
-    }
-}
-
-/// OCR (Vision on macOS).
-public protocol TextReader: Sendable {
-    func recognizeText(in image: PixelBuffer) async throws -> [OCRLine]
-}
 
 /// Face detection (Vision). Rects in the image's pixels.
 public protocol FaceFinder: Sendable {
@@ -60,34 +41,6 @@ public protocol FaceFinder: Sendable {
 /// Rectangle detection (Vision). Rects in the image's pixels.
 public protocol RectangleFinder: Sendable {
     func rectangles(in image: PixelBuffer) async throws -> [Rect2D]
-}
-
-// MARK: Accessibility
-
-/// One element read through Accessibility.
-public struct AXElementInfo: Hashable, Sendable {
-    public var role: String
-    public var title: String?
-    /// Static text only. Always nil for text-entry and secure roles: typed text is never read (`design/11` §6).
-    /// Not Codable on purpose: decoding would bypass the rule the initializer enforces.
-    public var text: String?
-    /// In global points.
-    public var frame: Rect2D
-    public var isTextEntry: Bool
-
-    public init(role: String, title: String?, text: String?, frame: Rect2D, isTextEntry: Bool) {
-        self.role = role
-        self.title = title
-        self.text = isTextEntry ? nil : text
-        self.frame = frame
-        self.isTextEntry = isTextEntry
-    }
-}
-
-/// The Accessibility tree (AXUIElement on macOS). Every call may be slow: never call it on the main actor.
-public protocol AXReader: Sendable {
-    func element(at point: Point2D) async throws -> AXElementInfo?
-    func elements(inWindowOf processID: Int32) async throws -> [AXElementInfo]
 }
 
 // MARK: Clipboard

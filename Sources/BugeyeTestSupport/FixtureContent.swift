@@ -13,6 +13,16 @@ public enum FixtureContent {
     public static let textFieldPlaceholder = "Type here"
     public static let secretsTitle = "Fake secrets"
 
+    // Wave 1 Mac batches (contracts §4.6): a secure field (Recording §9.4.5), a button that plays a short click
+    // (Recording §9.4.2), and Window ▸ Small Window opening a 400 × 300 pt window (Capture §9.4.2). Test-only (K17).
+    public static let passwordPlaceholder = "Password"
+    public static let playClickButton = "Play Click"
+    public static let windowMenu = "Window"
+    public static let smallWindowItem = "Small Window"
+    public static let smallWindowTitle = "Bugeye Fixture Small"
+    /// Points.
+    public static let smallWindowSize = Size2D(width: 400, height: 300)
+
     public struct FakeSecret: Hashable, Sendable {
         public let label: String
         public let value: String

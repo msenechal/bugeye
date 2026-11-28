@@ -36,9 +36,9 @@ import Testing
             ])
     }
 
-    @Test func settingsHasGeneralThenAI() throws {
+    @Test func settingsHasGeneralThenShortcutsThenAI() throws {
         let registry = try FeatureRegistry([GeneralModule()])
-        #expect(SettingsLayout.panes(for: registry).map(\.title) == ["General", "AI"])
+        #expect(SettingsLayout.panes(for: registry).map(\.title) == ["General", "Shortcuts", "AI"])
         #expect(registry.moduleIDs == ["general"])
     }
 

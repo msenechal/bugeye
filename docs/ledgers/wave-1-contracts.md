@@ -1,0 +1,66 @@
+# Wave 1 contracts ledger
+
+Plan: `docs/plans/2026-11-28-wave-1-contracts.md` · Spec: `docs/specs/2026-11-27-wave-1-contracts.md` · Branch: `feat/wave1-contracts` · PR: https://github.com/msenechal/bugeye/pull/3 (draft)
+
+Trust this file and `git log` over memory. Contract amendments (K2) add their ruling here only (K39).
+
+## Tasks
+
+| Task | Status | Commit | CI / notes |
+|---|---|---|---|
+| 1 | done | f3d095d | draft PR #3 |
+| 2 | done | ecfe15d | self-test 17 cases, seen failing with no script |
+| 3 | done | 13b7499 | |
+| 4 | done | 8169678 | tests and code written in one step (not seen failing first); both checked by hand, see ruling |
+| 5 | done | dd7cdf5 | 19 new writer tests, seen failing on the missing names |
+| 6 | done | 6bc2f63 | |
+| 7 | done | 8730927 | |
+| 8 | done | f0c51af | golden JSON generated from the encoder and checked by eye |
+| 9 | done | 76a2234 | |
+| 10 | done | 5c1fbc1 | no fake had a test to move; the AX test moved to `Tests/BugeyeCoreTests/Accessibility/` |
+| 11 | done | 703ff4c | |
+| 12 | done | f0d64fa | |
+| 13 | done | 3afd498 | |
+| 14 | done | b0ae2f6 | |
+| 15 | done | 6f13356 | |
+| 16 | done | dbb19cd | |
+| 17 | done | 21c049a | |
+| 18 | done | 4df3302 | |
+| — | done | 0611edf | `DocumentWindows(onUnderflow:)`, see ruling |
+| 19 | done | 5ad916c | not compiled here; macOS run 46092621392 found a missing `import Foundation` (fixed ad1fd82) |
+| 20 | done | 1a02357 | not compiled here |
+| 21–22 | done | b4e36a4 | not compiled here; macOS run 46092736765 failed one test (`performActionForItem` needs a running NSApp), fixed 7b34a14 |
+| review | done | (see rulings) | fresh final review: 0 Critical, 3 Important, 7 Minor; fix pass below |
+| macOS | green | 7b34a14 | manual run https://github.com/msenechal/bugeye/actions/runs/46092982896: build, all tests, bundle, release symbols |
+
+## Rulings
+
+Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as `Ruling: <what and why> (cost if wrong: …)`.
+
+- Ruling: the branch was cut fresh from `origin/main` (`a82a783`) and the six Wave 1 specs and `design/14` copied from `claude/bold-davinci-spj824` at `8192f4a`, as instructed. (The local checkout showed a stale `origin/feat/wave1-contracts` ref at `8192f4a`; the first push created the remote branch, so nothing was overwritten.) (cost if wrong: none; those commits stay on `claude/bold-davinci-spj824`.)
+
+- Ruling: Task 4's namer and folder tests were written together with their code instead of being run red first. The expected strings come from the spec, the fixed date was converted by hand (27 Nov 2026 14:03:12 Paris = 1 795 784 592 s), and every later task ran its tests red first. (cost if wrong: low; a test that can't fail would show as an always-green check, and each assertion here compares against a spec literal.)
+- Ruling: `MainMenu` (the type, its fixed table and `shellItemIDs`) landed with Task 11, not Task 15, because `FeatureRegistry` needs the shell's ids for `duplicateMainMenuItem` (plan P8); `MainMenu.entries` and its table test stayed in Task 15. Each main-menu key is a `KeyCombo` constant in `ShellStrings` next to its title, as §4.2.5 asks. (cost if wrong: none.)
+- Ruling: `ThumbnailDecorations` and `CaptureEventRecorder` capture `self` weakly in their bus subscriptions, so neither keeps itself alive through the bus. (cost if wrong: none.)
+- Ruling: the debug `registered` lookup returns a `@MainActor (String) -> String`, so an epic's command runs on the main actor like the built-ins. (cost if wrong: none.)
+
+- Ruling: `DocumentWindows.init` gains `onUnderflow: @MainActor () -> Void = {}` (additive, default empty). K37 says the shell logs a fault on an underflow, but §4.2.6's shape gave the shell no way to see one; `AppContext` passes a closure that logs it. Test failed first. (cost if wrong: none; one defaulted parameter.)
+- Ruling: `UserNotificationNotifier()` uses the system center only for an `.app` bundle with a bundle id, not merely "a bundle id": under `swift test` the runner can have an id without an app bundle, and `UNUserNotificationCenter` traps there. (cost if wrong: low; a bundled Bugeye is always an `.app`.)
+- Ruling: `AppServices.init` throws `LaunchError` (`.conflicts` or `.duplicates(router:settingsPanes:debugCommands:)`) instead of `FeatureRegistryError`, and takes an `extraInstall` closure (tests only) so the duplicate-id launch failures can be tested while every wiring is empty. It also takes `requestNotificationAuthorization`, which `AppDelegate` calls at launch, because `AppContext.notifier` is the port, not the adapter. (cost if wrong: none.)
+- Ruling: `MenuBarController` draws through a `StatusItemDisplay` protocol (the real one wraps `NSStatusItem`), so the override's badge, label, menu and restore are tested without a status item, as §4.5 asks. (cost if wrong: none.)
+- Ruling: the `macos` job was reached with manual `workflow_dispatch` runs on the branch while the PR was a draft (CLAUDE.md allows it), so `claude-review` didn't re-run on every compile fix. (cost if wrong: none.)
+
+- Ruling (final review I1, Important): the launch-failure tests register test-only ids (`test.item`, `test.pane`, `test.command`) and check the list contains them, instead of `capture` / `quickAccess.stack` compared to the whole list, which Capture's and Quick Access's own registrations would have broken (K20). (cost if wrong: none.)
+- Ruling (final review I2, Important): where `renameatx_np` answers `ENOTSUP` or `EINVAL` (exFAT, SMB, NFS have no `RENAME_EXCL` / `RENAME_SWAP`), the writer falls back to a check-then-rename for both the no-replace rename and `requireExisting`. That fallback can race with another writer between the check and the rename; the atomic primitives stay the path on APFS and HFS+. Seams `nativeNoReplace` / `nativeSwap`; tests failed first. The swapped-out old file is now removed even if `unlink` fails (M2). (cost if wrong: low; a narrow race on non-APFS volumes only, where the alternative was every save failing.)
+- Ruling (final review I3, Important): `copy(_:to:identity:)` onto its own source (any spelling of the path, or a hard link) throws the new `CaptureFileWriter.SameFile` and changes nothing, so the source is never changed (K28). It has no user-visible text: Quick Access treats it as "nothing to do". Test failed first. (cost if wrong: low; if Quick Access wants a notice, it needs a settled string, an additive amendment.)
+- Ruling (final review M3, M4, M5, M6, M7, Minor): fixed in the fix pass: a test pins that a subscriber added during delivery gets only later events (characterises code the review found correct, so it passed at once); the debug handler is created before the `onLaunch` steps so `events` includes what they publish; `TerminationGate`'s doc says participants must not rely on default-mode run-loop sources; the shell tests use a `TempDirectory` home; `linux.yml` passes `base_ref` through `env:`. M1, the rest of M5 and `AppServicesTests`' home are in `docs/backlog.md` (this PR is contract, so it may write the backlog). (cost if wrong: none.)
+
+- Ruling (claude-review round 1, Minor): a failed `move(.new(id))` gives the source back its previous identity (or removes the one it set), so "the source is still there" holds with its own ID. The ID is still written onto the source first, as §4.1.2 says. And `write` now uses the short `.bugeye-<uuid>.tmp` temp name like the new methods, so names near 255 bytes work (Wave 0 backlog M3, now resolved). Tests failed first. (cost if wrong: none.)
+
+## Waiting on user
+
+Nothing yet.
+
+## Backlog
+
+Nothing yet.

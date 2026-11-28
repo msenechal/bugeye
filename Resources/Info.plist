@@ -24,6 +24,10 @@
 	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Bugeye records your microphone only when you turn on Mic for a recording.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Bugeye shows your camera only when you turn on Cam for a recording.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

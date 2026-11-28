@@ -13,7 +13,7 @@ FORMAT_PATHS := Package.swift Sources Tests
 INSTALL_DIR ?= $(HOME)/Applications
 SIGN_IDENTITY ?= Bugeye Dev
 
-.PHONY: build test test-core lint format guards icon bundle cert install fixture check-release-symbols clean
+.PHONY: build test test-core lint format guards ownership icon bundle cert install fixture check-release-symbols clean
 
 build:
 	swift build
@@ -33,6 +33,12 @@ format:
 guards:
 	scripts/guards.sh
 	scripts/test-guards.sh
+	scripts/test-ownership.sh
+
+# Folder ownership of an epic branch against BASE (contracts spec §3).
+BASE ?= origin/main
+ownership:
+	scripts/ownership.sh $(BASE)
 
 # macOS only from here on.
 

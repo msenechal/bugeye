@@ -3,13 +3,17 @@ import AppKit
 import BugeyeFeatures
 import SwiftUI
 
-/// The "Bugeye Settings" window: one tab per pane, General then AI.
+/// The "Bugeye Settings" window: one tab per pane: General, the modules' panes that have a view, Shortcuts once
+/// Capture registers it, then AI.
 @MainActor
 final class SettingsWindowController {
     private let window: NSWindow
 
-    init(panes: [SettingsSectionSpec], general: GeneralSettings, ai: AIKeySettings) {
-        let host = NSHostingController(rootView: SettingsView(panes: panes, general: general, ai: ai))
+    init(panes: [SettingsSectionSpec], general: GeneralSettings, ai: AIKeySettings, settingsPanes: SettingsPanes) {
+        let host = NSHostingController(
+            rootView: SettingsView(
+                panes: SettingsView.visiblePanes(panes, settingsPanes: settingsPanes), general: general, ai: ai,
+                settingsPanes: settingsPanes))
         window = NSWindow(contentViewController: host)
         window.title = ShellStrings.settingsWindowTitle
         window.styleMask = [.titled, .closable, .resizable]
@@ -32,6 +36,12 @@ struct SettingsView: View {
     let panes: [SettingsSectionSpec]
     let general: GeneralSettings
     let ai: AIKeySettings
+    let settingsPanes: SettingsPanes
+
+    /// General and AI always; any other pane only once a view is registered for it (contracts §4.5).
+    static func visiblePanes(_ panes: [SettingsSectionSpec], settingsPanes: SettingsPanes) -> [SettingsSectionSpec] {
+        panes.filter { $0.id == "general" || $0.id == SettingsLayout.aiPane.id || settingsPanes.hasView(for: $0.id) }
+    }
 
     var body: some View {
         TabView {
@@ -47,8 +57,8 @@ struct SettingsView: View {
     private func paneView(_ pane: SettingsSectionSpec) -> some View {
         switch pane.id {
         case "general": GeneralPane(model: general)
-        case "ai": AIPane(model: ai)
-        default: EmptyView()
+        case SettingsLayout.aiPane.id: AIPane(model: ai)
+        default: settingsPanes.view(for: pane.id) ?? AnyView(EmptyView())
         }
     }
 }

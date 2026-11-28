@@ -1,13 +1,15 @@
 import AppKit
+import BugeyeCore
 import BugeyeFeatures
 import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let log = Logger(subsystem: "dev.msenechal.bugeye", category: "app")
+    private let log = Logger(subsystem: CaptureFolders.bundleID, category: "app")
     private var services: AppServices?
     private var menuBar: MenuBarController?
     private var settingsWindow: SettingsWindowController?
+    private var mainMenu: NSMenu?
     #if DEBUG
         private var debugChannel: DebugChannel?
     #endif
@@ -15,25 +17,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let services: AppServices
         do {
-            services = try AppServices.live()
+            services = try AppServices.live(applyActivationPolicy: { [weak self] in self?.applyActivationPolicy($0) })
         } catch {
-            // Two modules claim the same slot: a programming error that tests catch first.
-            log.fault("Feature modules conflict: \(String(describing: error.conflicts), privacy: .public)")
+            // Two modules claim the same slot, or two wirings the same id: a programming error that tests catch first.
+            log.fault("Bugeye can't start: \(String(describing: error), privacy: .public)")
             NSApp.terminate(nil)
             return
         }
         self.services = services
-        // Never shown (menu-bar agent), but it makes ⌘V, ⌘C, ⌘A, ⌘Z and ⌘W work in the Settings window.
-        NSApp.mainMenu = MainMenu.make()
+        let context = services.context
+        // Never shown while Bugeye is a menu-bar agent, but it makes ⌘V, ⌘C, ⌘A, ⌘Z and ⌘W work in Settings, and it
+        // is the menu bar while a document window is open (plan P10).
+        let mainMenu = MainMenuInstaller.menu(for: services.registry)
+        self.mainMenu = mainMenu
+        NSApp.mainMenu = mainMenu
         services.general.ensureFolderExists()
         // Reads the Keychain off the main actor; the AI pane shows "No key saved." until it answers.
         Task { await services.aiKey.load() }
 
         let settingsWindow = SettingsWindowController(
-            panes: SettingsLayout.panes(for: services.registry), general: services.general, ai: services.aiKey)
+            panes: SettingsLayout.panes(for: services.registry), general: services.general, ai: services.aiKey,
+            settingsPanes: context.settingsPanes)
         self.settingsWindow = settingsWindow
 
-        let menuBar = MenuBarController(entries: StatusMenu.entries(for: services.registry))
+        let menuBar = MenuBarController(
+            registry: services.registry, settings: services.settingsStore, router: context.router,
+            hotkeyStatus: context.hotkeyStatus, statusItemState: context.statusItem, display: SystemStatusItemDisplay())
+        let log = self.log
         menuBar.onChoose = { id in
             switch id {
             case StatusMenu.aboutID:
@@ -44,14 +54,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case StatusMenu.quitID:
                 NSApp.terminate(nil)
             default:
-                break  // Module items arrive with their wave.
+                if !context.router.performMenuItem(id) {
+                    log.error("no action for \(id, privacy: .public)")
+                }
             }
         }
         self.menuBar = menuBar
 
+        Task { await services.requestNotificationAuthorization() }
         #if DEBUG
-            startDebugChannel(moduleIDs: services.registry.moduleIDs)
+            // Made before the launch steps, so `events` also shows what they publish (final review M4).
+            let debugHandler = makeDebugHandler(services)
         #endif
+        context.runLaunchSteps()
+
+        #if DEBUG
+            startDebugChannel(debugHandler)
+        #endif
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let services else { return .terminateNow }
+        return Self.terminationReply(gate: services.context.termination) { allowed in
+            NSApp.reply(toApplicationShouldTerminate: allowed)
+        }
+    }
+
+    /// Answers `.terminateLater` and replies with the gate's answer once every participant has run (K11).
+    static func terminationReply(gate: TerminationGate, reply: @escaping @MainActor (Bool) -> Void)
+        -> NSApplication.TerminateReply
+    {
+        Task { @MainActor in reply(await gate.shouldTerminate()) }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -60,10 +94,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
+    private func applyActivationPolicy(_ policy: ActivationPolicy) {
+        guard let mainMenu else { return }
+        let apply = MainMenuInstaller.applier(
+            menu: mainMenu, setPolicy: { NSApp.setActivationPolicy($0) }, setMainMenu: { NSApp.mainMenu = $0 },
+            activate: { NSApp.activate() })
+        apply(policy)
+    }
+
     #if DEBUG
-        private func startDebugChannel(moduleIDs: [String]) {
-            let channel = DebugChannel(
-                path: DebugChannel.defaultSocketPath(), handler: DebugCommandHandler(moduleIDs: moduleIDs))
+        private func makeDebugHandler(_ services: AppServices) -> DebugCommandHandler {
+            let context = services.context
+            let commands = context.debugCommands
+            return DebugCommandHandler(
+                moduleIDs: services.registry.moduleIDs, router: context.router, settings: services.settingsStore,
+                bus: context.captureEvents, registered: { commands.handler(for: $0) })
+        }
+
+        private func startDebugChannel(_ handler: DebugCommandHandler) {
+            let channel = DebugChannel(path: DebugChannel.defaultSocketPath(), handler: handler)
             do {
                 try channel.start()
                 debugChannel = channel

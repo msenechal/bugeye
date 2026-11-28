@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-pattern='DebugChannel|DebugCommandHandler|bugeye-debug\.sock'
+pattern='DebugChannel|DebugCommandHandler|DebugCommands|bugeye-debug\.sock'
 
 symbols_of() {
     local config="$1"
