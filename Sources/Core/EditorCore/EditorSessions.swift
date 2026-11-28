@@ -98,6 +98,8 @@ public final class EditorSession {
     public internal(set) var imageSize = Size2D.zero
     /// A `deleted` event arrived, or a save found the file missing (§5.8).
     public internal(set) var isGone = false
+    /// Set when the window closed: a save still running then shows nothing more (final review B, I2).
+    public internal(set) var isClosed = false
     /// Increments when a save is requested (S6, plan P9).
     var saveGeneration = 0
     var saveTask: Task<SaveOutcome, Never>?
@@ -109,7 +111,7 @@ public final class EditorSession {
 
     /// The file name with its extension.
     public var name: String { item.fileURL.lastPathComponent }
-    public var isOpen: Bool { document != nil }
+    public var isOpen: Bool { document != nil && !isClosed }
 }
 
 /// The open editors and every rule about them (§6.4, S1–S7): one editor per capture, the bus events, saves,
@@ -136,8 +138,8 @@ public final class EditorSessions {
 
     /// S1, S2: one editor per capture; decode, then show, `opened()`, `editingStarted`, in that order.
     public func open(_ item: CaptureItem) async {
-        guard sessions[item.id] == nil else {
-            host?.bringForward(item.id)
+        if let existing = sessions[item.id] {
+            if existing.isOpen { host?.bringForward(item.id) }  // still loading: it will show itself
             return
         }
         let session = EditorSession(item: item)
@@ -164,6 +166,7 @@ public final class EditorSessions {
     /// S3: the window closed. Publishes `editingEnded` and `closed()` exactly once.
     public func didClose(_ id: CaptureID) {
         guard let session = sessions[id], session.isOpen else { return }
+        session.isClosed = true
         forget(session)
         publish(.editingEnded, session)
         environment.documentWindows.closed()
@@ -183,7 +186,7 @@ public final class EditorSessions {
             guard session.item.fileURL != event.item.fileURL || session.isGone else { return }
             session.item = event.item
             session.isGone = false
-            host?.retitle(session)
+            if session.isOpen { host?.retitle(session) }
         case .deleted:
             session.isGone = true
         default:
@@ -213,9 +216,13 @@ public final class EditorSessions {
         guard let document = session.document, let host else { return .failed }
         let snapshot = document.state
         var url = session.item.fileURL
+        // Gone: no file at the URL, or a `deleted` event for a capture the bus has forgotten. A file put back at its
+        // path (Put Back from the Trash) saves again (final review B, Minor 3).
         let exists = environment.fileExists(url)
-        if !document.isDirty && exists && !session.isGone { return .unchanged }
-        guard exists && !session.isGone else { return await goneFlow(session) }
+        let gone = !exists || (session.isGone && environment.bus.item(session.id) == nil)
+        if !gone { session.isGone = false }
+        if !document.isDirty && !gone { return .unchanged }
+        guard !gone else { return await goneFlow(session) }
 
         let exported: ExportedImage
         do {
@@ -235,7 +242,7 @@ public final class EditorSessions {
                     redone = true
                     url = moved.fileURL
                     session.item = moved
-                    host.retitle(session)
+                    if session.isOpen { host.retitle(session) }
                     continue
                 }
                 session.isGone = true
@@ -246,9 +253,10 @@ public final class EditorSessions {
         }
         let elapsed = start.duration(to: .now)
         environment.log(EditorLog.saved(session.name, milliseconds: Int((elapsed / .milliseconds(1)).rounded())))
-        // S6: a newer save was requested meanwhile; it marks and publishes for its own snapshot.
+        // S6: a newer save was requested meanwhile; it marks and publishes for its own snapshot. A save that finishes
+        // after its window closed still publishes `edited`: the file changed (final review B, I2).
         guard generation == session.saveGeneration else { return .saved }
-        document.markSaved(snapshot)
+        if !session.isClosed { document.markSaved(snapshot) }
         publish(.edited, session, preview: exported.preview)
         return .saved
     }
@@ -257,10 +265,9 @@ public final class EditorSessions {
     private func goneFlow(_ session: EditorSession) async -> SaveOutcome {
         guard let host else { return .failed }
         session.isGone = true
-        guard await host.showGoneAlert(session) else { return .cancelled }
-        guard let chosen = await host.chooseSaveAsURL(session), let document = session.document else {
-            return .cancelled
-        }
+        guard !session.isClosed, await host.showGoneAlert(session), !session.isClosed,
+            let chosen = await host.chooseSaveAsURL(session), !session.isClosed, let document = session.document
+        else { return .cancelled }
         let snapshot = document.state
         let exported: ExportedImage
         do {
@@ -278,7 +285,7 @@ public final class EditorSessions {
         session.item = moved
         session.isGone = false
         document.markSaved(snapshot)
-        host.retitle(session)
+        if session.isOpen { host.retitle(session) }
         if environment.bus.item(session.id) != nil {
             environment.bus.publish(
                 CaptureEvent(change: .moved, item: moved, previousURL: old.fileURL, origin: EditorModule.id))
@@ -295,6 +302,8 @@ public final class EditorSessions {
         guard let session = sessions[id], let document = session.document, let host else { return .failed }
         host.commitPendingEdits(session)
         guard let chosen = await host.chooseSaveAsURL(session) else { return .cancelled }
+        // Onto its own file, Save As is a Save: it must keep the capture's ID (final review B, I1).
+        if Self.samePath(chosen, session.item.fileURL) { return await save(id) }
         do {
             let exported = try await host.export(session, state: document.state)
             try await write(
@@ -308,7 +317,9 @@ public final class EditorSessions {
 
     private func failed(_ session: EditorSession, name: String, error: any Error) async -> SaveOutcome {
         environment.log(EditorLog.saveFailed(name, error: String(describing: error)))
-        await host?.showSaveFailed(session, name: name, message: error.localizedDescription)
+        if !session.isClosed {
+            await host?.showSaveFailed(session, name: name, message: error.localizedDescription)
+        }
         return .failed
     }
 
@@ -321,13 +332,16 @@ public final class EditorSessions {
         }.value
     }
 
+    static func normalized(_ u: URL) -> String {
+        var path = u.standardizedFileURL.resolvingSymlinksInPath().path
+        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        return path
+    }
+
+    static func samePath(_ a: URL, _ b: URL) -> Bool { normalized(a) == normalized(b) }
+
     private func isInSaveFolder(_ url: URL) -> Bool {
-        func normalized(_ u: URL) -> String {
-            var path = u.standardizedFileURL.path
-            while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
-            return path
-        }
-        return normalized(url.deletingLastPathComponent()) == normalized(environment.saveFolder())
+        Self.samePath(url.deletingLastPathComponent(), environment.saveFolder())
     }
 
     // MARK: Copy and drag
@@ -348,7 +362,7 @@ public final class EditorSessions {
     /// ID into the drag folder under the capture's name. Throws when it can't be written (the drag doesn't start).
     public func writeDragFile(_ id: CaptureID) async throws -> URL {
         guard let session = sessions[id], let document = session.document, let host else {
-            throw EditorLoadFailure(reason: "no editor")
+            throw EditorSessionError.noEditor
         }
         host.commitPendingEdits(session)
         let folder = environment.dragFolder
@@ -374,16 +388,21 @@ public final class EditorSessions {
     public func shouldClose(_ id: CaptureID) async -> Bool {
         guard let session = sessions[id], let document = session.document, let host else { return true }
         host.commitPendingEdits(session)
-        guard document.isDirty else { return true }
+        _ = await session.saveTask?.value  // a save in flight decides first (final review B, I3)
+        guard sessions[id] === session, document.isDirty else { return true }
         return await ask(session)
     }
 
     /// Quit (S7): every dirty editor in opening order, brought forward and asked; the first Cancel stops.
     public func shouldTerminate() async -> Bool {
         for session in openSessions {
-            guard let document = session.document, let host else { continue }
+            // An editor closed while an earlier one was asking isn't asked (final review B, I4).
+            guard sessions[session.id] === session, session.isOpen, let document = session.document, let host else {
+                continue
+            }
             host.commitPendingEdits(session)
-            guard document.isDirty else { continue }
+            _ = await session.saveTask?.value  // a save in flight decides first (I3)
+            guard sessions[session.id] === session, document.isDirty else { continue }
             host.bringForward(session.id)
             guard await ask(session) else { return false }
         }
@@ -408,6 +427,11 @@ public final class EditorSessions {
         let item = environment.bus.item(session.id) ?? session.item
         environment.bus.publish(CaptureEvent(change: change, item: item, preview: preview, origin: EditorModule.id))
     }
+}
+
+public enum EditorSessionError: Error, Hashable, Sendable {
+    /// No open editor for the capture.
+    case noEditor
 }
 
 /// The drag handle's folder, `<temporary directory>/Bugeye-Drag/`, cleaned only by the editor (E22).

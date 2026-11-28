@@ -9,7 +9,7 @@ Trust this file and `git log` over memory.
 | Slice | Branch | PR | State |
 |---|---|---|---|
 | A executor | `feat/wave1-editor-executor` | https://github.com/msenechal/bugeye/pull/7 | draft; final review done |
-| B core | `feat/wave1-editor-core` | | |
+| B core | `feat/wave1-editor-core` | https://github.com/msenechal/bugeye/pull/14 | draft; final review done, fix pass below |
 | C app | `feat/wave1-editor-app` | | |
 | D wiring | `feat/wave1-editor-wiring` | | |
 
@@ -47,6 +47,24 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (slice B): a gone-file Save As writes with `attributesFrom:` the old URL (which no longer exists, so it contributes nothing) and `identity: .new(item.id)`. Provenance on the lost file can't be recovered. (cost if wrong: low; Wave 2's provenance would be missing on such a file.)
 - Ruling (slice B): the text view's commit runs through `EditorHost.commitPendingEdits` at the start of save, Save As, copy, the drag file, close and quit, so the document holds the typed text before any of them reads it (§5.4). (cost if wrong: none.)
 - Ruling (claude-review A, Important): nested group opacities now multiply. The executor keeps a stack of effective alphas, and an isolated group's children start again from 1 inside its layer, as Core Graphics resets alpha in a transparency layer. A nested group's shadow replaces its parent's for the drawing inside it (documented). Probe tests cover 0.5 inside 0.5 (non-isolated and isolated inner group) and an isolated parent. They can't be seen failing on Linux; the macOS job is the check. (cost if wrong: none.)
+
+- Ruling (final review B, I1, Important): Save As… onto the capture's own file is a Save: `.keep`, `requireExisting: true`, `markSaved`, `edited`. It used to replace the capture's ID. Paths are compared standardised, with symlinks resolved. Test failed first. (cost if wrong: none.)
+- Ruling (final review B, I2, Important): `didClose` marks the session closed. A save still running then shows no alert (gone or failed) and no retitle, and doesn't mark the closed document. If its write succeeds it still publishes `edited`, because the file did change and Quick Access's thumbnail should follow it; this amends plan P9, which said "only if still open". Tests failed first. (cost if wrong: low; an `edited` event after `editingEnded` for that capture.)
+- Ruling (final review B, I3, Important): close and quit wait for a save in flight before deciding. If the save left the document clean, they ask nothing. Tests failed first. (cost if wrong: none.)
+- Ruling (final review B, I4, Important): quit skips an editor that was closed while another editor's prompt was up. Test failed first. (cost if wrong: none.)
+- Ruling (final review B, Minors 1, 3, 4, 6): fixed.
+  - Minor 1: `applyFrame` makes each discrete frame edit (a fill swatch, the Shadow toggle) one step; slice C uses it.
+  - Minor 3: a file put back at its path saves again, because a `deleted` flag only counts once the bus has also forgotten the capture.
+  - Minor 4: neither events nor a second open reach the host while a capture is still loading.
+  - Minor 6: the drag file throws `EditorSessionError.noEditor`.
+
+  (cost if wrong: none.)
+- Ruling (final review B, Minors 2, 5, 7): not changed in code.
+  - Minor 2: the shell commits or cancels text before every tool change and mouse-down; the controller ignores clicks while an entry is open, so its side stays safe.
+  - Minor 5: the missing tests came with the fixes above.
+  - Minor 7: the `saved … in N ms` log line times the write only, not the render; §8.4 doesn't say which. The snapping hook lives in the controller only, because `EditorState` is a value and holds no closures (§8.3 says "keep a snapping hook").
+
+  (cost if wrong: low.)
 
 ## Waiting on
 
