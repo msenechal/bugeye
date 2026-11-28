@@ -1,5 +1,6 @@
 import BugeyeCore
 import CoreGraphics
+import Foundation
 
 /// The one `PixelBuffer` ↔ `CGImage` conversion (contracts §4.4, K9). `PixelBuffer` is RGBA8, premultiplied
 /// alpha, sRGB unless its producer documents otherwise.
