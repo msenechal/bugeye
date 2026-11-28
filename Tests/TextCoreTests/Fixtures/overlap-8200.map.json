@@ -1,0 +1,312 @@
+{
+  "height" : 8200,
+  "lines" : [
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 100
+        },
+        "size" : {
+          "height" : 30,
+          "width" : 120
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 0,
+      "text" : "Header",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 100
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 120
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Header"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 3900
+        },
+        "size" : {
+          "height" : 30,
+          "width" : 360
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 1,
+      "text" : "Inside the overlap",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 3900
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 120
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Inside"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 180,
+              "y" : 3900
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 60
+            }
+          },
+          "range" : [
+            7,
+            10
+          ],
+          "text" : "the"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 260,
+              "y" : 3900
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 140
+            }
+          },
+          "range" : [
+            11,
+            18
+          ],
+          "text" : "overlap"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 3985
+        },
+        "size" : {
+          "height" : 30,
+          "width" : 300
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 2,
+      "text" : "Cut by the edge",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 3985
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 60
+            }
+          },
+          "range" : [
+            0,
+            3
+          ],
+          "text" : "Cut"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 120,
+              "y" : 3985
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 40
+            }
+          },
+          "range" : [
+            4,
+            6
+          ],
+          "text" : "by"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 180,
+              "y" : 3985
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 60
+            }
+          },
+          "range" : [
+            7,
+            10
+          ],
+          "text" : "the"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 260,
+              "y" : 3985
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 80
+            }
+          },
+          "range" : [
+            11,
+            15
+          ],
+          "text" : "edge"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 5800
+        },
+        "size" : {
+          "height" : 30,
+          "width" : 120
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 3,
+      "text" : "Middle",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 5800
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 120
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Middle"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 7650
+        },
+        "size" : {
+          "height" : 30,
+          "width" : 280
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 4,
+      "text" : "Second overlap",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 7650
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 120
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Second"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 180,
+              "y" : 7650
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 140
+            }
+          },
+          "range" : [
+            7,
+            14
+          ],
+          "text" : "overlap"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 8100
+        },
+        "size" : {
+          "height" : 30,
+          "width" : 120
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 5,
+      "text" : "Footer",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 8100
+            },
+            "size" : {
+              "height" : 30,
+              "width" : 120
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Footer"
+        }
+      ]
+    }
+  ],
+  "width" : 800
+}

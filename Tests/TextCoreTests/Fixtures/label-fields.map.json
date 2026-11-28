@@ -1,0 +1,295 @@
+{
+  "height" : 300,
+  "lines" : [
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 40
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 72
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 0,
+      "text" : "Name",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 40
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 72
+            }
+          },
+          "range" : [
+            0,
+            4
+          ],
+          "text" : "Name"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 300,
+          "y" : 42
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 108
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 0,
+      "text" : "Morgan",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 300,
+              "y" : 42
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 108
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Morgan"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 100
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 90
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 1,
+      "text" : "Email",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 100
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 90
+            }
+          },
+          "range" : [
+            0,
+            5
+          ],
+          "text" : "Email"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 300,
+          "y" : 98
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 288
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 1,
+      "text" : "user@example.com",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 300,
+              "y" : 98
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 288
+            }
+          },
+          "range" : [
+            0,
+            16
+          ],
+          "text" : "user@example.com"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 80,
+          "y" : 160
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 198
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 2,
+      "text" : "Remember me",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 80,
+              "y" : 160
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 144
+            }
+          },
+          "range" : [
+            0,
+            8
+          ],
+          "text" : "Remember"
+        },
+        {
+          "box" : {
+            "origin" : {
+              "x" : 242,
+              "y" : 160
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 36
+            }
+          },
+          "range" : [
+            9,
+            11
+          ],
+          "text" : "me"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 40,
+          "y" : 220
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 72
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 3,
+      "text" : "Save",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 40,
+              "y" : 220
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 72
+            }
+          },
+          "range" : [
+            0,
+            4
+          ],
+          "text" : "Save"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 200,
+          "y" : 221
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 108
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 3,
+      "text" : "Cancel",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 200,
+              "y" : 221
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 108
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Cancel"
+        }
+      ]
+    },
+    {
+      "box" : {
+        "origin" : {
+          "x" : 360,
+          "y" : 219
+        },
+        "size" : {
+          "height" : 34,
+          "width" : 108
+        }
+      },
+      "confidence" : 0.95,
+      "row" : 3,
+      "text" : "Delete",
+      "words" : [
+        {
+          "box" : {
+            "origin" : {
+              "x" : 360,
+              "y" : 219
+            },
+            "size" : {
+              "height" : 34,
+              "width" : 108
+            }
+          },
+          "range" : [
+            0,
+            6
+          ],
+          "text" : "Delete"
+        }
+      ]
+    }
+  ],
+  "width" : 1200
+}
