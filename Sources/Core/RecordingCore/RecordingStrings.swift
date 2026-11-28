@@ -85,6 +85,12 @@ public enum RecordingStrings {
 
     public static func pausedLabel(elapsed: String) -> String { "Recording paused, \(elapsed)" }
 
+    /// `path` as `~/…` when it is under `home`.
+    public static func homeRelative(_ path: String, home: String) -> String {
+        let prefix = home.hasSuffix("/") ? home : home + "/"
+        return path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path
+    }
+
     /// An error's description as a sentence: trimmed, ending with a full stop.
     public static func sentence(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,9 +126,8 @@ public enum RecordingStrings {
 
         /// `path` in `~/…` form when it is under `home`.
         public static func couldNotSave(path: String, home: String) -> RecordingNotice {
-            let prefix = home.hasSuffix("/") ? home : home + "/"
-            let shown = path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path
-            return RecordingNotice(title: "Couldn't save the recording", body: "It is still in \(shown).")
+            RecordingNotice(
+                title: "Couldn't save the recording", body: "It is still in \(homeRelative(path, home: home)).")
         }
     }
 }

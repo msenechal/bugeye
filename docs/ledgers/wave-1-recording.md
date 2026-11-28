@@ -11,7 +11,9 @@ Trust this file and `git log` over memory.
 | 1 core | `feat/wave1-recording-core` | https://github.com/msenechal/bugeye/pull/4 | ready, CI running |
 | 2 flow | `feat/wave1-recording-flow` (stacked on core) | https://github.com/msenechal/bugeye/pull/13 (draft) | in progress |
 | 3 layout | `feat/wave1-recording-layout` (stacked on flow) | https://github.com/msenechal/bugeye/pull/16 (draft) | in progress |
-| 4 adapters | `feat/wave1-recording-adapters` (stacked on core) | https://github.com/msenechal/bugeye/pull/17 (draft) | macos run queued |
+| 4 adapters | `feat/wave1-recording-adapters` (stacked on core) | https://github.com/msenechal/bugeye/pull/17 (draft) | manual macos run 46123514479 green |
+| 5 recorder | `feat/wave1-recording-recorder` (stacked on layout) | https://github.com/msenechal/bugeye/pull/22 (draft) | macos run 46124727052 failed to build (NSLock in async code), fixed |
+| 6 controller | `feat/wave1-recording-controller` (stacked on recorder) | (draft) | in progress |
 
 ## Tasks
 
@@ -65,6 +67,41 @@ Fresh reviewer: 0 Critical, 3 Important, 16 Minor. Fixed in one commit with `Lay
 - Minor fixed: orphan timelines are left alone (1); a recovered `.mp4` takes its timeline's time (2); files changed in the last 10 s are left alone (4); `convertedName` / `timelineName` (5); recovery ordering and live-take tests (6); the self-exclusion test (7); edge tests (8); doc comment (10); too-wide bar and badge clamp to the left edge (11); Apple function-key characters and multi-letter uppercases (13); opacity rounded to 0.001 (14).
 - Minor deferred to Backlog: 3, 15, 16. Minor 9 and 12 are rulings below.
 
+## Final review of PR #17 (slice 4)
+
+Fresh reviewer: 0 Critical, 2 Important, 4 Minor. Fixed in 83888b0; `macos` green (run 46126223265).
+- I1 a text field's AXTitle or AXDescription can be what was typed: text-entry and secure elements get no title read at all (`AXPointReader.info` and the read path), tested with "hunter2".
+- I2 the messaging timeout was per message, so a lookup could take several times 250 ms: one deadline for the whole lookup, the budget re-set before each message, attributes in two `AXUIElementCopyMultipleAttributeValues` calls.
+- Minor fixed: M1–M4 (search-field subrole, injectable trust and deadline, a deadline test, test names).
+
+## Final review of PR #22 (slice 5)
+
+Fresh reviewer: 1 Critical, 8 Important, 11 Minor. Fixed in a935da2 and its follow-up (the first `macos` run trapped in the converter's new progress code: `Int(NaN)` for a sample without a time; fixed at its root).
+- C1 `cancel()` during `prepare` left a live stream: an `isCancelled` flag set in `detach`, checked by the install step (`installIfLive`) and after `startCapture`; `prepare` throws `.cancelled`. Tested at the install seam.
+- I1 writer failures are reported once through `MovieWriter.onFailure` to the recorder's failure latch.
+- I2 a still screen starts the take: the last complete frame is cached and written at the first `.idle` frame after `arm()`. Tested with synthetic status attachments.
+- I3 audio retiming shifts every timing entry and keeps per-sample durations; a 1 s take has 1 s of audio (test).
+- I4 a window gone before Record throws `.noWindow` instead of recording the display.
+- I5 filter updates are chained and generation-checked; the fallback starts counting only once the filter applied.
+- I6 the converter's deadline is hard (an unstructured job raced against a timer, first result wins); reader and writer are registered only after `startWriting`; an aborted job's `.mp4` is deleted when it ends. Tested with a pump blocked for 2 s against a 300 ms deadline.
+- I7 tests: 30 frames dropped in the pause and read back; one `process(_:of:)` for the delegate and tests; idle, blank and started statuses; pause and resume stamps and `noFrames` through `StreamRecorder`.
+- I8 `InputMonitor.resendFocus()` (the controller calls it when the timeline starts) and `didActivateApplicationNotification`.
+- Minor fixed: all of M1–M11 (stop stamped in `detach`; callbacks on the main queue in order; `MovieWriter.Failure` is `LocalizedError`; one window list per tick with `followedGlobal`; whole-percent progress; `now` injected; `displaySize` removed; frame statuses named; `HostClock`; Bugeye's own focus skipped; test renamed; the session starts only with a frame the input takes).
+
+## Final review of PRs #23, #24 and #25 (slices 6–8)
+
+Fresh reviewer: 1 Critical and 7 Important (6 on #23, 1 on #24), and minors.
+- #23 C1 a recorder cancelled while preparing was never stopped: when `prepare` returns, the controller cancels it if it is no longer the session's recorder (with the recorder's own C1 fix, `prepare` also throws `.cancelled`). Tested with a held `prepare`.
+- #23 I1 `areaMoved` checks the session, and the border is red only in recording or paused.
+- #23 I2 a followed window's latest rect (clamped like the stream's) is the target's frame for the border, overlays, bubble, countdown, restart and the timeline header.
+- #23 I3 Stop and the preview are raced against `stopDeadline` (10 s); a throw or a timeout falls back to the fragments rule, with the asset's duration (backlog M6 done). Tested with a recorder that throws and one that never returns.
+- #23 I4 + PR #22's controller note: the timeline gets everything through one ordered `AsyncStream` consumer; pause and resume stamps that come before the timeline exists are replayed into it, clamped to its start.
+- #23 I5 the options bar lays out before reading `fittingSize` and is placed again after SwiftUI's pass.
+- #23 I6 tests: cancel while preparing, stale and countdown window moves, a throwing and a hanging stop, a display with a negative origin.
+- #24 I7 the ring's area point is tested on two displays (one with a negative origin), and the timer's self-stop on an empty last frame; `windowIDs` only while the window is shown.
+- #25 minors: recovery skips this instance's live takes and deletes off the main actor; the checklist's corrections (branch note, Accessibility re-read, the ● menu's Stop, bubble cycle, no " (2)" by hand, no unquoted log line).
+- Minors deferred to Backlog below.
+
 ## Rulings
 
 Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as `Ruling: <what and why> (cost if wrong: …)`.
@@ -90,6 +127,14 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
+- Ruling (slice 4): `AXPointReader` runs each query on a GCD queue with `AXUIElementSetMessagingTimeout(0.25)`, reads only AXRole, AXSubrole, AXTitle, AXDescription, AXPosition and AXSize, and treats text field, text area, combo box and search field as text entry. macOS has no "not determined" for Accessibility: untrusted reads as denied. (cost if wrong: low.)
+- Ruling (slice 5): the writer takes a pause asked before the first frame as "start paused": the first frame is written at 0 and nothing more until the resume (same rule as the flow's C1 fix). (cost if wrong: low; one frame.)
+- Ruling (slice 5): a line-based scroll wheel's deltas are multiplied by 10 to approximate points; precise (trackpad) deltas are points already. (cost if wrong: low; Wave 3 scales scrolls anyway.)
+- Ruling (slice 5): host time is the CoreMedia host clock (what ScreenCaptureKit stamps); input uses `NSEvent.timestamp` and `systemUptime`, the same mach-based clock. Checked in the Mac batch's item 5 (a click's `t` matches its ring's frame within 50 ms). (cost if wrong: medium; a constant offset in the timeline.)
+- Ruling (slice 6): `RecordingDelivery` is portable (writer, namer, bus, decorations, ports, `TimelineStore`) and tested on Linux; file moves run off the main actor. (cost if wrong: none.)
+- Ruling (slice 6): a writer that fails at stop leaves its 2 s fragments: the take is delivered as a `.mov` when at least 64 KiB is there (`TakeRecovery.minimumMovieBytes`), else "Nothing was recorded". (cost if wrong: low.)
+- Ruling (slice 6): the controller's countdown, ticker, sampler and focus timers run in `.common` modes; tests drive ticks as events and never wait on the run loop. (cost if wrong: none.)
+- Ruling (slice 6): the overlay window is a protocol (`OverlayPresenting`) the controller already calls; slice 7 implements it with the Editor's executor, and until then the controller runs with no overlay (so V2's exception windows are just the bubble). (cost if wrong: none.)
 - Ruling (slice 3): the codec limit applies to the long and short sides (H.264 4096 × 2304, HEVC 8192 × 4320), so a portrait display is limited to 2304 × 4096, not squeezed into a landscape box. (cost if wrong: low.)
 - Ruling (slice 3): the source rect grows to whole points (floor the origin, ceil the far edges), then is clamped into the display; at least 2 × 2 pt. (cost if wrong: none.)
 - Ruling (slice 3): bar placement: centred on the selection and kept on the screen horizontally; "inside the bottom edge" puts the bar 12 pt above the selection's (or screen's) bottom. (cost if wrong: low; the Mac batch shows it.)
@@ -103,6 +148,11 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 3, review I3): a leftover movie under 64 KiB holds no complete fragment and is deleted with its timeline rather than delivered broken. (cost if wrong: low; at most the first second of a crashed take.)
 - Ruling: a text-entry element (text field, area, combo box, search field) keeps no title in the timeline, only its role, subrole and frame: some apps put the typed value in AXTitle, and §7.4 forbids typed text. Captions lose a search field's name. (cost if wrong: low; Wave 3 captions can say "the text field".)
 - Ruling: stacked branches take later fixes from the branch below by merging it in (no rebase): force-pushing was refused in this session. (cost if wrong: none; merge commits in a squash-or-merge PR.)
+- Ruling (fix pass, PR #22 C1): `StreamRecorder.Failure` gains `.noWindow` ("The window to record isn't available.") and `.cancelled`; both reach the flow as `.other(...)` like the others. (cost if wrong: none; a cancelled session's failure is ignored by the reducer.)
+- Ruling (fix pass, PR #22 I1): the writer-failure test stands in for a full disk through `MovieWriter.reportFailure`; detecting `.failed` is one status check read on every append. (cost if wrong: low; the Mac batch can fill a disk image.)
+- Ruling (fix pass, PR #23 I3): the stop deadline is 10 s; past it the take is delivered from its fragments (or nothing) while the stuck stop keeps running unobserved. (cost if wrong: low; a slow finish loses at most its last 2 s fragment.)
+- Ruling (fix pass, PR #23 I4): inputs that arrive before the timeline exists are dropped (they precede its origin); only pause and resume stamps wait for it. (cost if wrong: none.)
+- Ruling (fix pass, PR #22 M9): one `HostClock.now()` for the sampler, the focus watcher and the recorder; the overlay's animation clock stays `systemUptime` (it only measures its own durations). (cost if wrong: none.)
 - Ruling (superseded by claude-review #4 minor 2): `TimelineStore.observe` now deletes off the main actor.
 
 ## Waiting on
@@ -110,8 +160,8 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 ## Backlog
 
 - 2026-11-28, PR #16 review minor 3: a take kept after "Couldn't save the recording" would be "recovered" at the next launch with "Bugeye quit while recording". The controller (slice 6) marks such takes (e.g. `Take-<uuid>.undelivered`) and recovery skips or words them differently.
-- 2026-11-28, PR #16 review minor 15–16: the overlay slice keeps its timer while rings animate or the badge is visible, draws one last empty frame after, and maps the display list's point size to the view at the backing scale.
-- 2026-11-28, PR #13 review M6: no deadline on `stopping` / `delivering`. The controller (slice 6) guarantees `stopped` and `delivered` always arrive (a `defer`, as `design/04` §2.9), tested with a recorder that throws, so ⌘Q never waits forever.
+- 2026-11-28, PR #23 review minors: the countdown's Esc by `keyDown` 53 in the test; drive the Recording pane's binding in its test; the notice's folder from `GeneralSettings.displayedFolder`; a `NoFreeName` delivery test (V24); `pixelsPerPoint` from the stream's pixel scale; the timeline's `end` at Stop's host time; §8 log details (`converted in` ms, `discarded <take>`, unknown disk); a confirm for a session already over is not shown; events raised during `execute` queued, not nested; the bubble corner reset on `.create`.
+- 2026-11-28, PR #25 review minors: the wiring tests drive quit through `context.termination` and recovery's delete list, quiet period and timeline move.
 
 - 2026-11-28, PR #4 review M6: `TimelineRecorder.init` creates the folder and file synchronously in the caller's context; the controller (slice 6) must create it off the main actor, or the recorder gains an async factory.
 - 2026-11-28, PR #4 review I1: slice 4's `AXPointReader` must set `AXUIElementSetMessagingTimeout` (≤ 250 ms) and run off the cooperative pool.
