@@ -454,10 +454,24 @@ final class SessionFixture {
         try FileManager.default.setAttributes(
             [.modificationDate: Date().addingTimeInterval(-25 * 3600)], ofItemAtPath: stale.path)
         let url = try await f.sessions.writeDragFile(f.id)
-        #expect(url == folder.appendingPathComponent("Shot.png"))
+        #expect(url.lastPathComponent == "Shot.png")
+        #expect(
+            url.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL
+                == folder.standardizedFileURL)
         #expect(f.contents(url) == "png-1-1")
         #expect(f.idAttribute(url) != nil && f.idAttribute(url) != f.id.description)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() == ["Fresh.png", "Shot.png"])
+        let entries = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(entries.count == 2 && entries.contains("Fresh.png") && !entries.contains("Old.png"))
+        // each drag gets its own subfolder, so a second drag never replaces a file another app is reading
+        let second = try await f.sessions.writeDragFile(f.id)
+        #expect(second != url && second.lastPathComponent == "Shot.png")
+        #expect(f.contents(url) == "png-1-1")
+        // stale subfolders go too
+        let staleFolder = second.deletingLastPathComponent()
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-25 * 3600)], ofItemAtPath: staleFolder.path)
+        _ = try await f.sessions.writeDragFile(f.id)
+        #expect(!FileManager.default.fileExists(atPath: staleFolder.path))
         #expect(DragFolder.url(temporaryDirectory: URL(fileURLWithPath: "/tmp")).path == "/tmp/Bugeye-Drag")
     }
 }

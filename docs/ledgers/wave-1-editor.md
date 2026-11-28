@@ -79,6 +79,8 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 
   Tests failed first, at compile time for the new names. (cost if wrong: none.)
 
+- Ruling (claude-review on #14, Minor): each drag writes into its own subfolder (`Bugeye-Drag/<uuid>/<capture name>`). The dropped file keeps the capture's name (§5.8), and a later drag never replaces a file another app may still be reading. The 24 h sweep removes old subfolders. Test failed first. (cost if wrong: none.)
+
 ## Waiting on
 
 - Capture's and Quick Access's wiring PRs, before slice D merges and before the manual pass (contracts §9).
