@@ -39,6 +39,7 @@ final class QuickAccessController {
     private var queue: [QuickAccessEvent] = []
     private var handling = false
     private var images: [CaptureID: (preview: PixelBuffer, image: CGImage)] = [:]
+    private var observers: [NSObjectProtocol] = []
 
     /// - Parameters:
     ///   - animated: false in tests: fades finish at once (plan P17).
@@ -65,12 +66,21 @@ final class QuickAccessController {
         subscription = bus.subscribe { [weak self] in self?.receive($0) }
         decorations.observe { [weak self] in self?.handle(.decorationsChanged($0)) }
         let center = NotificationCenter.default
-        center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) {
-            [weak self] _ in MainActor.assumeIsolated { self?.handle(.appActiveChanged(true)) }
-        }
-        center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) {
-            [weak self] _ in MainActor.assumeIsolated { self?.handle(.appActiveChanged(false)) }
-        }
+        observers = [
+            center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) {
+                [weak self] _ in MainActor.assumeIsolated { self?.handle(.appActiveChanged(true)) }
+            },
+            center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) {
+                [weak self] _ in MainActor.assumeIsolated { self?.handle(.appActiveChanged(false)) }
+            },
+        ]
+    }
+
+    /// Stops the ticker and the activation observers (final review of #11, M2 and M3). The app keeps its
+    /// controller for its life; tests let theirs go.
+    isolated deinit {
+        ticker?.invalidate()
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
     }
 
     // MARK: Input
@@ -206,7 +216,8 @@ final class QuickAccessController {
             } catch {
                 // Plan P13: the Copy notice is the closest settled text.
                 let name = payload.fileURL?.lastPathComponent ?? ""
-                log.error("failed copy: \(String(describing: error), privacy: .public)")
+                // The error's text, never its userInfo (which can hold paths): spec §7 (final review of #11, M4).
+                log.error("failed copy \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 notifier.post(
                     title: QuickAccessStrings.copyFailedTitle, body: QuickAccessStrings.copyFailedBody(name: name))
             }

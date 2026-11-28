@@ -129,6 +129,7 @@ struct ThumbnailView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
                             .foregroundStyle(accent)
+                            .allowsHitTesting(false)  // clicks and drags reach the image (Q11; review of #11, I2)
                     }
                 }
                 Spacer(minLength: 0)
@@ -151,6 +152,7 @@ struct ThumbnailView: View {
                             Text(text).font(.system(size: 11, weight: .semibold).monospacedDigit())
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(SwiftUI.Color.black.opacity(0.6), in: Capsule())
+                                .allowsHitTesting(false)
                         }
                     }
                 }
