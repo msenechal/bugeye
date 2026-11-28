@@ -46,6 +46,9 @@ public final class QuickAccessModel {
     /// The file each Copy in flight reads, so a Copy that failed because the file moved meanwhile (a Save, a `moved`)
     /// is retried once at the new place (claude-review on #10).
     private var copying: [CaptureID: URL] = [:]
+    /// The item of each Save in flight, following `edited`, `moved` and `saved` events even after the thumbnail went
+    /// away, so the published `saved` is never a stale copy (claude-review on #10).
+    private var saving: [CaptureID: CaptureItem] = [:]
     private var fading: Set<CaptureID> = []
     private var loggedDecorations: Set<String> = []
 
@@ -175,9 +178,13 @@ public final class QuickAccessModel {
         switch event.change {
         case .saved, .moved:
             if pendingSaveAs[id] != nil { pendingSaveAs[id]?.item = event.item }
+            if saving[id] != nil { saving[id] = event.item }
+        case .edited:
+            if saving[id] != nil { saving[id] = event.item }
         case .deleted:
             pendingSaveAs[id] = nil
-            deleting[id] = nil  // someone else published it; a Delete finishing later publishes nothing more
+            deleting[id] = nil
+            saving[id] = nil  // someone else published it; a Delete finishing later publishes nothing more
         default:
             break
         }
@@ -338,6 +345,7 @@ public final class QuickAccessModel {
             guard !busy.contains(item.id) else { return }
             record(actionID, item, trigger, &out)
             busy.insert(item.id)
+            saving[item.id] = item
             let target = saveTarget()
             out.append(.runFileAction(item.id, .save(item, folder: target.folder, displayPath: target.displayPath)))
         case QuickAccessActionID.save, QuickAccessActionID.saveAs:
@@ -438,7 +446,9 @@ public final class QuickAccessModel {
             busy.remove(id)
             // Only the file's place comes from the result; everything else is the item as it is now (contracts
             // §4.1.1: never publish a stale copy; final review of #10, M2).
-            var item = moved
+            var item = saving.removeValue(forKey: id) ?? moved
+            item.fileURL = moved.fileURL
+            item.isSaved = moved.isSaved
             if var entry = entry(id) {
                 entry.item.fileURL = moved.fileURL
                 entry.item.isSaved = moved.isSaved
@@ -451,11 +461,13 @@ public final class QuickAccessModel {
                 .publish(CaptureEvent(change: .saved, item: item, previousURL: previousURL, origin: Self.origin)))
         case .saveFolderUnavailable(let path):
             busy.remove(id)
+            saving[id] = nil
             fail(
                 "save", id, QuickAccessStrings.saveFailedTitle, QuickAccessStrings.folderUnavailableBody(path: path),
                 &out)
         case .saveFailed(let text):
             busy.remove(id)
+            saving[id] = nil
             fail("save", id, QuickAccessStrings.saveFailedTitle, text, &out)
         case .savedCopy(let copy):
             busy.remove(id)
