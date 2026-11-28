@@ -14,7 +14,8 @@ public final class CaptureController: AreaSelector {
     private let output: OutputRouter
 
     private var flow: CaptureFlow
-    private var queue: [FlowEvent] = []
+    /// Events waiting to be handled, each with the settings read at its request (nil for any other event).
+    private var queue: [(event: FlowEvent, settings: CaptureSettings?)] = []
     private var handling = false
     private var nextTicket = 1
     private var continuations: [SelectionTicket: CheckedContinuation<SelectionResult, Never>] = [:]
@@ -24,7 +25,6 @@ public final class CaptureController: AreaSelector {
     private var windowTasks: [SessionID: Task<[WindowInfo], Never>] = [:]
     private var windowImages: [SessionID: CapturedImage] = [:]
     private var sessionSettings: [SessionID: CaptureSettings] = [:]
-    private var pendingSettings: CaptureSettings?
     private var overlayNumbers: [SessionID: [Int]] = [:]
     private var inFlight: [Int: Task<Void, Never>] = [:]
     private var phaseWaiters: [(CaptureFlow.Phase, CheckedContinuation<Void, Never>)] = []
@@ -48,25 +48,28 @@ public final class CaptureController: AreaSelector {
     /// A screenshot request from a hotkey or a menu item. Settings are read now (Capture §5.7).
     public func request(_ kind: CaptureRequestKind) {
         let pointer = shell?.pointerLocation() ?? CocoaPoint(x: 0, y: 0)
-        pendingSettings = CaptureSettings.load(from: environment.settings)
-        send(
+        enqueue(
             .request(
                 kind, permitted: environment.permission.preflight(), activityAllows: activity.allows(.screenshot),
-                pointer: pointer, lastArea: LastAreaStore.load(from: environment.settings)))
-        pendingSettings = nil
+                pointer: pointer, lastArea: LastAreaStore.load(from: environment.settings)),
+            settings: CaptureSettings.load(from: environment.settings))
     }
 
     /// Feeds one event to the flow. Events sent while effects run are queued and handled after them, in order.
     public func send(_ event: FlowEvent) {
-        queue.append(event)
+        enqueue(event, settings: nil)
+    }
+
+    private func enqueue(_ event: FlowEvent, settings: CaptureSettings?) {
+        queue.append((event, settings))
         guard !handling else { return }
         handling = true
         defer { handling = false }
         while !queue.isEmpty {
-            let next = queue.removeFirst()
+            let (next, requestSettings) = queue.removeFirst()
             let wasSession = flow.session
             let effects = flow.handle(next)
-            if wasSession == nil, let session = flow.session, let settings = pendingSettings {
+            if wasSession == nil, let session = flow.session, let settings = requestSettings {
                 sessionSettings[session] = settings
             }
             for effect in effects { perform(effect) }

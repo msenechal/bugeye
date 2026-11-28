@@ -25,8 +25,14 @@ final class FakeCaptureShell: CaptureShell {
         }
     }
 
+    /// Runs once inside the next `closeOverlays`, as a re-entrant call from the shell would.
+    var duringClose: (() -> Void)?
+
     func closeOverlays(_ session: SessionID) {
         calls.append("close \(session)")
+        let hook = duringClose
+        duringClose = nil
+        hook?()
         open[session] = nil
     }
 
