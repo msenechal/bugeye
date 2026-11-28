@@ -19,6 +19,8 @@ Trust this file and `git log` over memory.
 | 12 | done | 0018f34 | see ruling on test order |
 | 13 | done | 2e4ea30 | see ruling on test order |
 | 14–15 | done | 12a155e | slice 3 (`feat/wave1-capture-mac`), not compiled here; manual macOS run https://github.com/msenechal/bugeye/actions/runs/46124357539 built and passed every test first time |
+| 16–18 | done | 3b41697 (rebased), fix pass 526b6e1 | slice 4 (`feat/wave1-capture-app`, PR #27), not compiled here; macos green on 2ed2a94 (run 46127300620) |
+| 19–20 | done | 7463fb5 (rebased), fix pass 463d37f, 3ede531 | slice 5 (`feat/wave1-capture-wiring`, PR #28, `needs-mac-check`); macos green on cc32ad3 (run 46127299438) |
 
 ## Rulings
 
