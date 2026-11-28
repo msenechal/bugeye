@@ -477,4 +477,14 @@ import Testing
             c.document.state.annotations.first?.shape == .arrow(from: Point2D(x: 11, y: 10), to: Point2D(x: 101, y: 10))
         )
     }
+
+    @Test func discreteFrameEditsAreAStepEachAndCloseAKeyboardRun() {
+        let c = Self.make()
+        c.setFrameEnabled(true)
+        c.setFrame(BackgroundFrame(padding: 49))
+        c.applyFrame(BackgroundFrame(padding: 49, fill: .white))
+        c.applyFrame(BackgroundFrame(padding: 49, fill: .black))
+        #expect(c.document.state.frame?.fill == .black)
+        #expect(Self.undoSteps(c.document) == 4)
+    }
 }

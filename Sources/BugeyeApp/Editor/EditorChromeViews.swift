@@ -22,7 +22,10 @@ final class EditorViewModel {
     @ObservationIgnored var onOptions: (ToolOptions) -> Void = { _ in }
     @ObservationIgnored var onFrameEnabled: (Bool) -> Void = { _ in }
     @ObservationIgnored var onFrameDrag: (Bool) -> Void = { _ in }
+    /// A slider value: part of a drag or a keyboard run.
     @ObservationIgnored var onFrame: (BackgroundFrame) -> Void = { _ in }
+    /// A swatch or the Shadow toggle: one step each.
+    @ObservationIgnored var onFrameApply: (BackgroundFrame) -> Void = { _ in }
     @ObservationIgnored var onResetCrop: () -> Void = {}
     @ObservationIgnored var onUndo: () -> Void = {}
     @ObservationIgnored var onRedo: () -> Void = {}
@@ -239,6 +242,12 @@ struct FramePopoverView: View {
         model.onFrame(frame)
     }
 
+    private func apply(_ change: (inout BackgroundFrame) -> Void) {
+        guard var frame = model.frame else { return }
+        change(&frame)
+        model.onFrameApply(frame)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle(
@@ -248,7 +257,7 @@ struct FramePopoverView: View {
                 HStack(spacing: 6) {
                     ForEach(EditorPalette.fills, id: \.name) { fill in
                         Button {
-                            set { $0.fill = fill.fill }
+                            apply { $0.fill = fill.fill }
                         } label: {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Self.fillStyle(fill.fill))
@@ -269,7 +278,7 @@ struct FramePopoverView: View {
                     apply: { value in set { $0.cornerRadius = value } })
                 Toggle(
                     EditorStrings.frameShadow,
-                    isOn: Binding(get: { frame.shadow }, set: { new in set { $0.shadow = new } }))
+                    isOn: Binding(get: { frame.shadow }, set: { new in apply { $0.shadow = new } }))
             }
         }
         .padding(14)

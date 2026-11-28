@@ -82,13 +82,20 @@ final class EditorManager: EditorHost {
 
     let sessions: EditorSessions
     let prompts: any EditorPrompts
+    /// Brings Bugeye to the front (`NSApp.activate()`). Tests pass a recorder: activating the test runner stalls
+    /// its main thread on hosted CI (macos run 46124668545).
+    let activate: @MainActor () -> Void
     private(set) var windows: [CaptureID: EditorWindowController] = [:]
     private var captures: [CaptureID: CGImage] = [:]
     private var blurCaches: [CaptureID: BlurCache] = [:]
 
-    init(environment: EditorEnvironment, prompts: any EditorPrompts = SheetPrompts()) {
+    init(
+        environment: EditorEnvironment, prompts: any EditorPrompts = SheetPrompts(),
+        activate: @escaping @MainActor () -> Void = { NSApp.activate() }
+    ) {
         sessions = EditorSessions(environment: environment)
         self.prompts = prompts
+        self.activate = activate
         sessions.host = self
     }
 
@@ -132,7 +139,10 @@ final class EditorManager: EditorHost {
     }
 
     func showWindow(for session: EditorSession) {
-        guard let capture = captures[session.id], let cache = blurCaches[session.id] else { return }
+        guard let capture = captures[session.id], let cache = blurCaches[session.id] else {
+            Self.logger.fault("show without a decoded image for \(session.name, privacy: .public)")
+            return
+        }
         let controller = EditorWindowController(session: session, capture: capture, blurCache: cache, manager: self)
         windows[session.id] = controller
         controller.show()
@@ -141,6 +151,7 @@ final class EditorManager: EditorHost {
     func bringForward(_ id: CaptureID) { windows[id]?.bringForward() }
     func retitle(_ session: EditorSession) { windows[session.id]?.retitle() }
     func commitPendingEdits(_ session: EditorSession) { windows[session.id]?.canvas.commitText() }
+    func documentSaved(_ session: EditorSession) { windows[session.id]?.canvasDidChange() }
 
     func export(_ session: EditorSession, state: EditorState) async throws -> ExportedImage {
         guard let capture = captures[session.id], let cache = blurCaches[session.id] else {

@@ -40,7 +40,7 @@ enum EditorImages {
     }
 
     struct ExportFailed: Error, LocalizedError {
-        var errorDescription: String? { "The image couldn't be rendered." }
+        var errorDescription: String? { EditorStrings.renderFailed }
     }
 
     /// The export render (§5.8): the base list of `state` with nothing active or hidden, in the capture's colour
@@ -92,18 +92,20 @@ final class BlurCache: Sendable {
     }
 
     /// For the canvas on the main actor: the cached result, else nil, computing it off the main actor and calling
-    /// `ready` on the main actor when it is in the cache (plan review A, Minor 8).
+    /// `ready` on the main actor once it is in the cache. A result that can't be computed never calls `ready`, so a
+    /// redraw can't loop (final review C, I4).
     func imageOrSchedule(
-        _ capture: CGImage, rect: Rect2D, effect: BlurEffect, ready: @escaping @MainActor @Sendable () -> Void
+        _ capture: CGImage, rect: Rect2D, effect: BlurEffect, ready: @escaping @MainActor @Sendable (Key) -> Void
     ) -> CGImage? {
         let key = Key(rect: rect, effect: effect)
         if let hit = entries.withLock({ $0[key] }) { return hit }
         let start = inFlight.withLock { $0.insert(key).inserted }
         guard start else { return nil }
         Task.detached(priority: .userInitiated) { [self] in
-            if let result = Self.compute(capture, rect: rect, effect: effect) { store(key, result) }
+            let result = Self.compute(capture, rect: rect, effect: effect)
+            if let result { store(key, result) }
             inFlight.withLock { _ = $0.remove(key) }
-            await ready()
+            if result != nil { await ready(key) }
         }
         return nil
     }
