@@ -33,6 +33,13 @@ jobs:
       - name: Install make
         run: command -v make || (apt-get update && apt-get install -y --no-install-recommends make)
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # the ownership check needs the merge base
+      - name: Folder ownership (contracts spec §3)
+        if: github.event_name == 'pull_request'
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          make ownership BASE=origin/${{ github.base_ref }}
       - name: Portable tests
         run: make test-core
       - name: Format

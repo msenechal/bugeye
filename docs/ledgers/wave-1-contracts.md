@@ -14,7 +14,7 @@ Trust this file and `git log` over memory. Contract amendments (K2) add their ru
 
 Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as `Ruling: <what and why> (cost if wrong: …)`.
 
-- Ruling: the branch was cut fresh from `origin/main` (`a82a783`) and the six Wave 1 specs and `design/14` copied from `claude/bold-davinci-spj824` at `8192f4a`, as instructed. A remote `feat/wave1-contracts` already existed, pointing at `8192f4a` (the specs branch, not based on `main`); see the push ruling below. (cost if wrong: none; those commits stay on `claude/bold-davinci-spj824`.)
+- Ruling: the branch was cut fresh from `origin/main` (`a82a783`) and the six Wave 1 specs and `design/14` copied from `claude/bold-davinci-spj824` at `8192f4a`, as instructed. (The local checkout showed a stale `origin/feat/wave1-contracts` ref at `8192f4a`; the first push created the remote branch, so nothing was overwritten.) (cost if wrong: none; those commits stay on `claude/bold-davinci-spj824`.)
 
 ## Waiting on user
 
