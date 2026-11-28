@@ -323,3 +323,44 @@ import Testing
         #expect(try dir.contents() == ["link.png", "shot.png", "sub"])
     }
 }
+
+/// claude-review round 1 (Minor findings).
+@Suite struct CaptureFileWriterReviewTests {
+    let dir: TempDirectory
+    let store = FakeFileMetadataStore()
+    init() throws { dir = try TempDirectory("writer-review") }
+
+    @Test func aFailedMoveWithANewIdentityRestoresTheSourcesOldID() throws {
+        defer { dir.remove() }
+        let source = dir.file("shot.png")
+        try Data("x".utf8).write(to: source)
+        try store.setValue(Data("old-id".utf8), "dev.msenechal.bugeye.id", at: source)
+        var writer = CaptureFileWriter(metadata: store)
+        writer.nativeNoReplace = { _, _ in EACCES }
+        #expect(throws: CaptureFileWriter.RenameFailed(errno: EACCES)) {
+            try writer.move(source, into: dir.url.appendingPathComponent("dest"), identity: .new(CaptureID()))
+        }
+        #expect(try store.value("dev.msenechal.bugeye.id", at: source) == Data("old-id".utf8))
+    }
+
+    @Test func aFailedMoveRemovesAnIDTheSourceDidNotHave() throws {
+        defer { dir.remove() }
+        let source = dir.file("shot.png")
+        try Data("x".utf8).write(to: source)
+        var writer = CaptureFileWriter(metadata: store)
+        writer.nativeNoReplace = { _, _ in EACCES }
+        #expect(throws: CaptureFileWriter.RenameFailed(errno: EACCES)) {
+            try writer.move(source, into: dir.url.appendingPathComponent("dest"), identity: .new(CaptureID()))
+        }
+        #expect(try store.value("dev.msenechal.bugeye.id", at: source) == nil)
+    }
+
+    @Test func writeHandlesNamesNearTheFileSystemLimit() throws {
+        defer { dir.remove() }
+        let url = dir.file(String(repeating: "a", count: 240) + ".png")
+        try CaptureFileWriter(metadata: store).write(Data("png".utf8), to: url)
+        #expect(try Data(contentsOf: url) == Data("png".utf8))
+        try CaptureFileWriter(metadata: store).write(Data("v2".utf8), to: url, requireExisting: true)
+        #expect(try Data(contentsOf: url) == Data("v2".utf8))
+    }
+}

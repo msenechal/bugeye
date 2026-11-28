@@ -16,7 +16,7 @@ Final review of the Wave 1 contracts (PR #3, 28 Nov 2026), Minor findings not fi
 Final review of Wave 0 (PR #2, 28 Nov 2026), Minor findings:
 - M1: `AIKeySettings` saves aren't serialized: two quick saves can reach the Keychain in either order while the status follows the later one, and a "Test key" press during a save can test the old key. Keep the in-flight save `Task` and await it in the next save and in `testKey`, or route Keychain calls through one actor; disable Test during a save. Where: `Sources/Core/AICore/AIKeySettings.swift`.
 - M2: `CaptureFileWriter` turns a symlinked capture path into a regular file with the link's mode and leaves the target stale. Resolve symlinks at the top of `write`; test with a symlink. Where: `Sources/BugeyeCore/Files/CaptureFileWriter.swift`.
-- M3: the writer's temp name `.<name>.<uuid>.tmp` adds 42 bytes, so names over 213 bytes fail with ENAMETOOLONG. Use `.bugeye-<uuid>.tmp`. Same file.
+- M3 (resolved in PR #3, 28 Nov 2026): the writer's temp name is now `.bugeye-<uuid>.tmp`, so long names no longer fail with ENAMETOOLONG.
 - M4: the AI key field keeps the typed key after Save, and a second Save resets "Key works." Clear `typedKey` after a successful save. Where: `Sources/BugeyeApp/SettingsWindowController.swift`.
 - M5: `claude-review.yml` uses moving tags for `actions/checkout` and `anthropics/claude-code-action` in the secret-bearing job; pin full SHAs, and add `persist-credentials: false` to the checkout.
 - M6: `FeatureRegistry` doesn't reserve the shell's own claims (the `ai` pane id, ⌘, and ⌘Q); seed `conflicts(in:)` with them. Where: `Sources/BugeyeFeatures/FeatureRegistry.swift`.

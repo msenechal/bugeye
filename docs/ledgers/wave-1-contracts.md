@@ -55,6 +55,8 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 - Ruling (final review I3, Important): `copy(_:to:identity:)` onto its own source (any spelling of the path, or a hard link) throws the new `CaptureFileWriter.SameFile` and changes nothing, so the source is never changed (K28). It has no user-visible text: Quick Access treats it as "nothing to do". Test failed first. (cost if wrong: low; if Quick Access wants a notice, it needs a settled string, an additive amendment.)
 - Ruling (final review M3, M4, M5, M6, M7, Minor): fixed in the fix pass: a test pins that a subscriber added during delivery gets only later events (characterises code the review found correct, so it passed at once); the debug handler is created before the `onLaunch` steps so `events` includes what they publish; `TerminationGate`'s doc says participants must not rely on default-mode run-loop sources; the shell tests use a `TempDirectory` home; `linux.yml` passes `base_ref` through `env:`. M1, the rest of M5 and `AppServicesTests`' home are in `docs/backlog.md` (this PR is contract, so it may write the backlog). (cost if wrong: none.)
 
+- Ruling (claude-review round 1, Minor): a failed `move(.new(id))` gives the source back its previous identity (or removes the one it set), so "the source is still there" holds with its own ID. The ID is still written onto the source first, as §4.1.2 says. And `write` now uses the short `.bugeye-<uuid>.tmp` temp name like the new methods, so names near 255 bytes work (Wave 0 backlog M3, now resolved). Tests failed first. (cost if wrong: none.)
+
 ## Waiting on user
 
 Nothing yet.

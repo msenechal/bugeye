@@ -81,8 +81,7 @@ public struct CaptureFileWriter: Sendable {
             kept[Self.identityAttribute] = Data(id.description.utf8)
         }
 
-        let temp = url.deletingLastPathComponent()
-            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp", isDirectory: false)
+        let temp = Self.tempURL(in: url.deletingLastPathComponent())
         do {
             try data.write(to: temp, options: .withoutOverwriting)
             for (name, value) in kept.sorted(by: { $0.key < $1.key }) {
@@ -149,9 +148,23 @@ public struct CaptureFileWriter: Sendable {
         throws -> URL
     {
         let name = name ?? source.lastPathComponent
-        if case .new(let id) = identity {
-            try metadata.setValue(Data(id.description.utf8), Self.identityAttribute, at: source)
+        guard case .new(let id) = identity else { return try moveKeepingIdentity(source, into: folder, named: name) }
+        let previous = try metadata.value(Self.identityAttribute, at: source)
+        try metadata.setValue(Data(id.description.utf8), Self.identityAttribute, at: source)
+        do {
+            return try moveKeepingIdentity(source, into: folder, named: name)
+        } catch {
+            // The source is still there: give it back the identity it had (claude-review, round 1).
+            if let previous {
+                try? metadata.setValue(previous, Self.identityAttribute, at: source)
+            } else {
+                try? metadata.removeValue(Self.identityAttribute, at: source)
+            }
+            throw error
         }
+    }
+
+    private func moveKeepingIdentity(_ source: URL, into folder: URL, named name: String) throws -> URL {
         if !simulateCrossVolume {
             switch try renameWithoutReplacing(source, in: folder, named: name) {
             case .placed(let url): return url
