@@ -1,5 +1,6 @@
 import BugeyeCore
 import Foundation
+import Synchronization
 
 /// Reads one image into a `TextMap`, strip by strip, with the 2× enlargement and a timeout per strip (OCR §5.3).
 public struct TextMapReader: Sendable {
@@ -70,7 +71,8 @@ public struct TextMapReader: Sendable {
 
     /// The strip merge (OCR §5.3.1). For each strip after the first, with top band `[start, start + overlap)`: a
     /// line entirely inside the band is dropped; a line starting in the band and ending below it replaces every
-    /// kept line from the strips above that it overlaps with positive area; every other line is kept.
+    /// kept line from the strips above that it overlaps with positive area **and** is on the same line with (§4.2's
+    /// `sameLine`); every other line is kept.
     static func merge(_ stripLines: [[TextLine]], strips: [Range<Int>], overlap: Int) -> [TextLine] {
         guard var kept = stripLines.first else { return [] }
         for index in stripLines.indices.dropFirst() {
@@ -80,7 +82,11 @@ public struct TextMapReader: Sendable {
             for line in stripLines[index] {
                 if line.box.minY >= start, line.box.maxY <= bandEnd { continue }
                 if line.box.minY < bandEnd {
-                    kept.removeAll { $0.box.intersection(line.box) != nil }
+                    // Only the same line, cut by the strip edge: a neighbour that merely touches it stays (ledger
+                    // ruling, slice 2 review I2).
+                    kept.removeAll {
+                        $0.box.intersection(line.box) != nil && TextMapBuilder.sameLine($0.box, line.box)
+                    }
                 }
                 added.append(line)
             }
@@ -90,28 +96,40 @@ public struct TextMapReader: Sendable {
     }
 
     /// One `TextReader` call under the strip timeout. A reader error becomes `recognitionFailed`; the timeout
-    /// becomes `timedOut(strip:)`; cancellation stays `CancellationError`.
+    /// becomes `timedOut(strip:)`; cancellation stays `CancellationError`. The reader runs in its own task, so a
+    /// recogniser that ignores cancellation can't hold the read past the timeout: it is cancelled and left to finish
+    /// on its own (slice 2 review I1).
     private func recognize(_ image: PixelBuffer, strip: Int) async throws -> [OCRLine] {
         let reader = self.reader
         let sleep = self.sleep
         let timeout = stripTimeout
+        let outcome = ResumeOnce<[OCRLine]>()
+        let work = Task { try await reader.recognizeText(in: image) }
+        let timer = Task { try await sleep(timeout) }
+        Task {
+            let result = await work.result
+            timer.cancel()
+            outcome.resume(
+                result.mapError { error in
+                    error is CancellationError ? error : TextMapError.recognitionFailed(String(describing: error))
+                })
+        }
+        Task {
+            guard (try? await timer.value) != nil else { return }
+            work.cancel()
+            outcome.resume(.failure(TextMapError.timedOut(strip: strip)))
+        }
         do {
-            return try await withThrowingTaskGroup(of: [OCRLine]?.self) { group in
-                group.addTask { try await reader.recognizeText(in: image) }
-                group.addTask {
-                    try await sleep(timeout)
-                    return nil
-                }
-                defer { group.cancelAll() }
-                guard let first = try await group.next() else { throw CancellationError() }
-                guard let lines = first else { throw TextMapError.timedOut(strip: strip) }
-                return lines
+            return try await withTaskCancellationHandler {
+                try await outcome.value()
+            } onCancel: {
+                work.cancel()
+                timer.cancel()
+                outcome.resume(.failure(CancellationError()))
             }
-        } catch let error as TextMapError {
-            throw error
         } catch {
-            if error is CancellationError || Task.isCancelled { throw CancellationError() }
-            throw TextMapError.recognitionFailed(String(describing: error))
+            if Task.isCancelled { throw CancellationError() }
+            throw error
         }
     }
 
@@ -122,6 +140,38 @@ public struct TextMapReader: Sendable {
         } catch {
             if error is CancellationError || Task.isCancelled { throw CancellationError() }
             throw TextMapError.unreadable(url)
+        }
+    }
+}
+
+/// A result delivered once, to a waiter that may arrive before or after it. Thread-safe.
+final class ResumeOnce<T: Sendable>: Sendable {
+    private struct State {
+        var result: Result<T, any Error>?
+        var waiter: CheckedContinuation<T, any Error>?
+    }
+
+    private let state = Mutex(State())
+
+    /// The first result wins; later ones are ignored.
+    func resume(_ result: Result<T, any Error>) {
+        let waiter: CheckedContinuation<T, any Error>? = state.withLock { state in
+            guard state.result == nil else { return nil }
+            state.result = result
+            defer { state.waiter = nil }
+            return state.waiter
+        }
+        waiter?.resume(with: result)
+    }
+
+    func value() async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            let ready: Result<T, any Error>? = state.withLock { state in
+                if let result = state.result { return result }
+                state.waiter = continuation
+                return nil
+            }
+            if let ready { continuation.resume(with: ready) }
         }
     }
 }

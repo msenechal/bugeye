@@ -22,6 +22,7 @@ Trust this file and `git log` over memory.
 | 13–14 | done | 872f26a | bilinear expectations computed independently (floating point, round half up) |
 | 15 | done | 8efe060 | |
 | 16 | done | 7438a05 | goldens generated with `BUGEYE_UPDATE_GOLDENS=1` and checked by eye |
+| 17 | done | (see rulings) | fresh final review of slice 2: 0 Critical, 2 Important, 8 Minor; all fixed in the fix pass |
 
 ## Rulings
 
@@ -37,6 +38,9 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 - Ruling: `TextMapReader` checks cancellation again **after** `beforeStrip`, not only before it, so a cancellation that arrives while the hook awaits (the store's URL check, Q5b) stops the read before decoding the strip. The test that found this failed first. (cost if wrong: none.)
 - Ruling: `TextMapError` is `CustomStringConvertible` with the log texts of plan P9 now (slice 2), since the reader throws it; its test was written with the code, not run red first. (cost if wrong: low; each assertion is a literal from P9.)
 - Ruling: the hand-made `french` fixture leaves its second word (`vu,`) unboxed, so the goldens cover a word Vision couldn't box; `label-fields` uses `user@example.com`, no personal data. (cost if wrong: none.)
+- Ruling (slice 2 review I1, Important): the strip timeout races the recogniser in its own unstructured task instead of a task group, because a group waits for every child: a recogniser that ignores cancellation (Vision's `perform` may) would have held the read, and the store's single read slot, forever. On timeout the recogniser task is cancelled and **left to finish on its own**; its late result is ignored. An outer cancellation still surfaces as `CancellationError`, even if the timer already fired (M4). Tests with a stubborn reader failed first. (cost if wrong: low; a stuck Vision call keeps a CPU core busy until it returns, but no read waits on it.)
+- Ruling (slice 2 review I2, Important; **deviates from spec §5.3.1**): a line that starts in a strip's top band and ends below it replaces only kept lines it overlaps **and is on the same line with** (§4.2's `sameLine`: vertical overlap ≥ half the smaller height). The spec's "every kept line it intersects" removed a neighbouring line that touched it by a few pixels, and that line's own copy in the band had already been dropped, so it vanished from the map. Vision boxes of tightly spaced text (terminals, code) often overlap by 1–3 px. Test failed first. (cost if wrong: low; a cut line that overlaps its own uncut copy by less than half its height would be kept twice.)
+- Ruling (slice 2 review M1–M8, Minor): all fixed: the band-drop and band-edge rules have a test that kills their mutants; the timeout is shown to be per strip; `enlarged2x` traps instead of returning the 1× buffer; the clock tests wait with a bound; the fingerprint test is named for the sub-microsecond step `Date` can hold; the traceback fixture's caret line is the real one (14 carets at column 11) and its goldens were regenerated. (cost if wrong: none.)
 
 ## Waiting on
 
