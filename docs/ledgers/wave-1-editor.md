@@ -29,7 +29,7 @@ Trust this file and `git log` over memory.
 | 14–16 | done | 69d98c5 | tests written after the code (see ruling) |
 | 17–21 | done | 3cb0e49, ed354f1 | not compiled here; macOS runs 46123425797 and the run on ed354f1 green; draft PR #18 |
 | C review | done | c0af0d8, 257e075 | fresh final review: 1 Critical, 6 Important, 10 Minor; fix pass below |
-| 22–23 | done | 30d962b | wiring and checklist; not compiled here; macOS run pending |
+| 22–23 | done | 30d962b, 14ff73c | wiring and checklist; not compiled here; macOS runs 46125714648 and 46126137861 green; D review: 0 Critical, 1 Important, 8 Minor, fixed |
 
 ## Rulings
 
