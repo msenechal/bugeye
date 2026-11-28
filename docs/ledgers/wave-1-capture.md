@@ -14,6 +14,10 @@ Trust this file and `git log` over memory.
 | 4 | done | 0f21bd7 | |
 | 5–6 | done | e1c55e8 | one test had a wrong expected display (its window centre was on the other display); test fixed |
 | 7 | done | 1a3777d | 46 flow tests; the invariant checker was seen failing on two deliberate mutations (Esc not released on leave; `frozen` ignoring its session) before being kept |
+| fix pass | done | 1290530 | PR #6 ready; linux https://github.com/msenechal/bugeye/actions/runs/46122731068 and macos https://github.com/msenechal/bugeye/actions/runs/46122731100 green; claude-review: "No findings." |
+| 8–11 | done | b61184c | slice 2 (`feat/wave1-capture-controller`) |
+| 12 | done | 0018f34 | see ruling on test order |
+| 13 | done | 2e4ea30 | see ruling on test order |
 
 ## Rulings
 
@@ -35,6 +39,16 @@ Final review of PR #6 (fresh reviewer, 28 Nov 2026): 0 Critical, 3 Important, 6 
 - Ruling (review M7): `displaysChanged` while freezing is accepted as is: C16 covers the selection, and the selection that follows cancels on the next change; a display that vanished between freeze and crop posts `The display was disconnected.` (cost if wrong: low; a stale frame for one selection.)
 - Ruling (review M8): a flow test drives the ⇧ lock through `mouseDragged` modifiers; the three write-failure strings are tested character for character in slice 2's `CaptureStringsTests`. (cost if wrong: none.)
 - Ruling (review M9): the selector serves purposes other than `.screenshot` (the `AreaSelector` doc says they never deliver); a `.screenshot` request through `select` behaves like the others and only returns its result. No caller does this. (cost if wrong: low.)
+
+Slice 2:
+
+- Ruling: `CaptureController`'s and `ShortcutsModel`'s tests were written right after their code, not run red first (a background build held the package). Each was then checked against deliberate mutations: the controller suite fails when the screenshot activity isn't released (5 issues); the Shortcuts suite fails when a cleared binding reports unregistered or duplicates are accepted. (cost if wrong: low; the mutation checks show the tests can fail.)
+- Ruling: the save folder is never created at capture time. A missing folder counts as unusable (temp + `Couldn't save to folder`), because creating it could put it on the boot volume under an unplugged disk's mount point; the shell already creates it at launch and when it's chosen. The temp folder is created on demand. (cost if wrong: low; a folder deleted while Bugeye runs gives the notice until the next launch or choice.)
+- Ruling: `FakeCaptureShell` lives in `Tests/CaptureCoreTests/Support/`, not `BugeyeTestSupport`, because `CaptureShell` is a `CaptureCore` protocol and `BugeyeTestSupport` sees only `BugeyeCore` (K18). (cost if wrong: none.)
+- Ruling: `CaptureController.waitUntil(_:)` and `settle()` are public, for tests and the debug channel; the selector tests had polled with `Task.yield()`, which starved the controller's own work under full-suite load (a run hung for 15 min). `FakeScreenSource` builds its frames row by row: `PixelBuffer(fill:)` took seconds for a 2880 × 1800 frame in a debug build. (cost if wrong: none.)
+- Ruling: settings are snapshotted at the request (Capture §5.7 "read fresh at each request") and used by that capture's delivery; the save folder is read at delivery. (cost if wrong: none.)
+- Ruling: an unreadable `com.apple.symbolichotkeys` counts as every screenshot entry missing (so on, with its default key), which is macOS's own state on a fresh account. (cost if wrong: low; at worst a false conflict notice.)
+- Ruling: the Shortcuts model's launch notices come in the order macOS conflicts, then taken keys; a typed combo that registers but is taken stays stored with the taken message (§5.6: "A binding that fails to register stays stored"). (cost if wrong: none.)
 
 ## Waiting on user
 

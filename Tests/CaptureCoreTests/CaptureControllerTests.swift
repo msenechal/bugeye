@@ -305,6 +305,24 @@ final class ControllerHarness {
         #expect(h.shell.open.isEmpty)
     }
 
+    @Test func aLateFreezeAfterACancelDoesNotStartTheNextSelection() async {
+        let h = ControllerHarness()
+        h.source.hold()
+        let first = Task { await h.controller.select(recording) }
+        await h.controller.waitUntil(.freezing)
+        h.controller.cancel(.recording)
+        #expect(await first.value == .cancelled)
+        // A new selection starts; then both freezes finish. Only the new one's frames open overlays.
+        let second = Task { await h.controller.select(recording) }
+        await h.controller.waitUntil(.freezing)
+        h.source.release()
+        await h.controller.waitUntil(.selecting)
+        #expect(h.shell.shown.count == 1)
+        #expect(h.shell.shown.first?.0 == h.controller.session)
+        h.controller.cancel(.recording)
+        #expect(await second.value == .cancelled)
+    }
+
     @Test func aSelectionWhileAScreenshotRunsAnswersBusy() async {
         let h = ControllerHarness()
         h.controller.request(.area)
@@ -314,11 +332,15 @@ final class ControllerHarness {
 
     @Test func anExternalCancelWhileFreezingAnswersCancelledAndNoOverlayEverShows() async {
         let h = ControllerHarness()
+        h.source.hold()
         let task = Task { await h.controller.select(recording) }
         await h.controller.waitUntil(.freezing)
         h.controller.cancel(.recording)
         #expect(await task.value == .cancelled)
+        // The freeze finishes after the cancel: its frames are dropped by session, nothing shows.
+        h.source.release()
         await h.controller.settle()
+        #expect(h.source.freezeCount == 1)
         #expect(h.shell.shown.isEmpty)
         #expect(h.controller.phase == .idle)
     }
