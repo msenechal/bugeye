@@ -59,6 +59,7 @@ import Testing
     @Test func launchRegistersEveryHotkeyAndAPressStartsACapture() async throws {
         let s = try Setup()
         s.context.runLaunchSteps()
+        defer { s.installed.launch.stop() }
         #expect(Set(s.registrar.registered.keys) == ["capture.fullscreen", "capture.allDisplays", "capture.area"])
         #expect(s.context.hotkeyStatus.isRegistered("capture.area"))
         #expect(s.registrar.press("capture.area"))
@@ -72,6 +73,7 @@ import Testing
     @Test func aTakenKeyIsMarkedUnregisteredAndAnnouncedAtLaunch() throws {
         let s = try Setup(taken: [GlobalKey("4", command: true, shift: true)])
         s.context.runLaunchSteps()
+        defer { s.installed.launch.stop() }
         #expect(!s.context.hotkeyStatus.isRegistered("capture.area"))
         #expect(
             s.notifier.posts == [
@@ -84,6 +86,7 @@ import Testing
     @Test func macOSConflictsAreAnnouncedAtLaunch() throws {
         let s = try Setup(system: [:])
         s.context.runLaunchSteps()
+        defer { s.installed.launch.stop() }
         #expect(s.notifier.posts.map(\.title) == ["macOS screenshot shortcuts are still on"])
         #expect(
             s.notifier.posts.first?.body
@@ -101,7 +104,44 @@ import Testing
         #expect(recorder.events.first?.origin == "capture")
     }
 
+    @Test func theLaunchPurgeRemovesOldTempFiles() async throws {
+        let s = try Setup()
+        let temp = CaptureFolders.temp(home: s.dir.url.path)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        let old = temp.appendingPathComponent("old.png")
+        FileManager.default.createFile(atPath: old.path, contents: Data())
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -2 * 86400)], ofItemAtPath: old.path)
+        s.context.runLaunchSteps()
+        defer { s.installed.launch.stop() }
+        #expect(await s.installed.launch.purge?.value == 1)
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+        #expect(s.installed.launch.timer?.isValid == true)
+        #expect(s.installed.launch.timer?.timeInterval == 3600)
+    }
+
+    @Test func aDisplayChangeCancelsTheSelection() async throws {
+        let s = try Setup()
+        s.context.runLaunchSteps()
+        defer { s.installed.launch.stop() }
+        #expect(s.context.router.performMenuItem("capture.area"))
+        await s.installed.controller.waitUntil(.selecting)
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        // The observer runs on the main queue, now or on its next turn.
+        await s.installed.controller.waitUntil(.idle)
+        #expect(s.installed.controller.phase == .idle)
+        #expect(s.installed.shell.overlays.isEmpty)
+    }
+
     #if DEBUG
+        @Test func theDebugClickCommandNeedsALiveSelection() throws {
+            let s = try Setup()
+            #expect(s.context.debugCommands.handler(for: "capture.click")?("1 10 10") == "error: no selection is up")
+            #expect(
+                s.context.debugCommands.handler(for: "capture.click")?("x")
+                    == "error: usage: capture.click <display id> <x> <y>")
+        }
+
         @Test func theDebugStateCommandAnswers() throws {
             let s = try Setup()
             #expect(s.context.debugCommands.handler(for: "capture.state")?("") == "idle")

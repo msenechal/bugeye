@@ -10,7 +10,7 @@ Capture brings back ⇧⌘3, ⌥⇧⌘3, ⇧⌘4 (with Space for a window and Re
    git fetch origin && git checkout feat/wave1-capture-wiring && git pull
    make install
    ```
-2. **Quit the old Bugeye** (`/Applications/Bugeye.app`) for every section except I.4: it holds ⇧⌘3 and ⇧⌘4.
+2. **Quit the old Bugeye** (`/Applications/Bugeye.app`) for every section except I.7: it holds ⇧⌘3 and ⇧⌘4.
 3. Grant Screen Recording to the new Bugeye: System Settings → Privacy & Security → Screen & System Audio Recording → turn on Bugeye (the one in `~/Applications`), then relaunch it. Section H resets this on purpose.
 4. Plug in the 1× external monitor beside the Retina screen. Open a few windows (Finder, Safari) on both displays.
 5. In System Settings → Keyboard → Keyboard Shortcuts → Screenshots, note which macOS shortcuts are on (I.3 uses this).
@@ -103,7 +103,7 @@ If an overlay ever stays stuck on screen, run the `log show` line **before** kil
    **Expected:** the overlay closes; focus goes back to the app you were in (type to check).
 2. Press ⇧⌘4, then right-click.
    **Expected:** the overlay closes.
-3. Press ⇧⌘4, click into another app's window on the other display is impossible (the overlay covers it); instead, unplug the external monitor while the overlay is up.
+3. Press ⇧⌘4, then unplug the external monitor while the overlay is up.
    **Expected:** the overlay closes on every display (`finish cancelled` in the log).
 4. After all of the above, run the `log show` line.
    **Expected:** every `begin screenshot overlays [...]` has a matching `finish ... overlays [...]` with the same numbers; no `closing a leftover overlay`.
@@ -143,11 +143,10 @@ If an overlay ever stays stuck on screen, run the `log show` line **before** kil
 4. Click the field and press ⇧⌘3.
    **Expected:** `⇧⌘3 is already used by Capture Fullscreen.` in orange; nothing saved. Then press ⇧4 in the field: `Use a letter or digit with at least one of ⌘, ⌥ or ⌃.`
 5. If a macOS screenshot shortcut is on for ⇧⌘3 or ⇧⌘4 (Before you start, step 5), relaunch Bugeye.
-   **Expected:** a banner `macOS screenshot shortcuts are still on` / `Disable ⇧⌘3 and ⇧⌘4 in System Settings → Keyboard → Keyboard Shortcuts → Screenshots, so Bugeye receives them.` (only the keys that are on), and the row says `macOS also uses ⇧⌘3 for its own screenshots and gets it first. …` with **Keyboard Shortcuts…**, which opens that settings page.
+   **Expected:** a banner `macOS screenshot shortcuts are still on` / `Disable ⇧⌘3 and ⇧⌘4 in System Settings → Keyboard → Keyboard Shortcuts → Screenshots, so Bugeye receives them.` (only the keys that are on), and the row says `macOS also uses ⇧⌘3 for its own screenshots and gets it first. Turn it off in System Settings → Keyboard → Keyboard Shortcuts → Screenshots.` with **Keyboard Shortcuts…**, which opens that settings page.
 6. Click **Restore Defaults**.
    **Expected:** all three rows back to ⇧⌘3, ⌥⇧⌘3, ⇧⌘4, all working.
-7. Start the old Bugeye, then quit and reopen the new one.
-   **Expected:** a banner `Some Bugeye shortcuts are taken` / `⇧⌘3, ⌥⇧⌘3 and ⇧⌘4 are taken by other apps. Choose others in Bugeye Settings → Shortcuts.` (the keys the old app holds); those rows show `None` with `⇧⌘4 is taken by another app, so this action has no shortcut. Quit that app and press Try Again, or choose another shortcut.` and **Try Again**; the status menu shows no keys for them. Quit the old app, press **Try Again** on each row.
-   **Expected:** the keys show again and work.
+7. Start the old Bugeye, then quit and reopen the new one. Note the banner and the rows, then quit the old app and press **Try Again** on each row.
+   **Expected:** first a banner `Some Bugeye shortcuts are taken` / `⇧⌘3, ⌥⇧⌘3 and ⇧⌘4 are taken by other apps. Choose others in Bugeye Settings → Shortcuts.` (the keys the old app holds), those rows show `None` with `⇧⌘4 is taken by another app, so this action has no shortcut. Quit that app and press Try Again, or choose another shortcut.` and **Try Again**, and the status menu shows no keys for them; after Try Again the keys show again and work.
 
 When you're done, say "all good", or list the numbers that failed (e.g. "B.2, G.4").

@@ -32,6 +32,23 @@ enum CaptureWiring {
         let controller: CaptureController
         let shell: AppCaptureShell
         let shortcuts: ShortcutsModel
+        let launch: LaunchHandles
+    }
+
+    /// What the launch step started: the launch purge, the hourly purge timer and the display-change observer.
+    @MainActor
+    final class LaunchHandles {
+        fileprivate(set) var purge: Task<Int, Never>?
+        fileprivate(set) var timer: Timer?
+        fileprivate(set) var observer: (any NSObjectProtocol)?
+
+        /// Stops the timer and the observer (tests; the app keeps them for its life).
+        func stop() {
+            timer?.invalidate()
+            timer = nil
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            observer = nil
+        }
     }
 
     static func install(_ context: AppContext) {
@@ -55,7 +72,11 @@ enum CaptureWiring {
         shell.presentAlert = { [weak context] in context?.screenRecordingAlert.show() }
 
         let permission = context.screenPermission
-        context.screenRecordingAlert.presenter = { ScreenRecordingAlertPresenter.present(permission: permission) }
+        // Presented on the next turn of the main loop, not inside the controller's event handling: a modal run there
+        // would queue hotkey presses made meanwhile and show a second alert after the first.
+        context.screenRecordingAlert.presenter = {
+            Task { @MainActor in ScreenRecordingAlertPresenter.present(permission: permission) }
+        }
         context.areaSelector.target = controller
 
         let router = context.router
@@ -83,23 +104,25 @@ enum CaptureWiring {
         context.settingsPanes.register(SettingsLayout.shortcutsPane.id) { AnyView(ShortcutsPane(model: shortcutsPane)) }
 
         let notifier = context.notifier
+        let launch = LaunchHandles()
+        context.retain(launch)
         context.onLaunch {
             shortcuts.registerAll()
             // The notifier holds posts until authorization is answered (contracts §4.4).
             for notice in shortcuts.launchNotices() { notifier.post(title: notice.title, body: notice.body) }
-            Task { await controller.purgeTemp(skippingKnown: false) }
+            launch.purge = Task { await controller.purgeTemp(skippingKnown: false) }
             let timer = Timer.scheduledTimer(withTimeInterval: TempJanitor.interval, repeats: true) { _ in
                 MainActor.assumeIsolated {
                     _ = Task { await controller.purgeTemp(skippingKnown: true) }
                 }
             }
-            context.retain(timer)
+            launch.timer = timer
             let observer = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
             ) { _ in
                 MainActor.assumeIsolated { controller.send(.displaysChanged) }
             }
-            context.retain(observer as AnyObject)
+            launch.observer = observer
         }
 
         #if DEBUG
@@ -110,6 +133,6 @@ enum CaptureWiring {
         context.retain(shortcuts)
         context.retain(paneModel)
         context.retain(shortcutsPane)
-        return Installed(controller: controller, shell: shell, shortcuts: shortcuts)
+        return Installed(controller: controller, shell: shell, shortcuts: shortcuts, launch: launch)
     }
 }
