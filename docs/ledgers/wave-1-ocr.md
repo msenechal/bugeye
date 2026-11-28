@@ -27,6 +27,7 @@ Trust this file and `git log` over memory.
 | 19 | done | 00bf617 | 27 tests, one or more per Q1–Q9; 25 repeated runs without a failure |
 | 20 | done | 8a03fdd | |
 | 21 | done | 0daf33a | slice 3 code complete |
+| 23–25 | done | see `git log` | branch `feat/wave1-ocr-wiring`; not compiled here, the `macos` job is the check |
 
 ## Rulings
 
@@ -50,6 +51,10 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 - Ruling: `saved` and `moved` for a capture that is only cached don't evict its map: a rename keeps the file's size and modification date, so the fingerprint still matches and the map is still right; `map(for:)` checks the fingerprint at the new URL anyway. `edited` for a capture the store has never seen is ignored, like the bus's own mirror (contracts plan P5). (cost if wrong: none.)
 - Ruling: the Q5b strip check (`checkURL`) has no public path that reaches it without an event having cancelled the read first (every URL change arrives through `handle`, on the same actor), so it is tested directly; likewise the `dropped <id>: gone` branch of Q6 is kept as a guard but can't be reached while `deleted` cancels the running read. (cost if wrong: none.)
 - Ruling: `TextServices` drains its stream in a detached task, and an `isolated deinit` cancels the subscription and the task. (cost if wrong: none.)
+- Ruling: the tests that run Vision and ImageIO **through `TextMapReader`** (a 1× image's boxes within 8 px, the 8,200 px overlap read once, the `BUGEYE_RECORD_OCR` recorder) and the wiring test live in `Tests/BugeyeAppTests/Text/`, not `Tests/MacAdaptersTests/`: `MacAdaptersTests` depends only on `MacAdapters` and `BugeyeTestSupport`, so it can't import `TextCore`, and `Package.swift` is contract. Both folders are OCR's. The Core Text drawing helper is duplicated in the two test targets for the same reason. (cost if wrong: none.)
+- Ruling: the word-box test checks each word's left and right edges within 4 px of Core Text's offsets, and that the box covers the line's ink vertically within 4 px, rather than ±4 px on all four sides: Vision boxes a word to the line's height, while the ink of `me` is shorter than that of `Remember`. (cost if wrong: low; the Mac batch checks boxes over real captures.)
+- Ruling: `TextWiring` logs `failed` lines at `.error` and every other line at `.notice` (so `log show` keeps them without `--info`), all `privacy: .public` since they hold only ids, sizes and timings (§6). (cost if wrong: none.)
+- Ruling: `ImageIOFileReader` takes its fingerprint from `URLResourceValues` (`fileSize`, `contentModificationDate`) after clearing cached values; `Date` keeps the modification time to about 240 ns, which is enough because every `CaptureFileWriter` rewrite renames a new file into place. (cost if wrong: low.)
 
 ## Waiting on
 
