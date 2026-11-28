@@ -24,7 +24,7 @@ struct PipelineText {
     static func draw(
         _ lines: [(String, Double, Double)], width: Int, height: Int, fontSize: CGFloat = 32,
         fontName: String = "Menlo"
-    ) throws -> DrawnText {
+    ) throws -> PipelineText {
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         let context = try #require(
             CGContext(
@@ -71,7 +71,7 @@ struct PipelineText {
         }
         let cgImage = try #require(context.makeImage())
         let image = try #require(PixelBufferImages.pixelBuffer(cgImage))
-        return DrawnText(image: image, words: words, lineTops: tops, lineBottoms: bottoms)
+        return PipelineText(image: image, words: words, lineTops: tops, lineBottoms: bottoms)
     }
 }
 

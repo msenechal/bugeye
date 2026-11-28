@@ -14,7 +14,7 @@ enum TextWiring {
     static func install(_ context: AppContext) -> TextServices {
         let files = ImageIOFileReader()
         let reader = TextMapReader(reader: VisionTextReader(), files: files)
-        let maps = CaptureTextMaps(reader: reader, files: files, log: Self.log)
+        let maps = CaptureTextMaps(reader: reader, files: files, log: { TextWiring.log($0) })
         return TextServices(maps: maps, bus: context.captureEvents)
     }
 
