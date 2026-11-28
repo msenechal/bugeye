@@ -8,31 +8,6 @@ public struct FakeFailure: Error, Equatable {
     public init(_ message: String = "fake failure") { self.message = message }
 }
 
-/// Displays and images given by the test.
-public final class FakeScreenSource: ScreenSource {
-    private let state: Mutex<(displays: [DisplayInfo], images: [DisplayID: PixelBuffer])>
-
-    public init(displays: [DisplayInfo] = [], images: [DisplayID: PixelBuffer] = [:]) {
-        state = Mutex((displays, images))
-    }
-
-    public func displays() async throws -> [DisplayInfo] {
-        state.withLock { $0.displays }
-    }
-
-    public func capture(display: DisplayID, rect: Rect2D?) async throws -> PixelBuffer {
-        guard let image = state.withLock({ $0.images[display] }) else { throw FakeFailure("no image for display") }
-        return image
-    }
-}
-
-/// Returns the lines the test gives, for any image.
-public struct FakeTextReader: TextReader {
-    public var lines: [OCRLine]
-    public init(lines: [OCRLine] = []) { self.lines = lines }
-    public func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] { lines }
-}
-
 public struct FakeFaceFinder: FaceFinder {
     public var faces: [Rect2D]
     public init(faces: [Rect2D] = []) { self.faces = faces }
@@ -43,20 +18,6 @@ public struct FakeRectangleFinder: RectangleFinder {
     public var rectangles: [Rect2D]
     public init(rectangles: [Rect2D] = []) { self.rectangles = rectangles }
     public func rectangles(in image: PixelBuffer) async throws -> [Rect2D] { rectangles }
-}
-
-/// An Accessibility tree given by the test: the element at a point is the last one containing it.
-public struct FakeAXReader: AXReader {
-    public var elementsByProcess: [Int32: [AXElementInfo]]
-    public init(elementsByProcess: [Int32: [AXElementInfo]] = [:]) { self.elementsByProcess = elementsByProcess }
-
-    public func element(at point: Point2D) async throws -> AXElementInfo? {
-        elementsByProcess.values.flatMap { $0 }.last { $0.frame.contains(point) }
-    }
-
-    public func elements(inWindowOf processID: Int32) async throws -> [AXElementInfo] {
-        elementsByProcess[processID] ?? []
-    }
 }
 
 /// Records every payload written.
