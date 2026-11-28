@@ -337,3 +337,27 @@ struct SelfCancellingReader: TextReader {
         }
     }
 }
+
+@Suite struct TextMapReaderTimeoutRaceTests {
+    @Test func aTimeoutIsAlwaysReportedAsATimeoutNeverAsARecognitionFailure() async throws {
+        // claude-review on #9: the timer must record `timedOut` before it cancels the recogniser, or the recogniser's
+        // own CancellationError can win and be reported as `recognitionFailed`.
+        let image = try PixelBuffer(width: 4, height: 4, fill: RGBA8(red: 0, green: 0, blue: 0))
+        var outcomes: [String] = []
+        for _ in 0..<200 {
+            let clock = ManualClock()
+            let text = FakeTextReader(steps: [.hang])
+            let reader = TextMapReader(reader: text, files: FakeImageFileReader(), clock: clock)
+            let task = Task { try await reader.read(.buffer(image), pixelsPerPoint: 2) }
+            #expect(await eventually { text.calls.count == 1 && clock.sleepers == 1 })
+            clock.advance(by: .seconds(10))
+            do {
+                _ = try await task.value
+                outcomes.append("map")
+            } catch {
+                outcomes.append(String(describing: error))
+            }
+        }
+        #expect(Set(outcomes) == ["timed out on strip 0"])
+    }
+}

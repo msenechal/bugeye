@@ -65,6 +65,7 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
   - Dropped `TextServices` stop forwarding events.
 
   Tests for M1, M2 and M4 failed first. The others pinned behaviour that was already correct, and each was seen failing against its mutant. (cost if wrong: none.)
+- Ruling (PR #9 claude-review, Important): when the strip timer fires it records `timedOut` **before** cancelling the recogniser; the other order let the recogniser's own `CancellationError` win `ResumeOnce` and be reported as `recognitionFailed`. The race window is two adjacent statements, so the new regression test (200 timed-out reads, every outcome `timed out on strip 0`) could not be made to fail first; the fix is the reviewer's exact swap. (cost if wrong: low; at worst a timeout is logged as a recognition failure.)
 
 ## Waiting on
 
