@@ -318,12 +318,26 @@ final class ShortcutsHarness {
         h.model.escapeTyped("capture.area")
         #expect(h.registrar.registered.count == 3)
         h.model.startRecording("capture.area")
-        h.model.stopRecording()
+        h.model.stopRecording("capture.area")
         #expect(h.registrar.registered.count == 3)
         #expect(h.model.rows.allSatisfy { !$0.isRecording })
         h.model.startRecording("capture.area")
         h.model.deleteTyped("capture.area")
         #expect(h.registrar.registered.count == 2)
+    }
+
+    @Test func aLateResignFromAnotherRowDoesNotStopTheNewRecording() {
+        let h = ShortcutsHarness()
+        h.model.registerAll()
+        h.model.startRecording("capture.fullscreen")
+        // The user clicks Capture Area: it starts recording, then the Fullscreen field resigns.
+        h.model.startRecording("capture.area")
+        h.model.stopRecording("capture.fullscreen")
+        #expect(h.model.rows[2].isRecording)
+        #expect(h.registrar.registered.isEmpty)
+        h.model.stopRecording("capture.area")
+        #expect(!h.model.rows[2].isRecording)
+        #expect(h.registrar.registered.count == 3)
     }
 
     @Test func keyCodesGiveTheUnshiftedKey() {

@@ -79,7 +79,7 @@ struct ShortcutsPane: View {
                                 text: model.fieldText(row), isRecording: row.isRecording,
                                 onClick: { model.model.startRecording(row.spec.id) },
                                 onKey: { model.handle($0, for: row.spec.id) },
-                                onResign: { model.model.stopRecording() }
+                                onResign: { model.model.stopRecording(row.spec.id) }
                             )
                             .frame(width: 140, height: 22)
                         }

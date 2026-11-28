@@ -92,6 +92,7 @@ Slice 5 (wiring), final review of PR #28 (fresh reviewer): 0 Critical, 2 Importa
 - Ruling (review M3): checklist fixed (I.7 named, F.3 rewritten, the macOS-conflict row message quoted in full, one Expected line per test). (cost if wrong: none.)
 
 - Ruling (PR #28's macos job, run 46126846133): `launchRegistersEveryHotkeyAndAPressStartsACapture` failed once because `aDisplayChangeCancelsTheSelection` posted the screen-change notification on the shared `NotificationCenter.default`, which every parallel test's controller observes, so it cancelled another test's selection. Root cause fixed: `CaptureWiring.Adapters.notifications` (`.default` in the app) lets each test observe its own center. (cost if wrong: none.)
+- Ruling (claude-review on PR #28, unverified concern): a field that resigns after another row started recording no longer stops the new recording; `stopRecording(id)` ends only that row's recording (nil, from the pane closing, ends any). Test failed first. (cost if wrong: none.)
 
 ## Waiting on user
 
