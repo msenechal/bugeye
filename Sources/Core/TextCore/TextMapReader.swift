@@ -56,6 +56,8 @@ public struct TextMapReader: Sendable {
                 image = strips.count == 1 ? buffer : try PixelResample.rows(buffer, strip)
             case .file(let url):
                 image = try await decoding(url) { try await files.pixels(of: url, rows: strip) }
+                // A file rewritten since `info` would map boxes with a stale size (claude-review on #9).
+                guard image.width == width, image.height == strip.count else { throw TextMapError.unreadable(url) }
             }
             if plan.scale == 2 { image = PixelResample.enlarged2x(image) }
             let lines = try await recognize(image, strip: index)

@@ -274,3 +274,22 @@ final class Completion: Sendable {
 
     private func finish() { state.withLock { $0 = true } }
 }
+
+@Suite struct TextMapReaderFileChangeTests {
+    @Test func aStripDecodedAtAnotherSizeThanTheFileSaidFailsTheRead() async throws {
+        // claude-review on #9: the file is rewritten between `info` and the strip's decode.
+        let files = FakeImageFileReader()
+        let url = URL(fileURLWithPath: "/captures/rewritten.png")
+        let print = FileFingerprint(size: 1, modified: Date())
+        files.set(
+            url, image: try PixelBuffer(width: 10, height: 20, fill: RGBA8(red: 9, green: 9, blue: 9)),
+            fingerprint: print)
+        let wider = try PixelBuffer(width: 30, height: 20, fill: RGBA8(red: 9, green: 9, blue: 9))
+        files.beforePixels = { files, url, _ in files.set(url, image: wider, fingerprint: print) }
+        let text = FakeTextReader()
+        await #expect(throws: TextMapError.unreadable(url)) {
+            try await TextMapReader(reader: text, files: files).read(.file(url), pixelsPerPoint: 2)
+        }
+        #expect(text.calls.isEmpty)
+    }
+}
