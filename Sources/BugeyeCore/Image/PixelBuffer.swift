@@ -15,6 +15,8 @@ public struct RGBA8: Hashable, Codable, Sendable {
 
 /// An image as plain bytes: the only way images cross the core boundary (`design/13` §2).
 /// Rows are top to bottom; each row is `bytesPerRow` long and starts with `width` RGBA8 pixels.
+/// RGBA8 with premultiplied alpha, sRGB unless the producer documents otherwise. There is no colour-space field
+/// (Capture C7, OCR T8).
 public struct PixelBuffer: Hashable, Sendable {
     public enum Error: Swift.Error, Equatable {
         case emptySize(width: Int, height: Int)

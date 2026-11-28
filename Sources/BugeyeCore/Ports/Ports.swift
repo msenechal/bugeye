@@ -13,7 +13,7 @@ public struct DisplayID: Hashable, Codable, Sendable {
 
 public struct DisplayInfo: Hashable, Codable, Sendable {
     public var id: DisplayID
-    /// The display's frame in global points.
+    /// Cocoa global points: origin at the bottom-left of the primary display, y up (Capture C8).
     public var frame: Rect2D
     /// Pixels per point: 2 on a Retina display, 1 on the user's external 1080p monitor.
     public var scale: Double
@@ -23,6 +23,12 @@ public struct DisplayInfo: Hashable, Codable, Sendable {
         self.frame = frame
         self.scale = scale
     }
+}
+
+/// A window server window id (CGWindowID). Capture's window list, the selector, Recording.
+public struct WindowID: Hashable, Codable, Sendable {
+    public var rawValue: UInt32
+    public init(_ rawValue: UInt32) { self.rawValue = rawValue }
 }
 
 /// Screen pixels (ScreenCaptureKit on macOS).
