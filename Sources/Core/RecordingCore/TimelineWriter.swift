@@ -17,6 +17,11 @@ public struct TimelineLimits: Hashable, Sendable {
     }
 }
 
+/// The header couldn't be written.
+struct TimelineWriteError: Error, CustomStringConvertible {
+    var description: String
+}
+
 /// Appends a timeline's lines to its file, enforcing the size limits. Not thread-safe: `TimelineRecorder`
 /// owns it. Lines are buffered until `flush`; `finish` writes `end`, flushes and fsyncs.
 final class TimelineWriter {
@@ -43,13 +48,17 @@ final class TimelineWriter {
         try self.init(url: url, handle: FileHandle(forWritingTo: url), header: header, limits: limits)
     }
 
-    /// Writes to an open handle (tests pass one that fails).
-    init(url: URL, handle: FileHandle, header: TimelineHeader, limits: TimelineLimits) throws {
+    /// Writes to an open handle (tests pass one that fails). `flushHeader: false` leaves the header buffered,
+    /// so a test can reach a write error after creation.
+    init(url: URL, handle: FileHandle, header: TimelineHeader, limits: TimelineLimits, flushHeader: Bool = true) throws
+    {
         self.url = url
         self.limits = limits
         self.handle = handle
         put(TimelineLineEncoder.header(header))
+        guard flushHeader else { return }
         flush()
+        if let error { throw TimelineWriteError(description: error) }
     }
 
     var isOpen: Bool { handle != nil }
