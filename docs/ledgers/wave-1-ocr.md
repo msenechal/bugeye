@@ -27,6 +27,7 @@ Trust this file and `git log` over memory.
 | 19 | done | 00bf617 | 27 tests, one or more per Q1–Q9; 25 repeated runs without a failure |
 | 20 | done | 8a03fdd | |
 | 21 | done | 0daf33a | slice 3 code complete |
+| 22 | done | (see rulings) | fresh final review of slice 3: 0 Critical, 2 Important, 6 Minor; all fixed; 25 repeated runs without a failure |
 
 ## Rulings
 
@@ -53,6 +54,17 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 - Ruling (PR #9 claude-review, Minor): a `.file` read checks that each decoded strip is the width and height that `info` promised, and throws `unreadable(url)` when not (a file rewritten between `info` and a strip would otherwise have its boxes mapped with a stale size). The store's Q6 check would also catch the change, but only after recognising every strip. Test failed first. (cost if wrong: none.)
 - Ruling (PR #9 claude-review, Minor): a `CancellationError` thrown by the recogniser while the read itself is not cancelled becomes `recognitionFailed`, so the store reports it and a later request reads again; only a cancelled read surfaces as `CancellationError`. Test failed first. The review's other finding (a same-size rewrite mid-read) is the store's Q6 check by design; a comment in `TextMapReader` now says so. (cost if wrong: none.)
 - Ruling (slice 3 review I2, Important, reader part): a cancelled read resolves only when its recogniser returns or the strip timeout passes, instead of at once. Resolving at once let the store start its next read while a cancellation-ignoring Vision call still ran, so a run of edits could stack several Vision passes, breaking Q1 and T9. The timeout still caps a stuck recogniser (slice 2 review I1), and a cancelled read whose recogniser returns lines still ends as `CancellationError`. The test failed first; the store side is on the store branch. (cost if wrong: low; cancelling a read can take up to one strip timeout, 10 s, but nothing waits on a cancelled read except the next read.)
+- Ruling (slice 3 review I1, Important): `eventsPublishedBackToBackKeepTheirOrder` failed 11 times in 60 on correct code, because whether a capture's read reached the fake before its `deleted` event cancelled it is a race. It now checks the outcome: no stored read of the deleted capture and no map for it, which a reversed order would break. (cost if wrong: none.)
+- Ruling (slice 3 review I2, Important, store part): a cancelled read keeps the store's one read slot until its task returns (`Running.cancelled`), and its job is queued again behind it. Together with the reader ruling above, a run of edits during a read whose recogniser ignores cancellation no longer stacks Vision passes (Q1, T9). The test counts overlapping recogniser calls and failed first. (cost if wrong: low; after an edit the new read can start up to one strip timeout late.)
+- Ruling (slice 3 review M1–M6, Minor): all fixed:
+  - `saved` or `moved` for a wanted capture with no job and no map queues a background read, so a read that failed because the file moved before its event arrived is retried.
+  - A requeued job nobody waits on becomes the newest background read (plan P12).
+  - The three untested rules have tests that kill their mutants.
+  - `LatestReading` passes its caller's cancellation on.
+  - Tests that could hang are bounded, and the strip check expects `Moved`.
+  - Dropped `TextServices` stop forwarding events.
+
+  Tests for M1, M2 and M4 failed first. The others pinned behaviour that was already correct, and each was seen failing against its mutant. (cost if wrong: none.)
 
 ## Waiting on
 
