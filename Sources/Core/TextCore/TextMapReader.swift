@@ -102,7 +102,7 @@ public struct TextMapReader: Sendable {
     /// One `TextReader` call under the strip timeout. A reader error becomes `recognitionFailed`; the timeout
     /// becomes `timedOut(strip:)`; cancellation stays `CancellationError`. The reader runs in its own task, so a
     /// recogniser that ignores cancellation can't hold the read past the timeout: it is cancelled and left to finish
-    /// on its own (slice 2 review I1).
+    /// on its own (slice 2 review I1). A cancelled read resolves when the recogniser returns or the timeout passes.
     private func recognize(_ image: PixelBuffer, strip: Int) async throws -> [OCRLine] {
         let reader = self.reader
         let sleep = self.sleep
@@ -124,13 +124,16 @@ public struct TextMapReader: Sendable {
             outcome.resume(.failure(TextMapError.timedOut(strip: strip)))
         }
         do {
-            return try await withTaskCancellationHandler {
+            let lines = try await withTaskCancellationHandler {
                 try await outcome.value()
             } onCancel: {
+                // The recogniser is asked to stop, and the read resolves when it returns or the strip timeout passes,
+                // so a cancelled read never frees the store's one read slot while Vision still runs (slice 3 review
+                // I2). The timeout still caps a recogniser that ignores cancellation (slice 2 review I1).
                 work.cancel()
-                timer.cancel()
-                outcome.resume(.failure(CancellationError()))
             }
+            try Task.checkCancellation()
+            return lines
         } catch {
             if Task.isCancelled { throw CancellationError() }
             // A recogniser that throws `CancellationError` on its own, with this read not cancelled, failed

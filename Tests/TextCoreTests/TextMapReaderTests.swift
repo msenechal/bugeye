@@ -202,17 +202,38 @@ final class StubbornReader: TextReader, Sendable {
         #expect(await eventually { stubborn.sawCancellation })
     }
 
-    @Test func anOuterCancelSurfacesAsCancellationEvenFromAStubbornReader() async throws {
+    @Test func aCancelledReadWaitsForItsRecogniserUpToTheStripTimeout() async throws {
+        // Slice 3 review I2: a cancelled read must not free the store's one read slot while its recogniser still
+        // runs, so it resolves only when the recogniser returns or the strip timeout passes.
+        let clock = ManualClock()
         let stubborn = StubbornReader()
-        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: ManualClock())
+        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: clock)
+        let image = try blank(10, 10)
+        let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
+        #expect(await eventually { stubborn.hasStarted && clock.sleepers == 1 })
+        let completion = Completion(task)
+        task.cancel()
+        #expect(await eventually { stubborn.sawCancellation })
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(!completion.isDone)
+        clock.advance(by: .seconds(10))
+        let finished = await eventually { completion.isDone }
+        stubborn.release()
+        #expect(finished)
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
+    @Test func aCancelledReadResolvesAsSoonAsItsRecogniserReturns() async throws {
+        let clock = ManualClock()
+        let stubborn = StubbornReader()
+        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: clock)
         let image = try blank(10, 10)
         let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
         #expect(await eventually { stubborn.hasStarted })
         let completion = Completion(task)
         task.cancel()
-        let finished = await eventually { completion.isDone }
         stubborn.release()
-        #expect(finished)
+        #expect(await eventually { completion.isDone })
         await #expect(throws: CancellationError.self) { try await task.value }
     }
 
