@@ -42,6 +42,28 @@ Trust this file and `git log` over memory.
 - I6 tests added: late lookup after discard, write error (`/dev/full`), cursor cap falling through to size, pause flushing a scroll group.
 - Minor fixed in the same pass: M1 (flush loop ends when the recorder is gone), M2 (header written at once), M3 (open clicks forgotten at pause), M4 (`AXElementInfo` fields `private(set)`; the `AXSecureTextField` subrole forces secure), M5 (timer cancelled when the reader answers), M7 (header `hasElements` false without a reader), M8 (gate wait bounded), M9 (dates without milliseconds read).
 - claude-review on #4 (2703ee8): 0 Critical, 0 Important, 2 Minor, both fixed with a failing test first: (1) a decoded element line with the `AXSecureTextField` subrole kept its title: `TimelineElement`'s field initializer is now failable for that subrole and the reader writes `withheld`; (2) `TimelineStore.observe` deleted on the main actor: deletions now run detached, and `waitForDeletions` reports them done.
+- claude-review on #4 (aabab8c): 0 Critical, 0 Important, 3 Minor, each fixed with a failing test first: (1) `MediaTime` and `RecordingClock.milliseconds` trapped on huge or NaN input (reproduced: a fatal error): both clamp now; (2) a header that can't be written didn't fail the recorder's creation: it throws now; (3) a text-entry element's title could be its typed value in some apps: dropped (see ruling).
+
+## Final review of PR #13 (slice 2)
+
+Fresh reviewer: 1 Critical, 5 Important, 7 Minor. Each fix has a test in `RecordingFlowReviewTests` that was seen failing first (13 failures before the fix).
+- C1 a Pause before the first frame dropped `takeStarted`: the timer read 00:00, Restart and Discard didn't ask, and delivery had no date. `takeStarted` in paused now starts the clock paused at the first frame. The writer (slice 5) follows the same rule.
+- I1 losing Screen Recording mid-take posted an invented "Recording stopped / Screen Recording was declined." notice: it now stops the take and shows Capture's alert (§5.7).
+- I2 the bubble's double-click size was refused once the bar closed: `option(.bubbleSize)` is taken from the countdown to the end of the take, saved, and kept across Restart.
+- I3 the alert bookkeeping: an alert survives a pause; a second Restart or Discard while one is up is ignored; a take that ends another way emits `dismissConfirm(s)` (new effect).
+- I4 the stale-ready cancel was dead code: a late `recorderReady` for any prepared session is cancelled again (idempotent in the shell), never for a stopped one. Found on the way: without that last rule, a late ready after Stop would cancel, and delete, a take being finished.
+- I5 the invariant checker gained: stop-after-cancel and cancel-after-stop, a discarded take never delivered, a monotonic ● timer that doesn't move while paused, failure paths in the drain, no `Date()`. R1 per attempt is structural (leaving and returning alternate), noted rather than tested.
+- Minor fixed: M1 (final punctuation, empty error), M2 (camera loss with Cam off is silent), M3 (`failedToStart` built explicitly), M7 (dead lines, table tests for quit, targetGone and restart from paused). `recordingHotkeyIsIgnoredDuringAScreenshotSelection` stays beside its twin: the spec names it.
+- Minor as rulings or backlog: M4, M5, M6 below.
+
+## Final review of PR #16 (slice 3)
+
+Fresh reviewer: 0 Critical, 3 Important, 16 Minor. Fixed in one commit with `LayoutReviewTests` and `TakeRecoveryReviewTests` (new API names first failed to compile; the new behaviours were checked failing by their assertions on the old code paths the reviewer reproduced).
+- I1 `ChildWindowFilter` mixed global window frames with a display-local rect: the parameter is now `followedGlobal`, with `WindowFollow.global(_:displayBounds:)`; tested on a display at (1512, −200).
+- I2 the V23 fallback reset its count on every filter update (10 Hz) so it could never fire: only a delivered frame resets it; "dropped" is documented as a blank or suspended frame, `.idle` counts as delivered.
+- I3 a recovered movie could hold no fragment: movies under 64 KiB are deleted with their timeline.
+- Minor fixed: orphan timelines are left alone (1); a recovered `.mp4` takes its timeline's time (2); files changed in the last 10 s are left alone (4); `convertedName` / `timelineName` (5); recovery ordering and live-take tests (6); the self-exclusion test (7); edge tests (8); doc comment (10); too-wide bar and badge clamp to the left edge (11); Apple function-key characters and multi-letter uppercases (13); opacity rounded to 0.001 (14).
+- Minor deferred to Backlog: 3, 15, 16. Minor 9 and 12 are rulings below.
 
 ## Rulings
 
@@ -61,6 +83,10 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): an extra event `conversionProgress(s, fraction)` drives the ● menu's `Finishing… <n> %`, which the spec's event list didn't have. The finishing entry's id is `recording.finishing` (disabled); the menu ids are `recording.pause|resume|stop|restart|discard`. (cost if wrong: none.)
 - Ruling (slice 2): the reducer keeps the set of live recorders: each `prepareRecorder(s)` gets exactly one `stopRecorder(s)` or `cancelRecorder(s)` (R3), and a late `recorderReady` for a moved-on session is cancelled only if that session's recorder was never ended. The shell's `cancelRecorder` must also cancel a recorder still preparing. (cost if wrong: low.)
 - Ruling (slice 2): bug found by the invariant test: with `recording.timeline` off, Stop emitted `timeline(finish)` for a timeline never started. The flow now tracks an open timeline and emits `finish` / `discard` only after a `start`. (cost if wrong: none.)
+- Ruling (slice 2, review M4): a permission answer arriving after Record is ignored: the countdown records what was effective at Record (R8), and the next recording picks the new permission up. (cost if wrong: low.)
+- Ruling (slice 2, review M5): `stopKey` stays a property the controller sets before each event; slice 6 tests that the ● menu's Stop shows the current binding after a change. (cost if wrong: low.)
+- Ruling (slice 2, review I4): the shell's `cancelRecorder(s)` is idempotent and tears down a recorder still preparing; the reducer cancels a late ready for any prepared, unstopped session. (cost if wrong: low.)
+- Ruling (slice 2, review C1): a take paused before its first frame starts paused: its clock begins and pauses at the first frame's host time. (cost if wrong: low.)
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
@@ -71,12 +97,21 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 3): the badge's padding is 14 × 8 pt; its text uses the semibold weight 0.3 (contracts' font mapping). (cost if wrong: low.)
 - Ruling (slice 3): the badge shows named keys only with ⌘ or ⌃ unless Show all keystrokes is on (↩ alone is typing a newline). (cost if wrong: low.)
 - Ruling (slice 3): take recovery also delivers an `.mp4` left without its `.mov` (a crash after a finished conversion) and deletes a partial `.mp4` beside its `.mov` and a timeline whose movie is gone. (cost if wrong: low.)
-- Ruling (slice 3): the child-window fallback (V23) counts dropped frames only right after a filter update; a delivered frame ends the watch. (cost if wrong: low.)
+- Ruling (slice 3, revised after review I2): the child-window fallback (V23) counts blank or suspended frames after a filter update until a frame is delivered (complete or idle); more than 2 in a row drops back to the window alone for the rest of the take. (cost if wrong: low.)
+- Ruling (slice 3, review minor 9): sheets and popovers that the window server lists at layer 0 aren't caught by the child filter (V10 names sheets); the Mac batch's item 4 opens a sheet as well as a menu to see it. (cost if wrong: low; a sheet missing from a window recording.)
+- Ruling (slice 3, review minor 12): an area partly off its display is shifted inside it, not cropped, so the size stays what was selected (and a followed window keeps its size). (cost if wrong: low.)
+- Ruling (slice 3, review I3): a leftover movie under 64 KiB holds no complete fragment and is deleted with its timeline rather than delivered broken. (cost if wrong: low; at most the first second of a crashed take.)
+- Ruling: a text-entry element (text field, area, combo box, search field) keeps no title in the timeline, only its role, subrole and frame: some apps put the typed value in AXTitle, and §7.4 forbids typed text. Captions lose a search field's name. (cost if wrong: low; Wave 3 captions can say "the text field".)
+- Ruling: stacked branches take later fixes from the branch below by merging it in (no rebase): force-pushing was refused in this session. (cost if wrong: none; merge commits in a squash-or-merge PR.)
 - Ruling (superseded by claude-review #4 minor 2): `TimelineStore.observe` now deletes off the main actor.
 
 ## Waiting on
 
 ## Backlog
+
+- 2026-11-28, PR #16 review minor 3: a take kept after "Couldn't save the recording" would be "recovered" at the next launch with "Bugeye quit while recording". The controller (slice 6) marks such takes (e.g. `Take-<uuid>.undelivered`) and recovery skips or words them differently.
+- 2026-11-28, PR #16 review minor 15–16: the overlay slice keeps its timer while rings animate or the badge is visible, draws one last empty frame after, and maps the display list's point size to the view at the backing scale.
+- 2026-11-28, PR #13 review M6: no deadline on `stopping` / `delivering`. The controller (slice 6) guarantees `stopped` and `delivered` always arrive (a `defer`, as `design/04` §2.9), tested with a recorder that throws, so ⌘Q never waits forever.
 
 - 2026-11-28, PR #4 review M6: `TimelineRecorder.init` creates the folder and file synchronously in the caller's context; the controller (slice 6) must create it off the main actor, or the recorder gains an async factory.
 - 2026-11-28, PR #4 review I1: slice 4's `AXPointReader` must set `AXUIElementSetMessagingTimeout` (≤ 250 ms) and run off the cooperative pool.

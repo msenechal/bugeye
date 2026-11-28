@@ -38,11 +38,15 @@ public enum KeystrokeFormatter {
         guard let characters, characters.count == 1, let scalar = characters.unicodeScalars.first,
             scalar.value >= 0x20
         else { return usBase[keyCode] }
+        // Apple's function-key characters (F13–F20, Help, keypad Clear …) have no glyph.
+        if (0xF700...0xF8FF).contains(scalar.value) { return nil }
         if scalar.properties.isAlphabetic, scalar.value >= 0x250 {
             // Cyrillic, Greek, …: the US letter of the key.
             return usBase[keyCode] ?? characters.uppercased()
         }
-        return characters.uppercased()
+        // One letter in, one letter out ("ß" stays "ß", not "SS").
+        let upper = characters.uppercased()
+        return upper.count == 1 ? upper : characters
     }
 
     /// macOS virtual key codes of keys with names.

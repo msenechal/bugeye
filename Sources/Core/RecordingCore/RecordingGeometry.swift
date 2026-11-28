@@ -68,7 +68,8 @@ public enum OptionsBarPlacement {
     public static let gap = 12.0
 
     public static func origin(bar: Size2D, selection: Rect2D, screen: Rect2D, wholeDisplay: Bool) -> Point2D {
-        let x = min(max(selection.minX + selection.width / 2 - bar.width / 2, screen.minX), screen.maxX - bar.width)
+        // A bar wider than the screen starts at its left edge.
+        let x = max(min(selection.minX + selection.width / 2 - bar.width / 2, screen.maxX - bar.width), screen.minX)
         let under = selection.maxY + gap
         let above = selection.minY - gap - bar.height
         let y: Double
@@ -100,8 +101,8 @@ public struct WindowSnapshot: Hashable, Sendable {
 
 /// Window recording follows the window at its starting size (§5.5).
 public enum WindowFollow {
-    /// The display-local source rect: the window's origin, the starting size, rounded to whole points and
-    /// clamped into the display. `windowBounds` and `displayBounds` in the same global points.
+    /// The display-local source rect: the window's origin rounded to whole points, the starting size (at most the
+    /// display's), clamped into the display. `windowBounds` and `displayBounds` in the same global points.
     public static func followedRect(windowBounds: Rect2D, size: Size2D, displayBounds: Rect2D) -> Rect2D {
         let width = min(size.width, displayBounds.width)
         let height = min(size.height, displayBounds.height)
@@ -109,12 +110,22 @@ public enum WindowFollow {
         let y = min(max((windowBounds.minY - displayBounds.minY).rounded(), 0), displayBounds.height - height)
         return Rect2D(x: x, y: y, width: width, height: height)
     }
+
+    /// A display-local rect in the global points of `displayBounds`.
+    public static func global(_ local: Rect2D, displayBounds: Rect2D) -> Rect2D {
+        Rect2D(
+            x: local.origin.x + displayBounds.minX, y: local.origin.y + displayBounds.minY, width: local.size.width,
+            height: local.size.height)
+    }
 }
 
 /// A window recording's child windows (V10): the same process, layer above 0 (menus, pop-ups, sheets), frame
-/// meeting the followed rect.
+/// meeting the followed rect. Sheets and popovers the window server lists at layer 0 aren't caught (ledger).
 public enum ChildWindowFilter {
-    public static func children(of window: WindowID, in windows: [WindowSnapshot], followed: Rect2D) -> [WindowID] {
+    /// `followedGlobal` is in the windows' Quartz global points: `WindowFollow.global(followedRect, …)`.
+    public static func children(of window: WindowID, in windows: [WindowSnapshot], followedGlobal followed: Rect2D)
+        -> [WindowID]
+    {
         guard let owner = windows.first(where: { $0.id == window }) else { return [] }
         return windows.filter {
             $0.id != window && $0.processID == owner.processID && $0.layer > 0
@@ -124,7 +135,9 @@ public enum ChildWindowFilter {
 }
 
 /// V10 / V23: if a filter update is followed by more than 2 consecutive dropped frames, the recording drops
-/// back to the window alone for the rest of the take.
+/// back to the window alone for the rest of the take. "Dropped" is a frame the stream marks blank or
+/// suspended (a missed frame); an `.idle` frame (nothing changed) counts as delivered. Repeated updates don't
+/// reset the count: only a delivered frame does.
 public struct ChildWindowFallback: Hashable, Sendable {
     public static let maxDroppedFrames = 2
 
@@ -136,7 +149,6 @@ public struct ChildWindowFallback: Hashable, Sendable {
 
     public mutating func filterUpdated() {
         watching = true
-        dropped = 0
     }
 
     public mutating func frameDropped() {

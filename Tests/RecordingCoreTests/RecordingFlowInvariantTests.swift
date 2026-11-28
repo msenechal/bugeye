@@ -1,4 +1,5 @@
 import BugeyeCore
+import BugeyeFeatures
 import Foundation
 import RecordingCore
 import Testing
@@ -10,6 +11,11 @@ import Testing
         var activities: Set<ScreenActivity.Activity> = []
         var prepared: Set<SessionID> = []
         var ended: Set<SessionID> = []
+        var cancelled: Set<SessionID> = []
+        var stopped: Set<SessionID> = []
+        /// Sessions whose take's timeline was discarded: never delivered (R6).
+        var discardedTakes: Set<SessionID> = []
+        var lastElapsed: (session: SessionID, seconds: Int, paused: Bool)?
         var bar = false
         var countdown = false
         var border = false
@@ -38,9 +44,18 @@ import Testing
                     // R8: the request's options are already effective.
                     let again = effectiveOptions(request.options, permissions: permissions, devices: devices)
                     if again != request.options { fail("R8 raw options in prepareRecorder") }
-                case .stopRecorder(let s), .cancelRecorder(let s):
-                    if !prepared.contains(s) { fail("R3 end of unprepared \(s)") }
-                    if !ended.insert(s).inserted { fail("R3 \(s) ended twice") }
+                case .stopRecorder(let s):
+                    if !prepared.contains(s) { fail("R3 stop of unprepared \(s)") }
+                    if cancelled.contains(s) || !stopped.insert(s).inserted { fail("R3 \(s) stopped after an end") }
+                    ended.insert(s)
+                case .cancelRecorder(let s):
+                    // A repeated cancel is allowed (a late ready, idempotent in the shell); a cancel after a stop isn't.
+                    if !prepared.contains(s) { fail("R3 cancel of unprepared \(s)") }
+                    if stopped.contains(s) { fail("R3 \(s) cancelled after its stop") }
+                    cancelled.insert(s)
+                    ended.insert(s)
+                case .deliver(let s, _, _, _):
+                    if discardedTakes.contains(s) { fail("R6 a discarded take delivered") }
                 case .showBar: bar = true
                 case .closeBar: bar = false
                 case .countdown: countdown = true
@@ -59,13 +74,42 @@ import Testing
                 case .timeline(.discard):
                     if !timeline { fail("R6 discard without start") }
                     timeline = false
-                case .statusItem(let item): statusItem = item != nil
+                    if let s = currentSession { discardedTakes.insert(s) }
+                case .statusItem(let item):
+                    statusItem = item != nil
+                    checkTimer(item)
                 case .allowQuit:
                     if !quitAsked { fail("R7 allowQuit without a quit") }
                     quitAsked = false
                 default: break
                 }
             }
+        }
+
+        /// The session the effects being applied belong to (set by the feeder before `apply`).
+        var currentSession: SessionID?
+
+        /// The ● timer never runs backwards in a take, and never moves while paused (catches a lost clock).
+        mutating func checkTimer(_ item: StatusItemOverride?) {
+            guard let item, let session = currentSession else { return }
+            let text: String
+            let paused: Bool
+            switch item.badge {
+            case .recording(let e):
+                text = e
+                paused = false
+            case .paused(let e):
+                text = e
+                paused = true
+            case .finishing: return
+            }
+            let parts = text.split(separator: ":").compactMap { Int($0) }
+            let seconds = parts.reduce(0) { $0 * 60 + $1 }
+            if let last = lastElapsed, last.session == session {
+                if seconds < last.seconds { fail("timer ran backwards \(last.seconds) → \(seconds)") }
+                if last.paused, paused, seconds != last.seconds { fail("timer moved while paused") }
+            }
+            lastElapsed = (session, seconds, paused)
         }
 
         mutating func check(_ flow: RecordingFlow, after effects: [RecordingEffect]) {
@@ -194,7 +238,8 @@ import Testing
         case .starting(let s, _, _): return .recorderReady(s)
         case .recording(let s, _):
             return pick([
-                .takeStarted(s, hostTime: host, date: Date()), .tick(s, hostNow: host), .pause(s, hostNow: host),
+                .takeStarted(s, hostTime: host, date: Date(timeIntervalSince1970: host)), .tick(s, hostNow: host),
+                .pause(s, hostNow: host),
                 .toggle(screenPermitted: true, activityAllows: true, lastArea: nil),
             ])
         case .paused(let s, _): return pick([.resume(s, hostNow: host), .tick(s, hostNow: host)])
@@ -202,9 +247,17 @@ import Testing
         }
     }
 
-    /// The event that moves `flow` toward idle.
-    static func drainEvent(_ flow: RecordingFlow) -> RecordingEvent? {
-        switch flow.state {
+    /// The event that moves `flow` toward idle, through failure paths when `failing`.
+    static func drainEvent(_ flow: RecordingFlow, failing: Bool = false) -> RecordingEvent? {
+        if failing {
+            switch flow.state {
+            case .countingDown(let s, _, _, _, _), .starting(let s, _, _): return .recorderFailed(s, .other("x"))
+            case .recording(let s, _), .paused(let s, _): return .diskChecked(s, freeBytes: 1)
+            case .finishing(let s, .stopping, _, _, _): return .stopped(s, .noFrames)
+            default: break
+            }
+        }
+        return switch flow.state {
         case .idle: nil
         case .selecting(let s):
             .selected(
@@ -239,6 +292,7 @@ import Testing
             {
                 world.permissions[permission] = answer
             }
+            world.currentSession = flow.state.session
             let effects = flow.next(event)
             if stale, let effects {
                 // R9: nothing but R3's cancel.
@@ -254,7 +308,8 @@ import Testing
         }
         for _ in 0..<400 { feed(Self.randomEvent(flow, &random, host: &host)) }
         var guardCount = 0
-        while let event = Self.drainEvent(flow), guardCount < 20 {
+        let failing = seed % 2 == 1
+        while let event = Self.drainEvent(flow, failing: failing), guardCount < 20 {
             feed(event)
             guardCount += 1
         }

@@ -10,4 +10,10 @@ import Testing
     func formats(seconds: Double, text: String) {
         #expect(MediaTime.text(seconds: seconds) == text)
     }
+
+    /// claude-review #4: a finite but huge value doesn't trap.
+    @Test func hugeValuesDoNotTrap() {
+        #expect(!MediaTime.text(seconds: 1e300).isEmpty)
+        #expect(!MediaTime.text(seconds: Double.greatestFiniteMagnitude).isEmpty)
+    }
 }

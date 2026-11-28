@@ -54,6 +54,17 @@ import Testing
         #expect(clock.milliseconds(for: 1000.1509) == 150)
     }
 
+    /// claude-review #4: huge or not-a-number times never trap.
+    @Test func hugeAndNaNTimesDoNotTrap() {
+        #expect(RecordingClock.milliseconds(1e300) > 0)
+        #expect(RecordingClock.milliseconds(.nan) == 0)
+        #expect(RecordingClock.milliseconds(-.infinity) == 0)
+        var clock = RecordingClock()
+        clock.begin(at: 0)
+        #expect(clock.milliseconds(for: .nan) == nil)
+        #expect(clock.milliseconds(for: 1e300) != nil)
+    }
+
     @Test func redundantPauseAndResumeAreNoOps() {
         var clock = RecordingClock()
         clock.pause(at: 1)
