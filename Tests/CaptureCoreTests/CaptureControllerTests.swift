@@ -184,6 +184,7 @@ final class ControllerHarness {
         #expect(item.pixelsPerPoint == 2)
         #expect(item.createdAt == freezeTime.addingTimeInterval(5))
         #expect(h.controller.phase == .idle)
+        #expect(h.controller.heldWindowImages == 0 && h.controller.heldFrameSessions == 0)
     }
 
     @Test func aClosedWindowPostsCaptureFailed() async throws {
@@ -199,6 +200,7 @@ final class ControllerHarness {
                 FakeNotifier.Post(title: "Capture failed", body: "The window closed before it could be captured.")
             ])
         #expect(h.recorder.events.isEmpty && h.controller.phase == .idle && h.activity.active.isEmpty)
+        #expect(h.controller.heldWindowImages == 0)
     }
 
     @Test func aRequestMadeWhileEffectsRunKeepsTheSettingsReadAtThatRequest() async throws {
