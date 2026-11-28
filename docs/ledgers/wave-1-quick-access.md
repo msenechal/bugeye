@@ -9,9 +9,9 @@ Trust this file and `git log` over memory.
 | Slice | Branch | PR | State |
 |---|---|---|---|
 | 1 core | `feat/wave1-quick-access-core` | #8 | green (linux, macos, review), ready to merge |
-| 2 model | `feat/wave1-quick-access-model` | #10 | done, stacked on #8 |
-| 3 mac | `feat/wave1-quick-access-mac` | #11 | macOS run pending, stacked on #10 |
-| 4 wiring | `feat/wave1-quick-access-wiring` | | draft pushed; waits for Capture's wiring PR (contracts §9) |
+| 2 model | `feat/wave1-quick-access-model` | #10 | final review and fix pass done; claude-review findings addressed |
+| 3 mac | `feat/wave1-quick-access-mac` | #11 | final review and fix pass done; macos green (run 46124520794) |
+| 4 wiring | `feat/wave1-quick-access-wiring` | #19 (draft) | macos green with slice 3 (run 46122790078); waits for Capture's wiring PR (contracts §9) |
 
 ## Tasks
 
@@ -50,12 +50,23 @@ Plan rulings P1–P18 are in the plan. Every later deviation is recorded here as
 - Ruling (final review of #10, M1 and M3): a Save As… cancelled by `deleted` releases `busy` when the panel answers; an `edited` preview arriving while the panel is open becomes the copy's preview. Tests failed first. M5's test gaps are filled (the same-file test now taps Save As… again; leaving a thumbnail that isn't key; Delete of the key thumbnail returns focus once). (cost if wrong: none.)
 - Ruling (claude-review on #10, Minor): a Copy whose read failed because the file moved meanwhile (a Save in flight, or a `moved`) is retried once at the item's current URL instead of posting `Couldn't copy`; a second failure there posts it. Copy isn't blocked during Save, so the tap is never silently ignored. Test failed first. (cost if wrong: none.)
 - Ruling (claude-review on #10, Minor): the item of each Save in flight is kept and follows `edited`, `moved` and `saved` events, so a Save finishing after its thumbnail went away publishes the current item, not the snapshot from the tap (like Delete's P7 item). Test failed first. (cost if wrong: none.)
+- Ruling (claude-review on #10, Important): a `deleted` event while a Save is in flight marks it, and the Save's result publishes nothing, so no `saved` ever follows a `deleted`. Test failed first. (cost if wrong: none.)
+- Ruling (claude-review on #10, Minor): a Save As… copy already running when its source is deleted still publishes its `created` (the copy is a file the user chose to save; Q17 and rule 11 cancel only before the copy starts) and keeps the thumbnail's preview. The Editor's origin is the named constant `QuickAccessModel.editorOrigin` (area cores can't import EditorCore; a shared constant would be an amendment). Test failed first. (cost if wrong: low.)
+- Ruling (claude-review on #10, Minor, no change): a Copy result arriving after its thumbnail went away is dropped, as spec §5.2 says; the `decoration ignored` line has no provider (P9). (cost if wrong: low; the user can overturn §5.2 on the open thread.)
+- Ruling (final review of #11, I1, Important): a controller-lifetime test shows the controller is freed while panels are still shown, so a strong capture in `ThumbnailActions`, `onEscape`, the ticker or an observer fails it. Shown to fail on a throwaway branch where `ThumbnailActions` held the controller strongly (macos run 46124518327: `controller == nil` failed); branch deleted. (cost if wrong: none.)
+- Ruling (final review of #11, I2, Important): the ✓ and the media badge don't take hits, so ⇧-click, plain click and drag on them reach the image (Q11). Not unit-testable on hosted CI; checklist F and E8 cover it. (cost if wrong: low.)
+- Ruling (final review of #11, M2–M6): the controller's `isolated deinit` invalidates the ticker and removes its activation observers; the copy-failure log uses the error's text, not its `userInfo`; the save-folder-unavailable log line names no folder (spec §7, test failed first); after the save panel, the app the user was in is reactivated. P17's injectable ticker factory wasn't needed: the deinit stops it and tests never spin the run loop. (cost if wrong: low.)
+- Ruling (final review of #11, M1): a double-click also delivers its two single clicks, so a ⇧-double-click toggles twice (net unchanged) and a plain double-click with a selection clears it. Accepted: rule 7's clearing on a plain click holds, and ⇧-double-click has no documented meaning. (cost if wrong: low.)
+- Ruling (final review of #11, M8): the strip is 40 pt with 28 pt buttons, so its padding is 6 pt vertical and 8 pt horizontal (spec §4's "8 pt padding" read as horizontal). (cost if wrong: low; a look detail for the manual pass.)
 
 ## Waiting on
 
 - Capture's wiring PR, for the wiring PR's merge, its Mac batch and the manual pass (contracts §9).
 
 ## Backlog
+
+- claude-review on #10 (28 Nov 2026): a Save finishing after its capture was deleted leaves the moved file in the save folder. Unreachable in Wave 1 (only Quick Access publishes `deleted`, and its Delete is refused during a Save, P6). Decide when a second `deleted` publisher arrives (Duplicates).
+- Final review of #11, M7 (28 Nov 2026): the macOS tests don't assert the panel became key on hover, nor call `dragProvider()` on a real file; the Mac batch (spec §8.4) covers both.
 
 - Final review of #10, M4 (28 Nov 2026): a `created` for an id whose panel is still fading out would show a new panel that the old `fadeOutFinished` then closes. Unreachable in Wave 1 (no publisher re-creates an id). Fix: ignore `created` while the id is fading, or close it first.
 - Final review of #10, M6 (28 Nov 2026): `loggedDecorations` keeps one short string per capture that had a duplicate decoration; prune it on dismissal.
