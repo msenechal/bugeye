@@ -12,41 +12,40 @@ import Vision
     @Test func probe() async throws {
         let drawn = try DrawnText.draw([("let x = foo(bar)", 40, 40)], width: 800, height: 120)
         let image = try #require(PixelBufferImages.cgImage(drawn.image))
+        print("PROBE all devices:", MLComputeDevice.allComputeDevices)
         var request = RecognizeTextRequest()
-        print("PROBE main devices:", request.supportedComputeDevices(for: .main))
-        print("PROBE current main device:", String(describing: request.computeDevice(for: .main)))
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
         request.automaticallyDetectsLanguage = true
         do {
             let out = try await request.perform(on: image)
-            print("PROBE accurate default OK:", out.compactMap { $0.topCandidates(1).first?.string })
-        } catch { print("PROBE accurate default FAILED:", String(reflecting: error)) }
-        for device in request.supportedComputeDevices(for: .main) {
-            var r = request
-            r.setComputeDevice(device, for: .main)
-            do {
-                let out = try await r.perform(on: image)
-                print("PROBE accurate on", device, "OK:", out.compactMap { $0.topCandidates(1).first?.string })
-            } catch { print("PROBE accurate on", device, "FAILED:", String(reflecting: error)) }
-        }
+            print("PROBE new accurate OK:", out.compactMap { $0.topCandidates(1).first?.string })
+        } catch { print("PROBE new accurate FAILED:", String(reflecting: error)) }
         var fast = RecognizeTextRequest()
         fast.recognitionLevel = .fast
         do {
             let out = try await fast.perform(on: image)
-            print("PROBE fast default OK:", out.compactMap { $0.topCandidates(1).first?.string })
-        } catch { print("PROBE fast default FAILED:", String(reflecting: error)) }
+            print("PROBE new fast OK:", out.compactMap { $0.topCandidates(1).first?.string })
+        } catch { print("PROBE new fast FAILED:", String(reflecting: error)) }
+
         let legacy = VNRecognizeTextRequest()
         legacy.recognitionLevel = .accurate
-        legacy.usesCPUOnly = true
+        legacy.usesLanguageCorrection = false
+        do {
+            print("PROBE legacy stage devices:", try legacy.supportedComputeStageDevices())
+        } catch { print("PROBE legacy stage devices FAILED:", String(reflecting: error)) }
         do {
             try VNImageRequestHandler(cgImage: image).perform([legacy])
-            print("PROBE legacy cpu OK:", legacy.results?.compactMap { $0.topCandidates(1).first?.string } ?? [])
-        } catch { print("PROBE legacy cpu FAILED:", String(reflecting: error)) }
-        let legacyDefault = VNRecognizeTextRequest()
-        do {
-            try VNImageRequestHandler(cgImage: image).perform([legacyDefault])
-            print("PROBE legacy default OK:", legacyDefault.results?.compactMap { $0.topCandidates(1).first?.string } ?? [])
+            print("PROBE legacy default OK:", legacy.results?.compactMap { $0.topCandidates(1).first?.string } ?? [])
         } catch { print("PROBE legacy default FAILED:", String(reflecting: error)) }
+        for device in MLComputeDevice.allComputeDevices {
+            let r = VNRecognizeTextRequest()
+            r.recognitionLevel = .accurate
+            r.setComputeDevice(device, for: .main)
+            do {
+                try VNImageRequestHandler(cgImage: image).perform([r])
+                print("PROBE legacy on", device, "OK:", r.results?.compactMap { $0.topCandidates(1).first?.string } ?? [])
+            } catch { print("PROBE legacy on", device, "FAILED:", String(reflecting: error)) }
+        }
     }
 }
