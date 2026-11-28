@@ -11,7 +11,7 @@ public actor LatestReading {
         self.reader = reader
     }
 
-    /// The image's map, or nil when the read failed or a newer call superseded it.
+    /// The image's map, or nil when the read failed, was cancelled, or a newer call superseded it.
     public func read(_ buffer: PixelBuffer, pixelsPerPoint: Double) async -> TextMap? {
         generation += 1
         let mine = generation
@@ -19,7 +19,12 @@ public actor LatestReading {
         let reader = self.reader
         let task = Task { try await Self.run(reader, buffer, pixelsPerPoint) }
         current = task
-        let result = try? await task.value
+        // The caller's cancellation cancels its read (slice 3 review M4).
+        let result = await withTaskCancellationHandler {
+            try? await task.value
+        } onCancel: {
+            task.cancel()
+        }
         guard generation == mine else { return nil }
         current = nil
         return result
