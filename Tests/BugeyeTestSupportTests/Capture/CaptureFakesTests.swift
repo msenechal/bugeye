@@ -49,6 +49,34 @@ private let side = DisplayInfo(id: DisplayID(2), frame: Rect2D(x: 4, y: 0, width
     }
 }
 
+@Suite struct FakeScreenSourceGateTests {
+    @Test func heldCallsWaitUntilReleased() async throws {
+        let source = FakeScreenSource(displays: [main])
+        source.hold()
+        let task = Task { try await source.freeze(displays: nil) }
+        while source.waitingCount < 1 { await Task.yield() }
+        #expect(source.freezeCount == 0)
+        source.release()
+        #expect(try await task.value.count == 1)
+        #expect(source.freezeCount == 1)
+        // Released: later calls don't wait.
+        _ = try await source.freeze(displays: nil)
+    }
+
+    @Test func heldWindowCapturesWaitToo() async throws {
+        let source = FakeScreenSource(displays: [main])
+        source.windowImages = [
+            WindowID(1): [try PixelBuffer(width: 1, height: 1, fill: RGBA8(red: 0, green: 0, blue: 0))]
+        ]
+        source.hold()
+        let task = Task { try await source.captureWindow(WindowID(1), pixelSize: Size2D(width: 1, height: 1)) }
+        while source.waitingCount < 1 { await Task.yield() }
+        #expect(source.windowCaptures.isEmpty)
+        source.release()
+        #expect(try await task.value.pixelWidth == 1)
+    }
+}
+
 @Suite struct FakeWindowListReaderTests {
     @Test func answersItsWindows() async {
         let window = WindowInfo(

@@ -28,6 +28,10 @@ public struct CocoaRect: Hashable, Sendable {
         QuartzRect(x: raw.minX, y: primaryHeight - raw.maxY, width: raw.width, height: raw.height)
     }
     public func contains(_ point: CocoaPoint) -> Bool { raw.contains(Point2D(x: point.x, y: point.y)) }
+    /// Max edges included: `NSEvent.mouseLocation` reports `y == maxY` on a display's top row.
+    public func containsClosed(_ point: CocoaPoint) -> Bool {
+        point.x >= raw.minX && point.x <= raw.maxX && point.y >= raw.minY && point.y <= raw.maxY
+    }
 }
 
 /// Quartz global: origin at the top-left of the primary display, y down, points.

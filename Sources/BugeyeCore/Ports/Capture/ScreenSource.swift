@@ -51,7 +51,8 @@ public enum ScreenSourceError: Error, Hashable, Sendable {
 
 /// Screen pixels (ScreenCaptureKit on macOS).
 public protocol ScreenSource: Sendable {
-    /// The connected displays, in the source's order.
+    /// The connected displays, in the source's order, without a shareable-content fetch (the adapter reads
+    /// `NSScreen`), so the full-screen freeze is still one fetch. `frame` is Cocoa global (`SCDisplay.frame` is Quartz).
     func displays() async throws -> [DisplayInfo]
     /// Freezes `displays` (nil: every display) from **one** shareable-content fetch, all displays concurrently, with
     /// Bugeye's own windows excluded by process id. Results are in the source's display order. A missing display

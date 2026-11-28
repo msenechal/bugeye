@@ -3,7 +3,8 @@ import Foundation
 import Synchronization
 
 /// Displays given by the test. A freeze answers a filled `PixelBuffer` per display at `frame × scale` pixels and
-/// counts as one content fetch; window captures answer scripted images in order.
+/// counts as one content fetch; window captures answer scripted images in order. After `hold()`, freezes and window
+/// captures wait until `release()`, so a test can cancel while one is in flight.
 public final class FakeScreenSource: ScreenSource {
     public struct WindowCapture: Hashable, Sendable {
         public var id: WindowID
@@ -22,6 +23,8 @@ public final class FakeScreenSource: ScreenSource {
         var windowImages: [WindowID: [PixelBuffer]] = [:]
         var windowFailure: ScreenSourceError?
         var windowCaptures: [WindowCapture] = []
+        var held = false
+        var waiting: [CheckedContinuation<Void, Never>] = []
     }
     private let state: Mutex<State>
 
@@ -53,11 +56,39 @@ public final class FakeScreenSource: ScreenSource {
     public func failNextFreeze(_ error: ScreenSourceError) { state.withLock { $0.freezeFailure = error } }
     public func failNextWindowCapture(_ error: ScreenSourceError) { state.withLock { $0.windowFailure = error } }
 
+    /// Makes later freezes and window captures wait for `release()`.
+    public func hold() { state.withLock { $0.held = true } }
+
+    /// Lets every waiting call go on; later calls don't wait.
+    public func release() {
+        let waiting = state.withLock { state in
+            state.held = false
+            defer { state.waiting = [] }
+            return state.waiting
+        }
+        for continuation in waiting { continuation.resume() }
+    }
+
+    /// Calls waiting for `release()`.
+    public var waitingCount: Int { state.withLock { $0.waiting.count } }
+
+    private func gate() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumeNow = state.withLock { state -> Bool in
+                guard state.held else { return true }
+                state.waiting.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+
     public func displays() async throws -> [DisplayInfo] {
         state.withLock { $0.displays }
     }
 
     public func freeze(displays wanted: [DisplayID]?) async throws -> [FrozenDisplay] {
+        await gate()
         let (displays, time) = try state.withLock { state -> ([DisplayInfo], Date) in
             state.freezeCount += 1
             if let failure = state.freezeFailure {
@@ -79,7 +110,8 @@ public final class FakeScreenSource: ScreenSource {
     }
 
     public func captureWindow(_ id: WindowID, pixelSize: Size2D) async throws -> CapturedImage {
-        try state.withLock { state in
+        await gate()
+        return try state.withLock { state in
             state.windowCaptures.append(WindowCapture(id: id, pixelSize: pixelSize))
             if let failure = state.windowFailure {
                 state.windowFailure = nil

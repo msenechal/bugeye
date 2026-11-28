@@ -36,11 +36,17 @@ public struct CaptureFlow: Sendable {
         var hovered: WindowInfo?
     }
 
+    /// What `finishing` waits for: a window's live capture (at this scale), then the delivery.
+    enum Awaiting: Hashable, Sendable {
+        case window(scale: Double)
+        case delivery
+    }
+
     enum State: Hashable, Sendable {
         case idle
         case freezing(SessionID, Job)
         case selecting(Selecting)
-        case finishing(SessionID, Job, scale: Double)
+        case finishing(SessionID, Job, Awaiting)
     }
 
     private(set) var state: State = .idle
@@ -123,15 +129,15 @@ public struct CaptureFlow: Sendable {
             state = .idle
             return failure(error, job: job) + answer(job, .cancelled)
         case .windowCaptured(let session, let time):
-            guard case .finishing(session, let job, let scale) = state else { return [] }
-            state = .finishing(session, job, scale: scale)
+            guard case .finishing(session, let job, .window(let scale)) = state else { return [] }
+            state = .finishing(session, job, .delivery)
             return [.deliver(session, [Delivery(source: .window, scale: scale, time: time)])]
         case .windowCaptureFailed(let session, let error):
-            guard case .finishing(session, let job, _) = state else { return [] }
+            guard case .finishing(session, let job, .window) = state else { return [] }
             state = .idle
             return failure(error, job: job)
         case .delivered(let session, let notices):
-            guard case .finishing(session, _, _) = state else { return [] }
+            guard case .finishing(session, _, .delivery) = state else { return [] }
             state = .idle
             return notices.map { .notify(title: $0.title, body: $0.body) }
         case .globalEscape, .displaysChanged:
@@ -191,12 +197,15 @@ public struct CaptureFlow: Sendable {
             return failure(.displayNotFound, job: job) + answer(job, .cancelled)
         }
         if case .screenshot(let kind, _) = job, kind == .fullscreen || kind == .allDisplays {
+            // One timestamp per press (C10): every display was frozen at once, so every file takes the earliest
+            // frame time and ` (2)`, ` (3)` in display order.
             let ordered = Self.displayOrder(frames)
-            state = .finishing(session, job, scale: ordered[0].scale)
+            let time = frames.map(\.time).min()!
+            state = .finishing(session, job, .delivery)
             return [
                 .deliver(
                     session,
-                    ordered.map { Delivery(source: .frame($0.display.id, crop: nil), scale: $0.scale, time: $0.time) })
+                    ordered.map { Delivery(source: .frame($0.display.id, crop: nil), scale: $0.scale, time: time) })
             ]
         }
         let startInWindow: Bool
@@ -206,7 +215,7 @@ public struct CaptureFlow: Sendable {
         }
         let mode: OverlayMode = startInWindow ? .window : .area
         state = .selecting(Selecting(session: session, job: job, frames: frames, windows: windows, mode: mode))
-        let key = frames.first { $0.display.cocoaFrame.contains(pointer) } ?? frames[0]
+        let key = frames.first { $0.display.cocoaFrame.containsClosed(pointer) } ?? frames[0]
         return [
             .sweepLeftovers, .showOverlays(session, displays: frames.map(\.display.id), mode: mode),
             .registerEscape(session), .activateBugeye, .makeKey(session, key.display.id),
@@ -312,7 +321,7 @@ public struct CaptureFlow: Sendable {
                 scale: frame.scale, imageWidth: frame.pixelWidth, imageHeight: frame.pixelHeight)
         else { return [.beep] }
         let effects = [FlowEffect.storeLastArea(area)] + leave(s, .area)
-        state = .finishing(s.session, s.job, scale: frame.scale)
+        state = .finishing(s.session, s.job, .delivery)
         return effects + [
             .deliver(
                 s.session, [Delivery(source: .frame(area.display, crop: crop), scale: frame.scale, time: frame.time)])
@@ -333,7 +342,7 @@ public struct CaptureFlow: Sendable {
         case .screenshot:
             let scale = s.frames.first { $0.display.id == centreDisplay }?.scale ?? s.frames.first?.scale ?? 2
             let effects = leave(s, .window)
-            state = .finishing(s.session, s.job, scale: scale)
+            state = .finishing(s.session, s.job, .window(scale: scale))
             return effects + [
                 .captureWindow(
                     s.session, window.id, windowSize: Size2D(width: bounds.raw.width, height: bounds.raw.height),

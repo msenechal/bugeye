@@ -107,6 +107,8 @@ public enum FlowEvent: Hashable, Sendable {
     case pointerMoved(SessionID, DisplayID, ViewPoint)
     case pointerEntered(SessionID, DisplayID, buttonDown: Bool)
     case mouseDown(SessionID, DisplayID, ViewPoint, Modifiers)
+    /// The display and point are those of the view where the drag started (AppKit sends every drag event there);
+    /// the flow uses the drag's own display.
     case mouseDragged(SessionID, DisplayID, ViewPoint, Modifiers)
     case mouseUp(SessionID, DisplayID, ViewPoint)
     case rightMouseDown(SessionID)

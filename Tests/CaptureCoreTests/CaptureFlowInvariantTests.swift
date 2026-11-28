@@ -32,6 +32,7 @@ struct InvariantChecker {
     var selectingSessions: Set<SessionID> = []
     var tickets: [SelectionTicket] = []
     var answers: [SelectionTicket: Int] = [:]
+    var delivers: [SessionID: Int] = [:]
     var failures: [String] = []
 
     init(seed: UInt64) { rng = SplitMix64(seed: seed) }
@@ -130,6 +131,9 @@ struct InvariantChecker {
             case .logSelectionBegin(let s, _): begins[s, default: 0] += 1
             case .logSelectionFinish(let s, _): finishes[s, default: 0] += 1
             case .answer(let ticket, _): answers[ticket, default: 0] += 1
+            case .deliver(let s, _):
+                delivers[s, default: 0] += 1
+                if delivers[s]! > 1 { fail("one deliver per session: \(s) delivered twice") }
             default: break
             }
         }

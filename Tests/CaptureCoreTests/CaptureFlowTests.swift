@@ -633,3 +633,66 @@ func leaveEffects(_ session: SessionID, _ outcome: SelectionOutcome) -> [FlowEff
         #expect(d.send(.key(s, .escape)) == leaveEffects(s, .cancelled) + [.answer(SelectionTicket(1), .cancelled)])
     }
 }
+
+/// Final review fix pass (ledger): `finishing` knows what it waits for; one timestamp per full-screen press.
+@Suite struct CaptureFlowFinishingTests {
+    @Test func aWindowResultDuringAnAreaDeliveryIsIgnored() {
+        var d = Driver()
+        d.open()
+        let s = d.session
+        d.drag(from: DisplayPoint(x: 100, y: 50), to: DisplayPoint(x: 300, y: 150))
+        #expect(d.send(.windowCaptured(s, time: freezeTime)) == [])
+        #expect(d.send(.windowCaptureFailed(s, .windowNotFound)) == [])
+        #expect(d.flow.phase == .finishing)
+        #expect(d.send(.delivered(s, notices: [])) == [])
+        #expect(d.flow.phase == .idle)
+    }
+
+    @Test func aSecondWindowCapturedDoesNotDeliverTwice() {
+        var d = Driver()
+        d.open(.window)
+        let s = d.session
+        d.send(.mouseDown(s, DisplayID(1), DisplayPoint(x: 200, y: 200).viewPoint(displayHeight: 900), noMods))
+        #expect(d.send(.delivered(s, notices: [])) == [])
+        #expect(d.flow.phase == .finishing)
+        #expect(d.send(.windowCaptured(s, time: freezeTime)).count == 1)
+        #expect(d.send(.windowCaptured(s, time: freezeTime)) == [])
+        #expect(d.send(.windowCaptureFailed(s, .windowNotFound)) == [])
+        #expect(d.flow.phase == .finishing)
+    }
+
+    @Test func everyFileOfOneFullScreenPressSharesTheEarliestFrameTime() {
+        var d = Driver()
+        d.send(.request(.allDisplays, permitted: true, activityAllows: true, pointer: pointerOnPrimary, lastArea: nil))
+        var late = frame(external)
+        late.time = freezeTime.addingTimeInterval(0.6)
+        let out = d.send(.frozen(d.session, [late, frame(primary)], windows: [], pointer: pointerOnPrimary))
+        guard case .deliver(_, let deliveries)? = out.first else {
+            Issue.record("no delivery")
+            return
+        }
+        #expect(deliveries.map(\.time) == [freezeTime, freezeTime])
+    }
+
+    @Test func thePointerOnADisplaysTopEdgeKeysThatDisplay() {
+        var d = Driver()
+        d.send(.request(.area, permitted: true, activityAllows: true, pointer: pointerOnPrimary, lastArea: nil))
+        let s = d.session
+        let out = d.send(
+            .frozen(s, [frame(external), frame(primary)], windows: [], pointer: CocoaPoint(x: 700, y: 900)))
+        #expect(out.contains(.makeKey(s, DisplayID(1))))
+    }
+
+    @Test func shiftFromDragEventsLocksTheAxisThatMovedLess() {
+        var d = Driver()
+        d.open()
+        let s = d.session
+        let h = primary.frame.height
+        let shift = Modifiers(shift: true)
+        d.send(.mouseDown(s, DisplayID(1), DisplayPoint(x: 100, y: 100).viewPoint(displayHeight: h), noMods))
+        d.send(.mouseDragged(s, DisplayID(1), DisplayPoint(x: 150, y: 150).viewPoint(displayHeight: h), shift))
+        d.send(.mouseDragged(s, DisplayID(1), DisplayPoint(x: 250, y: 153).viewPoint(displayHeight: h), shift))
+        d.send(.mouseDragged(s, DisplayID(1), DisplayPoint(x: 300, y: 400).viewPoint(displayHeight: h), shift))
+        #expect(d.flow.overlay(for: DisplayID(1))?.selection == DisplayRect(x: 100, y: 100, width: 200, height: 50))
+    }
+}

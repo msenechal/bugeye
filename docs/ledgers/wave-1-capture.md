@@ -25,6 +25,17 @@ Plan rulings P1–P11 are in the plan. Every later deviation is recorded here as
 - Ruling: a freeze that answers no frames counts as `displayNotFound` (`Capture failed` / `The display was disconnected.`); a selector request then answers `.cancelled`. (cost if wrong: low; unreachable with a connected display.)
 - Ruling: a click on a window whose centre is on no display, for a selector request without `windowNeedsDisplayCentre`, answers `.window` with the clicked display. (cost if wrong: low; Recording always sets the flag.)
 
+Final review of PR #6 (fresh reviewer, 28 Nov 2026): 0 Critical, 3 Important, 6 Minor. Fix pass:
+
+- Ruling (review I1, Important): `finishing` records what it waits for (`.window(scale:)` then `.delivery`). `windowCaptured` / `windowCaptureFailed` are accepted only while a window capture is awaited and `delivered` only while a delivery runs, so a stray or duplicate result can't deliver twice or drop to `idle` mid-delivery. The invariant checker now fails on a second `deliver` in a session. Tests failed first. (cost if wrong: none.)
+- Ruling (review I2, Important): every file of one full-screen press takes the earliest frame time (C10), so concurrent freezes stamped a few ms apart still share a name and get ` (2)` in display order. Test with differing frame times failed first. (cost if wrong: none.)
+- Ruling (review I3, Important): `FakeScreenSource.hold()` / `release()` / `waitingCount` gate freezes and window captures, so slice 2 tests a cancel while one is in flight. Self-tests failed first (missing names). (cost if wrong: none.)
+- Ruling (review M4): the pointer's display is found with closed edges (`CocoaRect.containsClosed`), since `NSEvent.mouseLocation` reports `y == maxY` on a display's top row. Test failed first. (cost if wrong: none.)
+- Ruling (review M5, M6): `FlowEvent.mouseDragged` documents that its point is in the drag's starting view; `ScreenSource.displays()` documents that the adapter reads `NSScreen` (no shareable-content fetch) and that `SCDisplay.frame` is Quartz. (cost if wrong: none.)
+- Ruling (review M7): `displaysChanged` while freezing is accepted as is: C16 covers the selection, and the selection that follows cancels on the next change; a display that vanished between freeze and crop posts `The display was disconnected.` (cost if wrong: low; a stale frame for one selection.)
+- Ruling (review M8): a flow test drives the ⇧ lock through `mouseDragged` modifiers; the three write-failure strings are tested character for character in slice 2's `CaptureStringsTests`. (cost if wrong: none.)
+- Ruling (review M9): the selector serves purposes other than `.screenshot` (the `AreaSelector` doc says they never deliver); a `.screenshot` request through `select` behaves like the others and only returns its result. No caller does this. (cost if wrong: low.)
+
 ## Waiting on user
 
 ## Backlog:
