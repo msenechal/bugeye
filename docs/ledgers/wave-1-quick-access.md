@@ -8,7 +8,7 @@ Trust this file and `git log` over memory.
 
 | Slice | Branch | PR | State |
 |---|---|---|---|
-| 1 core | `feat/wave1-quick-access-core` | #8 | final review done, fix pass done |
+| 1 core | `feat/wave1-quick-access-core` | #8 | green (linux, macos, review), ready to merge |
 | 2 model | `feat/wave1-quick-access-model` | #10 | done, stacked on #8 |
 | 3 mac | `feat/wave1-quick-access-mac` | #11 | macOS run pending, stacked on #10 |
 | 4 wiring | `feat/wave1-quick-access-wiring` | | draft pushed; waits for Capture's wiring PR (contracts §9) |
@@ -44,6 +44,7 @@ Plan rulings P1–P18 are in the plan. Every later deviation is recorded here as
 - Ruling: the `.selection` action runs only while its handler's state for the host is `enabled` or a submenu; `disabled` and `hidden` do nothing, as the builder greys or drops the button. (cost if wrong: low.)
 - Ruling (final review of #8, M1, treated as Important): a paused `DismissTimer` is never expired. A timer that ran out between two 0.5 s ticks and was then paused by a hover, an editor or a selection banked a negative remainder and stayed expired, so the model's `tick` would have dismissed a thumbnail under the pointer. It now expires at the first tick after it resumes. Test failed first. (cost if wrong: none.)
 - Ruling (final review of #8, M3): a primary whose handler answers `.submenu` is an enabled button that runs the action without a subitem (the strip has no submenus); a `.disabled` suggested action still gets its ring or ★, since the ring shows a habit, not availability. (cost if wrong: low; one line in the builder each.)
+- Ruling (process, 28 Nov 2026): the final-review subagent for #8 ran a `git checkout` in the shared working tree while slice 3 was being committed, so the macOS commit (`d6391b0`) landed on the core branch and reached #8. Repaired without rewriting history: reverted on core (`8ad1c52`), merged up, and re-applied on the mac branch with a revert of the revert. Every later review agent runs in its own worktree (`isolation: worktree`). (cost if wrong: none; #8's history shows the commit and its revert, its diff is clean.)
 
 ## Waiting on
 
