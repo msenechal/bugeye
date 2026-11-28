@@ -47,6 +47,10 @@ public struct CaptureFileWriter: Sendable {
     private let metadata: any FileMetadataStore
     /// Test seam (plan P3): `move` takes its other-volume path as if the rename had failed with `EXDEV`.
     var simulateCrossVolume = false
+    /// Test seams: the platform's atomic no-replace rename and exchange; nil uses the real one. Each returns 0 or
+    /// an errno; `ENOTSUP` or `EINVAL` makes the writer fall back (final review I2).
+    var nativeNoReplace: (@Sendable (String, String) -> Int32)?
+    var nativeSwap: (@Sendable (String, String) -> Int32)?
 
     public init(metadata: any FileMetadataStore) {
         self.metadata = metadata
@@ -82,7 +86,7 @@ public struct CaptureFileWriter: Sendable {
                 try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: temp.path)
             }
             if requireExisting {
-                let code = Self.replaceExisting(temp.path, with: url.path)
+                let code = replaceExisting(temp.path, with: url.path)
                 if code == ENOENT { throw TargetMissing(url: url) }
                 guard code == 0 else { throw RenameFailed(errno: code) }
             } else {
@@ -205,7 +209,7 @@ public struct CaptureFileWriter: Sendable {
     private func renameWithoutReplacing(_ file: URL, in folder: URL, named name: String) throws -> Placement {
         for attempt in 1...Self.maxNameAttempts {
             let target = folder.appendingPathComponent(CaptureFileNamer.candidate(name, attempt: attempt))
-            let code = Self.renameNoReplace(file.path, target.path)
+            let code = renameNoReplace(file.path, target.path)
             switch code {
             case 0: return .placed(target)
             case EEXIST: continue
@@ -217,9 +221,32 @@ public struct CaptureFileWriter: Sendable {
     }
 
     /// Renames `from` to `to` only if nothing is at `to`. Returns 0 or the errno (`EEXIST` on a clash).
-    /// macOS: `renameatx_np(RENAME_EXCL)`. Linux: `link(2)` then `unlink(2)`, both of which refuse an existing
-    /// target (plan P2; Swift's Glibc module doesn't expose `renameat2`).
-    private static func renameNoReplace(_ from: String, _ to: String) -> Int32 {
+    /// macOS: `renameatx_np(RENAME_EXCL)`; Linux: `link(2)` then `unlink(2)` (plan P2). A volume without the
+    /// primitive (exFAT, SMB, NFS answer `ENOTSUP` or `EINVAL`) falls back to a check-then-rename, which can race
+    /// with another writer in the instant between the two calls (final review I2).
+    private func renameNoReplace(_ from: String, _ to: String) -> Int32 {
+        let code = (nativeNoReplace ?? Self.platformNoReplace)(from, to)
+        guard code == ENOTSUP || code == EINVAL else { return code }
+        if access(to, F_OK) == 0 { return EEXIST }
+        return rename(from, to) == 0 ? 0 : errno
+    }
+
+    /// Replaces `target` with `temp` only if `target` exists. Returns 0, `ENOENT` when it's gone, or the errno.
+    /// macOS: `renameatx_np(RENAME_SWAP)`, then the swapped-out old file (now at `temp`) is removed. Without the
+    /// primitive (Linux, or a volume answering `ENOTSUP` / `EINVAL`): a check-then-rename.
+    private func replaceExisting(_ temp: String, with target: String) -> Int32 {
+        let code = (nativeSwap ?? Self.platformSwap)(temp, target)
+        if code == 0 {
+            // `temp` now names the old file. Never leave it behind silently (final review M2).
+            if unlink(temp) != 0 { try? FileManager.default.removeItem(atPath: temp) }
+            return 0
+        }
+        guard code == ENOTSUP || code == EINVAL else { return code }
+        guard access(target, F_OK) == 0 else { return ENOENT }
+        return rename(temp, target) == 0 ? 0 : errno
+    }
+
+    private static let platformNoReplace: @Sendable (String, String) -> Int32 = { from, to in
         #if canImport(Darwin)
             return renameatx_np(AT_FDCWD, from, AT_FDCWD, to, UInt32(RENAME_EXCL)) == 0 ? 0 : errno
         #else
@@ -233,15 +260,11 @@ public struct CaptureFileWriter: Sendable {
         #endif
     }
 
-    /// Replaces `target` with `temp` only if `target` exists. Returns 0, `ENOENT` when it's gone, or the errno.
-    private static func replaceExisting(_ temp: String, with target: String) -> Int32 {
+    private static let platformSwap: @Sendable (String, String) -> Int32 = { temp, target in
         #if canImport(Darwin)
-            guard renameatx_np(AT_FDCWD, temp, AT_FDCWD, target, UInt32(RENAME_SWAP)) == 0 else { return errno }
-            unlink(temp)  // `temp` now names the old file.
-            return 0
+            return renameatx_np(AT_FDCWD, temp, AT_FDCWD, target, UInt32(RENAME_SWAP)) == 0 ? 0 : errno
         #else
-            guard access(target, F_OK) == 0 else { return ENOENT }
-            return rename(temp, target) == 0 ? 0 : errno
+            return ENOTSUP
         #endif
     }
 

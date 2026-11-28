@@ -226,3 +226,66 @@ import Testing
                 == "\u{201C}shot.png\u{201D} was moved or deleted.")
     }
 }
+
+/// Volumes without `RENAME_EXCL` / `RENAME_SWAP` (exFAT, SMB, NFS) answer `ENOTSUP`: the writer falls back to a
+/// check-then-rename (final review I2).
+@Suite struct CaptureFileWriterFallbackTests {
+    let dir: TempDirectory
+    let store = FakeFileMetadataStore()
+
+    init() throws { dir = try TempDirectory("writer-fallback") }
+
+    func unsupportedWriter(_ code: Int32 = ENOTSUP) -> CaptureFileWriter {
+        var writer = CaptureFileWriter(metadata: store)
+        writer.nativeNoReplace = { _, _ in code }
+        writer.nativeSwap = { _, _ in code }
+        return writer
+    }
+
+    @Test(arguments: [ENOTSUP, EINVAL])
+    func createFallsBackAndStillNeverReplaces(code: Int32) throws {
+        defer { dir.remove() }
+        try Data("old".utf8).write(to: dir.file("a.png"))
+        let url = try unsupportedWriter(code).create(
+            Data("new".utf8), named: "a.png", in: dir.url, identity: CaptureID())
+        #expect(url.lastPathComponent == "a (2).png")
+        #expect(try Data(contentsOf: dir.file("a.png")) == Data("old".utf8))
+        #expect(try Data(contentsOf: url) == Data("new".utf8))
+        #expect(try dir.contents() == ["a (2).png", "a.png"])
+    }
+
+    @Test func moveFallsBack() throws {
+        defer { dir.remove() }
+        let source = dir.file("shot.png")
+        try Data("x".utf8).write(to: source)
+        let folder = dir.url.appendingPathComponent("dest", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("other".utf8).write(to: folder.appendingPathComponent("shot.png"))
+        let url = try unsupportedWriter().move(source, into: folder)
+        #expect(url.lastPathComponent == "shot (2).png")
+        #expect(!FileManager.default.fileExists(atPath: source.path))
+    }
+
+    @Test func requireExistingFallsBack() throws {
+        defer { dir.remove() }
+        let url = dir.file("shot.png")
+        try Data("old".utf8).write(to: url)
+        try store.setValue(Data("id".utf8), "dev.msenechal.bugeye.id", at: url)
+        try unsupportedWriter().write(Data("new".utf8), to: url, requireExisting: true)
+        #expect(try Data(contentsOf: url) == Data("new".utf8))
+        #expect(try store.value("dev.msenechal.bugeye.id", at: url) == Data("id".utf8))
+        let gone = dir.file("gone.png")
+        #expect(throws: CaptureFileWriter.TargetMissing(url: gone)) {
+            try unsupportedWriter().write(Data("new".utf8), to: gone, requireExisting: true)
+        }
+        #expect(try dir.contents() == ["shot.png"])
+    }
+
+    @Test func otherErrorsAreNotRetried() throws {
+        defer { dir.remove() }
+        #expect(throws: CaptureFileWriter.RenameFailed(errno: EACCES)) {
+            try unsupportedWriter(EACCES).create(Data("x".utf8), named: "a.png", in: dir.url, identity: CaptureID())
+        }
+        #expect(try dir.contents() == [])
+    }
+}
