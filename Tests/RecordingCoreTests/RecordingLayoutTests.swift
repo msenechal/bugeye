@@ -136,8 +136,10 @@ import Testing
                 id: WindowID(6), processID: 10, layer: 8, frame: Rect2D(x: 880, y: 680, width: 100, height: 100)),
         ]
         #expect(
-            ChildWindowFilter.children(of: WindowID(1), in: windows, followed: followed) == [WindowID(2), WindowID(6)])
-        #expect(ChildWindowFilter.children(of: WindowID(99), in: windows, followed: followed) == [])
+            ChildWindowFilter.children(of: WindowID(1), in: windows, followedGlobal: followed) == [
+                WindowID(2), WindowID(6),
+            ])
+        #expect(ChildWindowFilter.children(of: WindowID(99), in: windows, followedGlobal: followed) == [])
     }
 
     @Test func moreThanTwoDroppedFramesAfterAFilterUpdateFallsBackToTheWindowAlone() {

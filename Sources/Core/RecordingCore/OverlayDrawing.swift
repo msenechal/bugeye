@@ -41,7 +41,8 @@ public struct KeystrokeBadge: Hashable, Sendable {
     public func opacity(at time: Double) -> Double {
         guard isVisible(at: time) else { return 0 }
         let left = Self.visible - (time - shownAt)
-        return left >= Self.fade ? 1 : left / Self.fade
+        // Rounded to a thousandth, so drawing and goldens carry no float noise.
+        return left >= Self.fade ? 1 : (left / Self.fade * 1000).rounded() / 1000
     }
 
     /// Centred, 40 pt above the bottom of `area`; nil when nothing shows.
@@ -51,7 +52,7 @@ public struct KeystrokeBadge: Hashable, Sendable {
         let width = metrics.width + 2 * Self.padding.width
         let height = metrics.ascent + metrics.descent + 2 * Self.padding.height
         let rect = Rect2D(
-            x: (area.width - width) / 2, y: area.height - Self.bottomGap - height, width: width, height: height)
+            x: max((area.width - width) / 2, 0), y: area.height - Self.bottomGap - height, width: width, height: height)
         return DisplayList(
             size: area,
             commands: [

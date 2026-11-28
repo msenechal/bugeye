@@ -43,6 +43,15 @@ Trust this file and `git log` over memory.
 - Minor fixed in the same pass: M1 (flush loop ends when the recorder is gone), M2 (header written at once), M3 (open clicks forgotten at pause), M4 (`AXElementInfo` fields `private(set)`; the `AXSecureTextField` subrole forces secure), M5 (timer cancelled when the reader answers), M7 (header `hasElements` false without a reader), M8 (gate wait bounded), M9 (dates without milliseconds read).
 - claude-review on #4 (2703ee8): 0 Critical, 0 Important, 2 Minor, both fixed with a failing test first: (1) a decoded element line with the `AXSecureTextField` subrole kept its title: `TimelineElement`'s field initializer is now failable for that subrole and the reader writes `withheld`; (2) `TimelineStore.observe` deleted on the main actor: deletions now run detached, and `waitForDeletions` reports them done.
 
+## Final review of PR #16 (slice 3)
+
+Fresh reviewer: 0 Critical, 3 Important, 16 Minor. Fixed in one commit with `LayoutReviewTests` and `TakeRecoveryReviewTests` (new API names first failed to compile; the new behaviours were checked failing by their assertions on the old code paths the reviewer reproduced).
+- I1 `ChildWindowFilter` mixed global window frames with a display-local rect: the parameter is now `followedGlobal`, with `WindowFollow.global(_:displayBounds:)`; tested on a display at (1512, −200).
+- I2 the V23 fallback reset its count on every filter update (10 Hz) so it could never fire: only a delivered frame resets it; "dropped" is documented as a blank or suspended frame, `.idle` counts as delivered.
+- I3 a recovered movie could hold no fragment: movies under 64 KiB are deleted with their timeline.
+- Minor fixed: orphan timelines are left alone (1); a recovered `.mp4` takes its timeline's time (2); files changed in the last 10 s are left alone (4); `convertedName` / `timelineName` (5); recovery ordering and live-take tests (6); the self-exclusion test (7); edge tests (8); doc comment (10); too-wide bar and badge clamp to the left edge (11); Apple function-key characters and multi-letter uppercases (13); opacity rounded to 0.001 (14).
+- Minor deferred to Backlog: 3, 15, 16. Minor 9 and 12 are rulings below.
+
 ## Rulings
 
 Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as `Ruling: <what and why> (cost if wrong: …)`.
@@ -71,12 +80,18 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 3): the badge's padding is 14 × 8 pt; its text uses the semibold weight 0.3 (contracts' font mapping). (cost if wrong: low.)
 - Ruling (slice 3): the badge shows named keys only with ⌘ or ⌃ unless Show all keystrokes is on (↩ alone is typing a newline). (cost if wrong: low.)
 - Ruling (slice 3): take recovery also delivers an `.mp4` left without its `.mov` (a crash after a finished conversion) and deletes a partial `.mp4` beside its `.mov` and a timeline whose movie is gone. (cost if wrong: low.)
-- Ruling (slice 3): the child-window fallback (V23) counts dropped frames only right after a filter update; a delivered frame ends the watch. (cost if wrong: low.)
+- Ruling (slice 3, revised after review I2): the child-window fallback (V23) counts blank or suspended frames after a filter update until a frame is delivered (complete or idle); more than 2 in a row drops back to the window alone for the rest of the take. (cost if wrong: low.)
+- Ruling (slice 3, review minor 9): sheets and popovers that the window server lists at layer 0 aren't caught by the child filter (V10 names sheets); the Mac batch's item 4 opens a sheet as well as a menu to see it. (cost if wrong: low; a sheet missing from a window recording.)
+- Ruling (slice 3, review minor 12): an area partly off its display is shifted inside it, not cropped, so the size stays what was selected (and a followed window keeps its size). (cost if wrong: low.)
+- Ruling (slice 3, review I3): a leftover movie under 64 KiB holds no complete fragment and is deleted with its timeline rather than delivered broken. (cost if wrong: low; at most the first second of a crashed take.)
 - Ruling (superseded by claude-review #4 minor 2): `TimelineStore.observe` now deletes off the main actor.
 
 ## Waiting on
 
 ## Backlog
+
+- 2026-11-28, PR #16 review minor 3: a take kept after "Couldn't save the recording" would be "recovered" at the next launch with "Bugeye quit while recording". The controller (slice 6) marks such takes (e.g. `Take-<uuid>.undelivered`) and recovery skips or words them differently.
+- 2026-11-28, PR #16 review minor 15–16: the overlay slice keeps its timer while rings animate or the badge is visible, draws one last empty frame after, and maps the display list's point size to the view at the backing scale.
 
 - 2026-11-28, PR #4 review M6: `TimelineRecorder.init` creates the folder and file synchronously in the caller's context; the controller (slice 6) must create it off the main actor, or the recorder gains an async factory.
 - 2026-11-28, PR #4 review I1: slice 4's `AXPointReader` must set `AXUIElementSetMessagingTimeout` (≤ 250 ms) and run off the cooperative pool.

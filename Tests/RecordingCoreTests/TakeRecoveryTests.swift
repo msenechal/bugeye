@@ -14,7 +14,7 @@ import Testing
 
     @Test func aLeftoverMovieIsRecoveredWithItsTimeline() {
         let files = [
-            file(a, ".mov", 100), file(a, ".timeline.jsonl"), file(b, ".mov", 200), file(c, ".timeline.jsonl"),
+            file(a, ".mov", 100), file(a, ".timeline.jsonl", 90), file(b, ".mov", 200), file(c, ".timeline.jsonl"),
             TakeRecovery.File(name: ".DS_Store", created: Date()),
         ]
         let plan = TakeRecovery.plan(files: files, liveTakes: [b])
@@ -23,10 +23,10 @@ import Testing
                 TakeRecovery.Recovery(
                     take: a, movie: "Take-\(a.uuidString.lowercased()).mov",
                     timeline: "Take-\(a.uuidString.lowercased()).timeline.jsonl",
-                    createdAt: Date(timeIntervalSince1970: 100))
+                    createdAt: Date(timeIntervalSince1970: 90))
             ])
-        // A timeline with no movie, and not live, is an orphan.
-        #expect(plan.delete == ["Take-\(c.uuidString.lowercased()).timeline.jsonl"])
+        // A timeline with no movie is left alone (its recording may have been delivered).
+        #expect(plan.delete.isEmpty)
     }
 
     @Test func aTakeWithoutATimelineIsStillRecovered() {
