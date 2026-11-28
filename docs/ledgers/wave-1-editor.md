@@ -19,7 +19,14 @@ Trust this file and `git log` over memory.
 |---|---|---|---|
 | 1 | done | 065188c | plan and ledger; draft PR #7 |
 | 2 | done | edd00d2, 12783ca | not compiled here; macOS run 46121444277 failed to compile a nested `#require` (fixed 12783ca); run 46121832947 green |
-| A review | done | (see rulings) | fresh final review: 0 Critical, 1 Important, 9 Minor |
+| A review | done | 9373695 | fresh final review: 0 Critical, 1 Important, 9 Minor; fix pass below; PR #7 marked ready |
+| 3–4 | done | 009f641 | tests first, seen failing to compile |
+| 5–7 | done | 55bb992 | tests first, seen failing to compile |
+| 8 | done | 4244cc6 | tests first, seen failing to compile; passed at once after the code (see ruling) |
+| 9 | done | 621cbe2 | one test expectation was wrong (σ = 10 boxes); see ruling |
+| 10 | done | 2113672 | code written before its tests (see ruling); goldens recorded on Linux and checked by eye |
+| 11–13 | done | 560aaa6 | tests first, seen failing to compile |
+| 14–16 | done | (next commit) | tests written after the code (see ruling) |
 
 ## Rulings
 
@@ -31,6 +38,14 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (final review A, Minors 1, 2, 3, 4, 7): fixed in the fix pass because the executor's API freezes once merged (E11): `execute` restores the text matrix and text position; `contextIsFlipped` has no default, so a flipped caller can't forget it, and the doc states the list must span a y-up context's height; `render` returns nil for non-finite or over-65 536 px sizes and falls back to sRGB for a non-RGB or non-output space (tested); a `clip` outside a group is documented as ignored. (cost if wrong: none.)
 - Ruling (final review A, Minor 5): the text probe keeps its loose width bound (ink between 0.8 × and the measured width + 1 px) instead of the plan's "within 1 px": ink bounds exclude the side bearings that `CTLineGetTypographicBounds` includes, so an exact match would test Core Text, not the executor. Font agreement is by construction: both call `CoreTextFonts.font(for:)`. (cost if wrong: low.)
 - Ruling (final review A, Minor 8): the executor calls the blur provider synchronously; slice C's canvas provider returns a cached result or nil and computes off the main actor. (cost if wrong: none.)
+
+- Ruling (slice B): the interaction controller's 37 tests and the sessions' 23 tests passed on their first run after the code. They were each written to the spec's rules before or with the code, and they were seen failing only at compile time. The renderer's and the sessions' code was drafted before their tests. Each test asserts spec values, not values read back from the code; the renderer goldens were checked by eye against §7's numbers (pad 96 at 2×, image origin 46, text baseline 154.4, group bounds + 32 px). (cost if wrong: low: a test that can't fail would show up as an always-green check in the final review.)
+- Ruling (slice B, task 9): my first test expected `boxSizes(sigma: 10) == [19, 19, 19]`. The formula gives `[19, 19, 21]` (m = round(1.5) = 2), so I fixed the test, not the code. A separate test checks the gaussian against three naive box passes, byte for byte. (cost if wrong: none.)
+- Ruling (slice B, E23): a Strong blur of a full 5K region (5120 × 2880, radius 30) takes 620 ms in a release build on this Linux x86 container, after moving to division-free, row-ordered passes (the first draft took 2.9 s). The user's Apple Silicon Mac should be about two to three times faster. The 300 ms threshold is checked in the manual pass (§9 J); if it's missed, E5's swap to Core Image applies. (cost if wrong: medium: a pause on large Strong blurs.)
+- Ruling (slice B): golden JSON is compared as decoded `DisplayList` values, not as text, so float formatting can't differ between Linux and macOS. `BUGEYE_RECORD_GOLDENS=1` rewrites them; recording JSON goldens on Linux is allowed (E21 governs pixel goldens only). (cost if wrong: none.)
+- Ruling (slice B): `EditorSessions` checks `fileExists` before a save. A file deleted in Finder, or a session marked gone by a `deleted` event, goes straight to the gone alert with no render; the writer's `TargetMissing` covers the race after the check (E19). (cost if wrong: none.)
+- Ruling (slice B): a gone-file Save As writes with `attributesFrom:` the old URL (which no longer exists, so it contributes nothing) and `identity: .new(item.id)`. Provenance on the lost file can't be recovered. (cost if wrong: low; Wave 2's provenance would be missing on such a file.)
+- Ruling (slice B): the text view's commit runs through `EditorHost.commitPendingEdits` at the start of save, Save As, copy, the drag file, close and quit, so the document holds the typed text before any of them reads it (§5.4). (cost if wrong: none.)
 
 ## Waiting on
 
