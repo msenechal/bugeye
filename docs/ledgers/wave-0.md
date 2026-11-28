@@ -66,14 +66,16 @@ Every deviation from the plan, as `Ruling: <what and why> (cost if wrong: …)`.
 - Ruling (sixth review, Minor, not changed): the debug channel's socket gets mode 0600 just after `bind` instead of at creation, and `stop()` closes the listener while the accept thread may still poll it. Debug builds only; in `docs/backlog.md`. (cost if wrong: low.)
 - Ruling (seventh review, Important; reverses the two Keychain rulings above, decided by this session under the user's delegation): every Keychain call in `AIKeySettings` now runs off the main actor (`Task.detached`), as CLAUDE.md's "nothing slow on the main thread" rule demands; the reviewer raised it three rounds running and named a real trigger (a re-signed build can show a Keychain access prompt, freezing the menu bar). `init` no longer touches the Keychain (status starts at "No key saved."); `load()` reads it at launch; `save` is async; each result is applied only if no newer save happened (generation check). The `SecretStore` port stays synchronous. Test `theKeychainIsNeverCalledOnTheMainActor` probes the main actor from inside every store call; it failed against a main-actor `load()` (Thread.isMainThread proved useless on Linux and was dropped) and passes now; the AI settings suite passed 15 runs in a row. (cost if wrong: low; at launch the pane can show "No key saved." for the moment the Keychain takes to answer.)
 - Ruling (seventh review, Minor, raised three times; amends P11): a `CaptureFileWriter` rewrite keeps the file's POSIX permissions (copied onto the temp file before the rename), so a capture made private stays private after an editor save. The creation date and ACLs are still not kept; fsync is still in the backlog. Test `aRewriteKeepsTheFilesPermissions` failed first. (cost if wrong: none.)
+- Final review (28 Nov 2026, a fresh agent with no memory of writing the code, following `.claude/skills/final-review`): no Critical, 3 Important, 11 Minor. Fix pass, each with a test that fails first:
+  - Ruling (I1): `FakeFileMetadataStore` entries remember the path they were last seen at; if that path now holds a different inode, the file was replaced and the entry is dropped, so a reused inode (ext4 reuses at once) no longer inherits a replaced file's attributes. Test `repeatedRewritesNeverBringBackDroppedAttributes` failed first. Birth time was tried first and rejected: Foundation on Linux reports the change time as `creationDate`, which moves on rename. (cost if wrong: low; a deleted file whose inode is reused by an unrelated new file in the same test would still inherit, which no current test does.)
+  - Ruling (I2): the app installs a main menu (`MainMenu`, never shown for an `LSUIElement` agent) so ⌘V, ⌘C, ⌘X, ⌘A, ⌘Z and ⌘W reach the Settings window; its menu titles are not spec strings because they are never displayed. macOS-only test (P22). Checklist steps added. (cost if wrong: low.)
+  - Ruling (I3): the debug channel sets `SO_NOSIGPIPE` on each client socket, so a client hanging up before its reply can't kill the app. macOS-only test (P22). (cost if wrong: none.)
+  - The 11 Minor findings are in `docs/backlog.md`.
 
 ## Waiting on user
 
-- (Decided, see the rulings below: the user asked the executing session to make the technical calls.)
-
-- Done by the user, 27 Nov 2026: `oven-sh/setup-bun@*` allowed; the `review` job on b810686 ran and posted its review (Task 5's proof; the `CLAUDE_CODE_OAUTH_TOKEN` secret works).
-
-- Add `linux` and `macos` as required checks in the `main` ruleset once both are green (plan, "Steps only the user can do").
+- Done 28 Nov 2026: the user ran `docs/checklists/wave-0.md` on their Mac and it passed ("all good"); `linux` and `macos` are required checks on `main`. Two checklist steps were added afterwards by the final review's fix pass (⌘V into the key field, ⌘W closes Settings); an optional quick re-check.
+- Merge PR #2 when satisfied (the user merges).
 
 ## Blockers
 
