@@ -39,34 +39,53 @@ import Testing
     }
 
     @Test func aDuplicateRouterIDFailsLaunch() {
-        #expect(throws: AppServices.LaunchError.duplicates(router: ["menu:x"], settingsPanes: [], debugCommands: [])) {
-            try services(home: "/Users/m") { context in
-                context.router.onMenuItem("x") {}
-                context.router.onMenuItem("x") {}
+        // Test-only ids, so an epic's own registrations never collide with them (K20, final review I1).
+        do {
+            _ = try services(home: "/Users/m") { context in
+                context.router.onMenuItem("test.item") {}
+                context.router.onMenuItem("test.item") {}
             }
+            Issue.record("launch should fail")
+        } catch {
+            guard case .duplicates(let router, _, _) = error else {
+                Issue.record("\(error)")
+                return
+            }
+            #expect(router.contains("menu:test.item"))
         }
     }
 
     @Test func aDuplicatePaneFailsLaunch() {
-        #expect(throws: AppServices.LaunchError.duplicates(router: [], settingsPanes: ["capture"], debugCommands: [])) {
-            try services(home: "/Users/m") { context in
-                context.settingsPanes.register("capture") { AnyView(EmptyView()) }
-                context.settingsPanes.register("capture") { AnyView(EmptyView()) }
+        do {
+            _ = try services(home: "/Users/m") { context in
+                context.settingsPanes.register("test.pane") { AnyView(EmptyView()) }
+                context.settingsPanes.register("test.pane") { AnyView(EmptyView()) }
             }
+            Issue.record("launch should fail")
+        } catch {
+            guard case .duplicates(_, let panes, _) = error else {
+                Issue.record("\(error)")
+                return
+            }
+            #expect(panes.contains("test.pane"))
         }
     }
 
     #if DEBUG
         @Test func aDuplicateOrBuiltInDebugCommandFailsLaunch() {
-            #expect(
-                throws: AppServices.LaunchError.duplicates(
-                    router: [], settingsPanes: [], debugCommands: ["quickAccess.stack", "ping"])
-            ) {
-                try services(home: "/Users/m") { context in
-                    context.debugCommands.register("quickAccess.stack") { _ in "" }
-                    context.debugCommands.register("quickAccess.stack") { _ in "" }
+            do {
+                _ = try services(home: "/Users/m") { context in
+                    context.debugCommands.register("test.command") { _ in "" }
+                    context.debugCommands.register("test.command") { _ in "" }
                     context.debugCommands.register("ping") { _ in "" }
                 }
+                Issue.record("launch should fail")
+            } catch {
+                guard case .duplicates(_, _, let commands) = error else {
+                    Issue.record("\(error)")
+                    return
+                }
+                #expect(commands.contains("test.command") && commands.contains("ping"))
             }
         }
     #endif

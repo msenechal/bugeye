@@ -1,4 +1,7 @@
 /// Asked when the user quits (⌘Q, Quit Bugeye in either menu). One gate, two stages (K11).
+/// There is no timeout: a participant that never returns keeps the app waiting. While AppKit waits for the answer
+/// (`.terminateLater`) the run loop is in modal mode, so participants must not depend on default-mode timers or
+/// `perform(_:afterDelay:)` to finish.
 @MainActor
 public final class TerminationGate {
     private var asks: [@MainActor () async -> Bool] = []

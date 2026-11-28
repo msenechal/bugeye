@@ -37,9 +37,11 @@ jobs:
           fetch-depth: 0  # the ownership check needs the merge base
       - name: Folder ownership (contracts spec §3)
         if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          make ownership BASE=origin/${{ github.base_ref }}
+          make ownership BASE="origin/$BASE_REF"
       - name: Portable tests
         run: make test-core
       - name: Format

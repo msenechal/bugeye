@@ -62,10 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.menuBar = menuBar
 
         Task { await services.requestNotificationAuthorization() }
+        #if DEBUG
+            // Made before the launch steps, so `events` also shows what they publish (final review M4).
+            let debugHandler = makeDebugHandler(services)
+        #endif
         context.runLaunchSteps()
 
         #if DEBUG
-            startDebugChannel(services)
+            startDebugChannel(debugHandler)
         #endif
     }
 
@@ -99,12 +103,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
-        private func startDebugChannel(_ services: AppServices) {
+        private func makeDebugHandler(_ services: AppServices) -> DebugCommandHandler {
             let context = services.context
             let commands = context.debugCommands
-            let handler = DebugCommandHandler(
+            return DebugCommandHandler(
                 moduleIDs: services.registry.moduleIDs, router: context.router, settings: services.settingsStore,
                 bus: context.captureEvents, registered: { commands.handler(for: $0) })
+        }
+
+        private func startDebugChannel(_ handler: DebugCommandHandler) {
             let channel = DebugChannel(path: DebugChannel.defaultSocketPath(), handler: handler)
             do {
                 try channel.start()

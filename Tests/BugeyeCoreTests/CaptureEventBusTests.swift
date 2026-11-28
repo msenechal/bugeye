@@ -85,6 +85,20 @@ import Testing
         withExtendedLifetime(a) {}
     }
 
+    @Test func aSubscriberAddedDuringDeliveryGetsOnlyLaterEvents() {
+        let bus = CaptureEventBus()
+        var log: [String] = []
+        var late: CaptureSubscription?
+        let a = bus.subscribe { event in
+            log.append("a:\(event.change.rawValue)")
+            if late == nil { late = bus.subscribe { log.append("late:\($0.change.rawValue)") } }
+        }
+        bus.publish(event(.created, item(id)))
+        bus.publish(event(.edited, item(id)))
+        #expect(log == ["a:created", "a:edited", "late:edited"])
+        withExtendedLifetime((a, late)) {}
+    }
+
     @Test func itemFollowsTheCaptureAndForgetsOnDelete() {
         let bus = CaptureEventBus()
         #expect(bus.item(id) == nil)
