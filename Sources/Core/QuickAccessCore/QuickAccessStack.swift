@@ -43,3 +43,11 @@ public struct QuickAccessStack<Item: Identifiable> {
         return items.remove(at: index)
     }
 }
+
+extension QuickAccessStack {
+    /// Replaces the item with the same id, in place; no-op if it isn't there.
+    public mutating func replace(_ item: Item) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[index] = item
+    }
+}
