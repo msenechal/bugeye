@@ -33,14 +33,15 @@ extension TextLine {
                     x: box.minX + perCharacter * Double(index), y: box.minY, width: perCharacter,
                     height: box.height))
         }
-        return pieces.reduce(nil) { union($0, $1) }
+        return pieces.reduce(nil) { $0?.union($1) ?? $1 }
     }
 }
 
-/// The smallest rect holding both.
-func union(_ a: Rect2D?, _ b: Rect2D) -> Rect2D? {
-    guard let a else { return b }
-    let x0 = min(a.minX, b.minX)
-    let y0 = min(a.minY, b.minY)
-    return Rect2D(x: x0, y: y0, width: max(a.maxX, b.maxX) - x0, height: max(a.maxY, b.maxY) - y0)
+extension Rect2D {
+    /// The smallest rect holding both.
+    func union(_ other: Rect2D) -> Rect2D {
+        let x0 = min(minX, other.minX)
+        let y0 = min(minY, other.minY)
+        return Rect2D(x: x0, y: y0, width: max(maxX, other.maxX) - x0, height: max(maxY, other.maxY) - y0)
+    }
 }
