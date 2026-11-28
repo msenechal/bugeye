@@ -9,7 +9,7 @@ import Testing
 @testable import BugeyeApp
 
 @MainActor @Suite struct CaptureWiringTests {
-    struct Setup {
+    @MainActor struct Setup {
         let dir: TempDirectory
         let context: AppContext
         let registrar = FakeHotkeyRegistrar()
