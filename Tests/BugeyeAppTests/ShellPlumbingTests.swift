@@ -108,7 +108,9 @@ import Testing
         #expect(menu.items.map { $0.isSeparatorItem ? "—" : $0.title } == ["Stop", "—", "Discard"])
         #expect(menu.items[0].isEnabled && !menu.items[2].isEnabled)
         #expect(menu.items[0].keyEquivalent == "5")
-        menu.performActionForItem(at: 0)
+        // Sent the way AppKit sends a menu action; `performActionForItem` needs a running NSApp, which tests lack.
+        let stop = menu.items[0]
+        _ = (stop.target as? NSObject)?.perform(try #require(stop.action), with: stop)
         #expect(stopped == 1)
 
         context.statusItem.setOverride(nil, owner: "someoneElse")
