@@ -1,6 +1,6 @@
 # Wave 1: Capture
 
-**Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
+**Status:** approved 28 Nov 2026 · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
 
 Capture rebuilds the first build's still captures (`design/02` §1.1–1.3): full screen, every display, area and window, the selection overlay, and output (save, copy, announce). It runs as one of the parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton. Everything it shares with the other epics lands first in the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`); §3 lists what Capture uses from it.
 

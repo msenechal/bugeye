@@ -1,6 +1,6 @@
 # Wave 1: Quick Access
 
-**Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
+**Status:** approved 28 Nov 2026 · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
 
 Quick Access rebuilds the first build's thumbnail stack (`design/02` §1.4, §2.12): one floating thumbnail per capture, its strip and ⋯ menu, hover, Esc, drag-out, ⇧-click selection. It runs as one of the parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton. It builds on the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`; §3 here lists what it uses) and on Capture's split of ownership (`docs/specs/2026-11-27-wave-1-capture.md` C2). It owns thumbnails, Save, Save As…, Delete, and the `saved` and `deleted` events.
 

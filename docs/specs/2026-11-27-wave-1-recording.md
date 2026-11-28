@@ -1,6 +1,6 @@
 # Wave 1: Recording core
 
-**Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
+**Status:** approved 28 Nov 2026 · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
 
 Recording rebuilds the first build's screen recorder (`design/04` §1.1–1.6): ⇧⌘5, area, display and window targets, the options bar, the countdown, MP4 with microphone and system audio, click rings, the keystroke badge, the webcam bubble, the ● menu, and delivery to Quick Access. It also records an **event timeline** next to every recording, silently, for the motion engine of Wave 3 (`design/14` §2). It runs as one of the parallel Wave 1 sessions (`design/14` R1) on Wave 0's skeleton. What it needs from shared code lands first, in the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`; §3 here lists what it uses).
 

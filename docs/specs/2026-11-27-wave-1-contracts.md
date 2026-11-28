@@ -1,6 +1,6 @@
 # Wave 1: Contracts
 
-**Status:** draft for approval · **Date:** 27 November 2026 · **Process:** spec (this) → plan → execution → final review → fix pass
+**Status:** approved 28 Nov 2026 · **Date:** 27 November 2026 · **Process:** spec (this) → plan → execution → final review → fix pass
 
 Wave 1 runs five epics in five parallel cloud sessions (`design/14` R1): Capture, Quick Access, Editor core, Recording core, and the OCR word map. Before any of them starts, one session lands one small pull request, **the Wave 1 contracts PR**, holding every shared type, port, protocol and app-shell change the five epics need. After it merges, each epic writes only inside its own folders (§3), and a CI check enforces that. This spec reconciles the five epic specs (`docs/specs/2026-11-27-wave-1-{capture,quick-access,editor,recording,ocr}.md`) against what Wave 0 actually built (branch `feat/wave-0`, ledger `docs/ledgers/wave-0.md`). Each epic spec now has a short "Uses from the contracts" section pointing here; where they disagree, this spec wins.
 
@@ -44,7 +44,7 @@ Rulings added after the Wave 1 spec review (28 Nov 2026), one per finding (cost 
 | K27 | **`CaptureFileWriter.write` gains `requireExisting`** (§4.1.2): with true, the final step replaces the target only if it still exists, else throws `TargetMissing` and leaves nothing behind. The editor's Save uses it. | Wave 1 spec review, finding 8: a Save racing Quick Access's Save recreated the file at its old path without its ID (`design/03`'s fixed bug, `design/11` §6). [Low] |
 | K28 | **`CaptureFileWriter.copy(_:to:identity:)`** (§4.1.2) copies a file with its preserved attributes and a new identity without reading it into memory. Quick Access's Save As… uses it for every kind. | Wave 1 spec review, finding 11: `write(_ data:)` would load a multi-GB recording into memory; the first build copied the file. [Low] |
 | K29 | **`SelectionResult.area` carries a `StoredArea`** (display, display-local rect, the display's size at selection time). Recording stores it as is. | Wave 1 spec review, finding 13: Recording needs the display size for Return's "changed size" rule and has no screen port. [Low] |
-| K30 | **The writer's errors have settled descriptions** (§4.1.2): `NoFreeName`, `RenameFailed` and `TargetMissing` conform to `LocalizedError`, tested character for character. | Wave 1 spec review, finding 15: notices show `<error>`, which was "The operation couldn't be completed. (… error 1.)". [Low] |
+| K30 | **The writer's errors have settled descriptions** (§4.1.2): `NoFreeName`, `RenameFailed` and `TargetMissing` conform to `LocalizedError`, tested character for character. Approved by the user on 28 Nov 2026 with `RenameFailed` showing no error number; the errno goes to the log only. | Wave 1 spec review, finding 15: notices show `<error>`, which was "The operation couldn't be completed. (… error 1.)". [Low] |
 | K31 | **Who publishes what, in Wave 1** (§4.1.1): `created` by Capture, Recording, Quick Access (Save As… copy) and the Editor (gone-file Save As… after a Delete); `saved` and `deleted` by Quick Access; `moved`, `edited`, `editingStarted` and `editingEnded` by the Editor. | Wave 1 spec review, finding 18: three epic specs disagreed on `moved`. [Low] |
 | K32 | **`recordingSetup` ends with the countdown** (§4.1.8): it covers selecting, configuring and countingDown; Recording's `starting` (the countdown has ended, the first frame hasn't arrived) holds `recording`, so screenshots work from the end of the countdown, as `design/04` §1.1 and §6 item 3 say. | Wave 1 spec review, finding 20: the table included `starting` while §6 and the design said the countdown's end. The documented boundary is kept rather than moved. [Low] |
 | K33 | **Hotkey ids are not settings keys.** The `hotkeyID` example is `"capture.area"`; Capture's ids are settled in Capture §5.1. | Wave 1 spec review, finding 21. [Low] |
@@ -187,7 +187,7 @@ Publishers in Wave 1 (K31): `created` by Capture, Recording, Quick Access (the S
 extension CaptureFileWriter {
     /// errorDescription: `Too many files are already named like “<name>”.` (K30)
     public struct NoFreeName: Error, Equatable, LocalizedError { public let name: String }
-    // Wave 0's `RenameFailed` gains `LocalizedError`; errorDescription: `The file couldn't be moved into place (error <errno>).`
+    // Wave 0's `RenameFailed` gains `LocalizedError`; errorDescription: `The file couldn't be moved into place.` (the errno is logged, never shown)
 
     /// errorDescription: `“<file name>” was moved or deleted.` (K27, K30)
     public struct TargetMissing: Error, Equatable, LocalizedError { public let url: URL }

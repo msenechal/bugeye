@@ -1,6 +1,6 @@
 # Wave 1: Editor core
 
-**Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → manual pass
+**Status:** approved 28 Nov 2026 · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → manual pass
 
 The editor core rebuilds the first build's annotation editor (`design/03` §1.1–1.7): opening, the window, eleven tools, the options strip, the background frame, undo, zoom and output. It runs as one of the five parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton, after the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`; §3 here lists what it uses). The display list is its centre: the canvas and every export draw from the same list (`design/03` §5.2).
 
