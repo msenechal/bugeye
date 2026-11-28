@@ -23,7 +23,7 @@ struct StreamRequest: Sendable {
 
 /// The ScreenCaptureKit stream and the movie writer of one take (`design/04` §2.6). Everything touching the
 /// stream's samples, the writer and the follow timer runs on `queue`; callbacks go to the main actor.
-final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, RecorderDriving, @unchecked Sendable {
     enum Failure: Error, LocalizedError, Equatable {
         case userDeclined
         case noDisplay
