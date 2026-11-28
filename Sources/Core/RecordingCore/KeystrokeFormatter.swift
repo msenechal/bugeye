@@ -1,5 +1,33 @@
+import BugeyeCore
+
 /// Key labels for the keystroke badge and the timeline (spec §5.4, §7.4).
 public enum KeystrokeFormatter {
+    /// The badge's label: modifiers ⌃ ⌥ ⇧ ⌘ then the key, space-separated ("⇧ ⌘ 3"). Nil for a press that
+    /// isn't a shortcut (⌘ or ⌃) unless `showAllKeys`, and for a key with no base. Never reaches the timeline.
+    public static func label(
+        keyCode: UInt16, characters: String?, modifiers: Set<TimelineModifier>, showAllKeys: Bool
+    ) -> String? {
+        let isShortcut = modifiers.contains(.cmd) || modifiers.contains(.ctrl)
+        guard isShortcut || showAllKeys, let base = baseKey(keyCode: keyCode, characters: characters) else {
+            return nil
+        }
+        let symbols = modifiers.sorted().map { modifier in
+            switch modifier {
+            case .ctrl: "⌃"
+            case .opt: "⌥"
+            case .shift: "⇧"
+            case .cmd: "⌘"
+            }
+        }
+        return (symbols + [keySymbols[base] ?? base]).joined(separator: " ")
+    }
+
+    /// How the badge shows named keys.
+    static let keySymbols: [String: String] = [
+        "Return": "↩", "Enter": "⌤", "Tab": "⇥", "Delete": "⌫", "ForwardDelete": "⌦", "Escape": "⎋",
+        "Left": "←", "Right": "→", "Down": "↓", "Up": "↑", "Home": "↖", "End": "↘", "PageUp": "⇞", "PageDown": "⇟",
+    ]
+
     /// The key's base: a name for a named key ("Return", "F1", "Space"), the digit for the number row, the
     /// uppercase letter a Latin layout produces, and the US letter of the key for any other script.
     /// `characters` is the key's character with no modifiers applied in the current layout
@@ -10,11 +38,15 @@ public enum KeystrokeFormatter {
         guard let characters, characters.count == 1, let scalar = characters.unicodeScalars.first,
             scalar.value >= 0x20
         else { return usBase[keyCode] }
+        // Apple's function-key characters (F13–F20, Help, keypad Clear …) have no glyph.
+        if (0xF700...0xF8FF).contains(scalar.value) { return nil }
         if scalar.properties.isAlphabetic, scalar.value >= 0x250 {
             // Cyrillic, Greek, …: the US letter of the key.
             return usBase[keyCode] ?? characters.uppercased()
         }
-        return characters.uppercased()
+        // One letter in, one letter out ("ß" stays "ß", not "SS").
+        let upper = characters.uppercased()
+        return upper.count == 1 ? upper : characters
     }
 
     /// macOS virtual key codes of keys with names.

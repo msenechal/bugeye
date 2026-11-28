@@ -10,6 +10,8 @@ Trust this file and `git log` over memory.
 |---|---|---|---|
 | 1 core | `feat/wave1-recording-core` | https://github.com/msenechal/bugeye/pull/4 | ready, CI running |
 | 2 flow | `feat/wave1-recording-flow` (stacked on core) | https://github.com/msenechal/bugeye/pull/13 (draft) | in progress |
+| 3 layout | `feat/wave1-recording-layout` (stacked on flow) | https://github.com/msenechal/bugeye/pull/16 (draft) | in progress |
+| 4 adapters | `feat/wave1-recording-adapters` (stacked on core) | https://github.com/msenechal/bugeye/pull/17 (draft) | macos run queued |
 
 ## Tasks
 
@@ -27,6 +29,8 @@ Trust this file and `git log` over memory.
 | 12–14 | done | 64636ab | options, settings, `effectiveOptions`, strings, disk guard; seen failing (compile) first |
 | 15 | done | dc5554d + next | `RecordingFlow`; table and regression tests seen failing (compile) first; the R1–R9 random-sequence test found one real bug (below) and fails on a planted one (dropping the countdown's `end(recordingSetup)`: 60 of 60 seeds) |
 | 16 | done | (next) | `RecordingModule`, seen failing (compile) first |
+| 17–20 | done | 5ad0136 | geometry, placement, follow, child windows, fallback, bubble; seen failing (compile) first |
+| 21–22 | done | (next) | label, badge, rings (goldens generated, checked by hand: badge 94 × 38 pt at (353, 522) for "⇧ ⌘ 3"; rings at half and full alpha), take recovery; seen failing (compile) first. The privacy test gained `theBadgeShowsWhatTheTimelineNeverWrites` |
 
 ## Final review of PR #4
 
@@ -51,6 +55,15 @@ Fresh reviewer: 1 Critical, 5 Important, 7 Minor. Each fix has a test in `Record
 - I5 the invariant checker gained: stop-after-cancel and cancel-after-stop, a discarded take never delivered, a monotonic ● timer that doesn't move while paused, failure paths in the drain, no `Date()`. R1 per attempt is structural (leaving and returning alternate), noted rather than tested.
 - Minor fixed: M1 (final punctuation, empty error), M2 (camera loss with Cam off is silent), M3 (`failedToStart` built explicitly), M7 (dead lines, table tests for quit, targetGone and restart from paused). `recordingHotkeyIsIgnoredDuringAScreenshotSelection` stays beside its twin: the spec names it.
 - Minor as rulings or backlog: M4, M5, M6 below.
+
+## Final review of PR #16 (slice 3)
+
+Fresh reviewer: 0 Critical, 3 Important, 16 Minor. Fixed in one commit with `LayoutReviewTests` and `TakeRecoveryReviewTests` (new API names first failed to compile; the new behaviours were checked failing by their assertions on the old code paths the reviewer reproduced).
+- I1 `ChildWindowFilter` mixed global window frames with a display-local rect: the parameter is now `followedGlobal`, with `WindowFollow.global(_:displayBounds:)`; tested on a display at (1512, −200).
+- I2 the V23 fallback reset its count on every filter update (10 Hz) so it could never fire: only a delivered frame resets it; "dropped" is documented as a blank or suspended frame, `.idle` counts as delivered.
+- I3 a recovered movie could hold no fragment: movies under 64 KiB are deleted with their timeline.
+- Minor fixed: orphan timelines are left alone (1); a recovered `.mp4` takes its timeline's time (2); files changed in the last 10 s are left alone (4); `convertedName` / `timelineName` (5); recovery ordering and live-take tests (6); the self-exclusion test (7); edge tests (8); doc comment (10); too-wide bar and badge clamp to the left edge (11); Apple function-key characters and multi-letter uppercases (13); opacity rounded to 0.001 (14).
+- Minor deferred to Backlog: 3, 15, 16. Minor 9 and 12 are rulings below.
 
 ## Rulings
 
@@ -77,6 +90,17 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
+- Ruling (slice 3): the codec limit applies to the long and short sides (H.264 4096 × 2304, HEVC 8192 × 4320), so a portrait display is limited to 2304 × 4096, not squeezed into a landscape box. (cost if wrong: low.)
+- Ruling (slice 3): the source rect grows to whole points (floor the origin, ceil the far edges), then is clamped into the display; at least 2 × 2 pt. (cost if wrong: none.)
+- Ruling (slice 3): bar placement: centred on the selection and kept on the screen horizontally; "inside the bottom edge" puts the bar 12 pt above the selection's (or screen's) bottom. (cost if wrong: low; the Mac batch shows it.)
+- Ruling (slice 3): the rings' "14 → 28 pt" are diameters; ease-out is quadratic; left is systemYellow (1, 0.8, 0), right systemPink (1, 0.176, 0.333), other buttons don't ring. (cost if wrong: low; a constant.)
+- Ruling (slice 3): the badge's padding is 14 × 8 pt; its text uses the semibold weight 0.3 (contracts' font mapping). (cost if wrong: low.)
+- Ruling (slice 3): the badge shows named keys only with ⌘ or ⌃ unless Show all keystrokes is on (↩ alone is typing a newline). (cost if wrong: low.)
+- Ruling (slice 3): take recovery also delivers an `.mp4` left without its `.mov` (a crash after a finished conversion) and deletes a partial `.mp4` beside its `.mov` and a timeline whose movie is gone. (cost if wrong: low.)
+- Ruling (slice 3, revised after review I2): the child-window fallback (V23) counts blank or suspended frames after a filter update until a frame is delivered (complete or idle); more than 2 in a row drops back to the window alone for the rest of the take. (cost if wrong: low.)
+- Ruling (slice 3, review minor 9): sheets and popovers that the window server lists at layer 0 aren't caught by the child filter (V10 names sheets); the Mac batch's item 4 opens a sheet as well as a menu to see it. (cost if wrong: low; a sheet missing from a window recording.)
+- Ruling (slice 3, review minor 12): an area partly off its display is shifted inside it, not cropped, so the size stays what was selected (and a followed window keeps its size). (cost if wrong: low.)
+- Ruling (slice 3, review I3): a leftover movie under 64 KiB holds no complete fragment and is deleted with its timeline rather than delivered broken. (cost if wrong: low; at most the first second of a crashed take.)
 - Ruling: a text-entry element (text field, area, combo box, search field) keeps no title in the timeline, only its role, subrole and frame: some apps put the typed value in AXTitle, and §7.4 forbids typed text. Captions lose a search field's name. (cost if wrong: low; Wave 3 captions can say "the text field".)
 - Ruling: stacked branches take later fixes from the branch below by merging it in (no rebase): force-pushing was refused in this session. (cost if wrong: none; merge commits in a squash-or-merge PR.)
 - Ruling (superseded by claude-review #4 minor 2): `TimelineStore.observe` now deletes off the main actor.
@@ -85,6 +109,8 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 
 ## Backlog
 
+- 2026-11-28, PR #16 review minor 3: a take kept after "Couldn't save the recording" would be "recovered" at the next launch with "Bugeye quit while recording". The controller (slice 6) marks such takes (e.g. `Take-<uuid>.undelivered`) and recovery skips or words them differently.
+- 2026-11-28, PR #16 review minor 15–16: the overlay slice keeps its timer while rings animate or the badge is visible, draws one last empty frame after, and maps the display list's point size to the view at the backing scale.
 - 2026-11-28, PR #13 review M6: no deadline on `stopping` / `delivering`. The controller (slice 6) guarantees `stopped` and `delivered` always arrive (a `defer`, as `design/04` §2.9), tested with a recorder that throws, so ⌘Q never waits forever.
 
 - 2026-11-28, PR #4 review M6: `TimelineRecorder.init` creates the folder and file synchronously in the caller's context; the controller (slice 6) must create it off the main actor, or the recorder gains an async factory.
