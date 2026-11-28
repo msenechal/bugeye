@@ -45,7 +45,8 @@ import Testing
         view.time = 0.1
         let lists = view.lists()
         #expect(lists.count == 2)
-        #expect(lists.allSatisfy(\.isBalanced))
+        let balanced = lists.allSatisfy { $0.isBalanced }
+        #expect(balanced)
         #expect(lists[0].size == Size2D(width: 400, height: 300))
         #expect(view.isFlipped)
     }
