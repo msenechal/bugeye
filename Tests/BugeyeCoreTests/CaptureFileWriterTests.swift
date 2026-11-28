@@ -53,6 +53,19 @@ import Testing
         #expect(mode?.intValue == 0o600)
     }
 
+    @Test func repeatedRewritesNeverBringBackDroppedAttributes() throws {
+        defer { dir.remove() }
+        let url = try makeCapture()
+        // Each rewrite frees an inode that the file system may hand to the next new file at once.
+        for round in 1...3 {
+            try writer.write(Data("v\(round)".utf8), to: url)
+            #expect(try store.value("com.apple.quarantine", at: url) == nil, "round \(round)")
+        }
+        let fresh = dir.file("fresh.png")
+        try writer.write(Data("new".utf8), to: fresh)
+        #expect(try store.names(at: fresh) == [])
+    }
+
     @Test func otherAttributesAreNotCopied() throws {
         defer { dir.remove() }
         let url = try makeCapture()
