@@ -248,4 +248,27 @@ import Testing
         #expect(done.published.isEmpty)
         #expect(h.model.busy.isEmpty)
     }
+
+    /// The copy is a real file the user chose to save: a `deleted` of its source after the copy started doesn't stop
+    /// its `created`, and the copy keeps the thumbnail's preview (claude-review on #10).
+    @Test func aCopyFinishingAfterItsSourceWasDeletedKeepsThePreview() throws {
+        let h = ModelHarness()
+        let item = h.item(saved: true)
+        let preview = try PixelBuffer(width: 1, height: 1, fill: RGBA8(red: 4, green: 4, blue: 4))
+        h.show(item, preview: preview)
+        h.handle(.stripTapped(item.id, .save))
+        let target = URL(fileURLWithPath: "/tmp/Copy.png")
+        h.handle(.saveAsChosen(item.id, target))
+        h.publish(.deleted, item, origin: "duplicates")
+        var copy = item
+        copy.id = CaptureID()
+        copy.fileURL = target
+        let done = h.handle(.fileActionFinished(item.id, .savedCopy(copy)))
+        #expect(done.published.first?.preview == preview)
+        #expect(h.model.pendingSaveAs.isEmpty)
+    }
+
+    @Test func theEditorsOriginIsNamed() {
+        #expect(QuickAccessModel.editorOrigin == "editor")
+    }
 }
