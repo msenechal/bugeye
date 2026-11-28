@@ -565,16 +565,16 @@ final class StoreHarness: Sendable {
 /// Ignores cancellation until released, and counts how many calls ran at once.
 final class OverlapCountingReader: TextReader, Sendable {
     private struct State {
-        var released = false
         var running = 0
         var peak = 0
         var calls = 0
     }
 
     private let state = Mutex(State())
+    private let latch = ReleaseLatch()
     var peak: Int { state.withLock { $0.peak } }
     var calls: Int { state.withLock { $0.calls } }
-    func release() { state.withLock { $0.released = true } }
+    func release() { latch.release() }
 
     func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] {
         state.withLock {
@@ -583,7 +583,7 @@ final class OverlapCountingReader: TextReader, Sendable {
             $0.peak = max($0.peak, $0.running)
         }
         defer { state.withLock { $0.running -= 1 } }
-        while !state.withLock({ $0.released }) { try? await Task.sleep(for: .milliseconds(1)) }
+        await latch.wait()  // suspends, never spins, even once cancelled
         return []
     }
 }

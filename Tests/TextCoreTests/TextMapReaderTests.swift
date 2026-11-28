@@ -162,20 +162,52 @@ import Testing
     }
 }
 
+/// Suspends its callers until released, ignoring cancellation. It never polls: a cancelled task's `Task.sleep`
+/// returns at once, so a polling loop would spin and could starve the cooperative pool (macos run 46124112621).
+final class ReleaseLatch: Sendable {
+    private struct State {
+        var released = false
+        var waiters: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let state = Mutex(State())
+
+    func release() {
+        let waiters = state.withLock { state in
+            state.released = true
+            defer { state.waiters = [] }
+            return state.waiters
+        }
+        for waiter in waiters { waiter.resume() }
+    }
+
+    func wait() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let now = state.withLock { state in
+                if state.released { return true }
+                state.waiters.append(continuation)
+                return false
+            }
+            if now { continuation.resume() }
+        }
+    }
+}
+
 /// A recogniser that ignores cancellation until the test releases it (Vision's `perform` may not be cancellable).
 final class StubbornReader: TextReader, Sendable {
-    private let released = Mutex(false)
+    private let latch = ReleaseLatch()
     private let started = Mutex(false)
     private let sawCancel = Mutex(false)
     var hasStarted: Bool { started.withLock { $0 } }
     var sawCancellation: Bool { sawCancel.withLock { $0 } }
-    func release() { released.withLock { $0 = true } }
+    func release() { latch.release() }
 
     func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] {
         started.withLock { $0 = true }
-        while !released.withLock({ $0 }) {
-            if Task.isCancelled { sawCancel.withLock { $0 = true } }
-            try? await Task.sleep(for: .milliseconds(1))
+        await withTaskCancellationHandler {
+            await latch.wait()
+        } onCancel: {
+            sawCancel.withLock { $0 = true }
         }
         throw FakeFailure("cancelled late")
     }
@@ -335,5 +367,29 @@ struct SelfCancellingReader: TextReader {
             try await TextMapReader(reader: SelfCancellingReader(), files: FakeImageFileReader())
                 .read(.buffer(image), pixelsPerPoint: 2)
         }
+    }
+}
+
+@Suite struct TextMapReaderTimeoutRaceTests {
+    @Test func aTimeoutIsAlwaysReportedAsATimeoutNeverAsARecognitionFailure() async throws {
+        // claude-review on #9: the timer must record `timedOut` before it cancels the recogniser, or the recogniser's
+        // own CancellationError can win and be reported as `recognitionFailed`.
+        let image = try PixelBuffer(width: 4, height: 4, fill: RGBA8(red: 0, green: 0, blue: 0))
+        var outcomes: [String] = []
+        for _ in 0..<200 {
+            let clock = ManualClock()
+            let text = FakeTextReader(steps: [.hang])
+            let reader = TextMapReader(reader: text, files: FakeImageFileReader(), clock: clock)
+            let task = Task { try await reader.read(.buffer(image), pixelsPerPoint: 2) }
+            #expect(await eventually { text.calls.count == 1 && clock.sleepers == 1 })
+            clock.advance(by: .seconds(10))
+            do {
+                _ = try await task.value
+                outcomes.append("map")
+            } catch {
+                outcomes.append(String(describing: error))
+            }
+        }
+        #expect(Set(outcomes) == ["timed out on strip 0"])
     }
 }
