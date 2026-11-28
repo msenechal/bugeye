@@ -44,9 +44,15 @@ public struct RecordingClock: Hashable, Sendable {
         return host - origin - cut
     }
 
-    /// Whole milliseconds of output time (rounded down), for the timeline.
+    /// Whole milliseconds of output time (rounded down, after a microsecond's allowance for binary floating
+    /// point: 1000.15 − 1000 is 0.14999…), for the timeline.
     public func milliseconds(for host: Double) -> Int? {
-        outputTime(for: host).map { Int(($0 * 1000).rounded(.down)) }
+        outputTime(for: host).map(Self.milliseconds)
+    }
+
+    /// `seconds` as whole milliseconds, as `milliseconds(for:)` rounds.
+    public static func milliseconds(_ seconds: Double) -> Int {
+        Int((seconds * 1000 + 0.001).rounded(.down))
     }
 
     /// Output seconds recorded by `host`: 0 before the origin, frozen while paused.

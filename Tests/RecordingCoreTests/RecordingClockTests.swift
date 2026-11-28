@@ -46,6 +46,14 @@ import Testing
         #expect(clock.milliseconds(for: 7) == nil)
     }
 
+    @Test func millisecondsSurviveFloatingPointError() {
+        var clock = RecordingClock()
+        clock.begin(at: 1000)
+        // 1000.15 - 1000 is 0.149999… in binary floating point.
+        #expect(clock.milliseconds(for: 1000.15) == 150)
+        #expect(clock.milliseconds(for: 1000.1509) == 150)
+    }
+
     @Test func redundantPauseAndResumeAreNoOps() {
         var clock = RecordingClock()
         clock.pause(at: 1)
