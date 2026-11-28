@@ -1,0 +1,281 @@
+{
+ "pixelsPerPoint": 2,
+ "width": 1200,
+ "height": 300,
+ "strips": [
+  [
+   {
+    "text": "Delete",
+    "bounds": {
+     "origin": {
+      "x": 360,
+      "y": 219
+     },
+     "size": {
+      "width": 108,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 360,
+        "y": 219
+       },
+       "size": {
+        "width": 108,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Name",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 40
+     },
+     "size": {
+      "width": 72,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       4
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 40
+       },
+       "size": {
+        "width": 72,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Morgan",
+    "bounds": {
+     "origin": {
+      "x": 300,
+      "y": 42
+     },
+     "size": {
+      "width": 108,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 300,
+        "y": 42
+       },
+       "size": {
+        "width": 108,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Email",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 100
+     },
+     "size": {
+      "width": 90,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       5
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 100
+       },
+       "size": {
+        "width": 90,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "user@example.com",
+    "bounds": {
+     "origin": {
+      "x": 300,
+      "y": 98
+     },
+     "size": {
+      "width": 288,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       16
+      ],
+      "bounds": {
+       "origin": {
+        "x": 300,
+        "y": 98
+       },
+       "size": {
+        "width": 288,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Remember me",
+    "bounds": {
+     "origin": {
+      "x": 80,
+      "y": 160
+     },
+     "size": {
+      "width": 198,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       8
+      ],
+      "bounds": {
+       "origin": {
+        "x": 80,
+        "y": 160
+       },
+       "size": {
+        "width": 144,
+        "height": 34
+       }
+      }
+     },
+     {
+      "range": [
+       9,
+       11
+      ],
+      "bounds": {
+       "origin": {
+        "x": 242,
+        "y": 160
+       },
+       "size": {
+        "width": 36,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Save",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 220
+     },
+     "size": {
+      "width": 72,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       4
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 220
+       },
+       "size": {
+        "width": 72,
+        "height": 34
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Cancel",
+    "bounds": {
+     "origin": {
+      "x": 200,
+      "y": 221
+     },
+     "size": {
+      "width": 108,
+      "height": 34
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 200,
+        "y": 221
+       },
+       "size": {
+        "width": 108,
+        "height": 34
+       }
+      }
+     }
+    ]
+   }
+  ]
+ ]
+}
