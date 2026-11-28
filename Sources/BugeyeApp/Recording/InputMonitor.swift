@@ -71,6 +71,7 @@ final class InputMonitor {
     private var sampler: Timer?
     private var focusTimer: Timer?
     private var lastFocus: (pid: pid_t, window: CGWindowID?)?
+    private var activation: NSObjectProtocol?
 
     init(sinks: Sinks) {
         self.sinks = sinks
@@ -118,6 +119,19 @@ final class InputMonitor {
         }
         RunLoop.main.add(focus, forMode: .common)
         focusTimer = focus
+        // §7.2 "on app activation": stamped when it happens, not at the next poll.
+        activation = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkFocus() }
+        }
+        checkFocus()
+    }
+
+    /// Sends the focused app and window again: the controller calls it once the timeline has started, since the
+    /// line sent at `start` comes before the first frame and is dropped (PR #22 review I8).
+    func resendFocus() {
+        lastFocus = nil
         checkFocus()
     }
 
@@ -128,6 +142,8 @@ final class InputMonitor {
         sampler = nil
         focusTimer?.invalidate()
         focusTimer = nil
+        if let activation { NSWorkspace.shared.notificationCenter.removeObserver(activation) }
+        activation = nil
         lastFocus = nil
     }
 
@@ -140,12 +156,15 @@ final class InputMonitor {
 
     private func sampleCursor() {
         let point = InputTranslation.quartz(NSEvent.mouseLocation, primaryHeight: primaryHeight)
-        sinks.input(.move(point), ProcessInfo.processInfo.systemUptime)
+        sinks.input(.move(point), HostClock.now())
     }
 
-    /// The active app, and its frontmost window (checked twice a second). No window title (V14).
+    /// The active app, and its frontmost window (on activation, and checked twice a second). No window title
+    /// (V14). Bugeye itself is skipped: its alerts activate it, and it isn't what was recorded (review M9).
     private func checkFocus() {
-        guard let app = NSWorkspace.shared.frontmostApplication else { return }
+        guard let app = NSWorkspace.shared.frontmostApplication,
+            app.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else { return }
         let pid = app.processIdentifier
         let window = Self.frontWindow(of: pid)
         if let last = lastFocus, last.pid == pid, last.window == window?.id { return }
@@ -153,7 +172,7 @@ final class InputMonitor {
         sinks.input(
             .focus(
                 app: app.bundleIdentifier ?? "", name: app.localizedName ?? "", window: window.map { WindowID($0.id) },
-                frame: window?.frame), ProcessInfo.processInfo.systemUptime)
+                frame: window?.frame), HostClock.now())
     }
 
     private static func frontWindow(of pid: pid_t) -> (id: CGWindowID, frame: Rect2D)? {
