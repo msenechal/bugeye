@@ -325,8 +325,11 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
 @MainActor
 final class EditorDragHandleView: NSView, NSDraggingSource {
     private let writeFile: @MainActor () async throws -> URL
-    private var pending: Task<URL?, Never>?
-    private var ready: URL?
+    private var pending: Task<Void, Never>?
+    /// The file the current press's export wrote, once ready.
+    private(set) var ready: URL?
+    /// Each press gets a new generation; a late export from an earlier press is ignored (claude-review on #18).
+    private var generation = 0
 
     init(writeFile: @escaping @MainActor () async throws -> URL) {
         self.writeFile = writeFile
@@ -344,32 +347,39 @@ final class EditorDragHandleView: NSView, NSDraggingSource {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    override func mouseDown(with event: NSEvent) {
-        ready = nil
-        let write = writeFile
-        pending = Task { [weak self] in
-            do {
-                let url = try await write()
-                self?.ready = url
-                return url
-            } catch {
-                NSSound.beep()
-                return nil
-            }
-        }
-    }
+    override func mouseDown(with event: NSEvent) { beginPress() }
+    override func mouseUp(with event: NSEvent) { endPress() }
 
     override func mouseDragged(with event: NSEvent) {
         guard let url = ready else { return }
-        ready = nil
-        pending = nil
+        endPress()
         let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         let icon = NSImage(systemSymbolName: EditorStrings.dragSymbol, accessibilityDescription: nil) ?? NSImage()
         item.setDraggingFrame(bounds, contents: icon)
         beginDraggingSession(with: [item], event: event, source: self)
     }
 
-    override func mouseUp(with event: NSEvent) {
+    /// Starts this press's export; only its own result can become `ready`.
+    func beginPress() {
+        endPress()
+        let mine = generation
+        let write = writeFile
+        pending = Task { [weak self] in
+            do {
+                let url = try await write()
+                guard let self, mine == generation, !Task.isCancelled else { return }
+                ready = url
+            } catch {
+                guard let self, mine == generation, !Task.isCancelled else { return }
+                NSSound.beep()
+            }
+        }
+    }
+
+    /// Ends the press: cancels its export and forgets its result.
+    func endPress() {
+        generation &+= 1
+        pending?.cancel()
         pending = nil
         ready = nil
     }
