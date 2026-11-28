@@ -344,16 +344,27 @@ public enum TimelineLineEncoder {
         "{" + fields.map { string($0.0) + ":" + $0.1 }.joined(separator: ",") + "}"
     }
 
-    static func iso8601(_ date: Date) -> String {
+    /// UTC with milliseconds, rounded to the nearest millisecond the same way on every platform
+    /// ("2026-11-27T14:03:12.481Z").
+    public static func iso8601(_ date: Date) -> String {
+        let totalMs = Int64((date.timeIntervalSince1970 * 1000).rounded())
+        let seconds = totalMs.quotientAndRemainder(dividingBy: 1000)
+        let wholeSeconds = seconds.remainder < 0 ? seconds.quotient - 1 : seconds.quotient
+        let ms = seconds.remainder < 0 ? seconds.remainder + 1000 : seconds.remainder
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.formatOptions = [.withInternetDateTime]
         formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter.string(from: date)
+        let base = formatter.string(from: Date(timeIntervalSince1970: Double(wholeSeconds)))
+        let digits = String(ms)
+        return String(base.dropLast()) + "." + String(repeating: "0", count: 3 - digits.count) + digits + "Z"
     }
 
-    static func date(_ string: String) -> Date? {
+    /// Reads `iso8601`'s form, with or without fractional seconds.
+    public static func date(_ string: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: string)
     }
 }

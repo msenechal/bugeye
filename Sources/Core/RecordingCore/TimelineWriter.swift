@@ -29,18 +29,27 @@ final class TimelineWriter {
     private(set) var events = 0
     private(set) var truncations: [TimelineTruncation] = []
     private(set) var error: String?
+    /// The latest `t` of a line other than `element` (whose `t` is its click's): `trunc` never goes back.
+    private var latestT = 0
 
-    /// Creates the file (replacing nothing: the take's name is unique) and buffers the header.
-    init(url: URL, header: TimelineHeader, limits: TimelineLimits) throws {
-        self.url = url
-        self.limits = limits
+    /// Creates the file (replacing nothing: the take's name is unique) and writes the header at once, so a take
+    /// that dies in its first second still has a readable timeline (V15).
+    convenience init(url: URL, header: TimelineHeader, limits: TimelineLimits) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
-        handle = try FileHandle(forWritingTo: url)
+        try self.init(url: url, handle: FileHandle(forWritingTo: url), header: header, limits: limits)
+    }
+
+    /// Writes to an open handle (tests pass one that fails).
+    init(url: URL, handle: FileHandle, header: TimelineHeader, limits: TimelineLimits) throws {
+        self.url = url
+        self.limits = limits
+        self.handle = handle
         put(TimelineLineEncoder.header(header))
+        flush()
     }
 
     var isOpen: Bool { handle != nil }
@@ -50,6 +59,12 @@ final class TimelineWriter {
         guard isOpen, !truncations.contains(.size) else { return }
         let text = TimelineLineEncoder.line(line)
         let size = text.utf8.count + 1
+        let isElement: Bool
+        switch line.event {
+        case .element, .elementStatus: isElement = true
+        default: isElement = false
+        }
+        if !isElement { latestT = max(latestT, line.t) }
         if case .move = line.event {
             if truncations.contains(.cursor) { return }
             if bytes + size > limits.cursorBytes {
@@ -66,6 +81,7 @@ final class TimelineWriter {
     }
 
     private func truncate(_ reason: TimelineTruncation, t: Int) {
+        let t = max(t, latestT)
         let text = TimelineLineEncoder.line(TimelineLine(t: t, event: .trunc(reason)))
         if reason == .cursor, bytes + text.utf8.count + 1 > limits.totalBytes - limits.reserve {
             truncate(.size, t: t)

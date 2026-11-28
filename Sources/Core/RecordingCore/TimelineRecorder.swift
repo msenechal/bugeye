@@ -81,15 +81,24 @@ public actor TimelineRecorder {
     private var nextClickID = 1
     private var openClicks: [TimelineButton: [Int]] = [:]
     private var pendingScroll: (t: Int, at: Point2D, dx: Double, dy: Double)?
+    /// The lookup whose line isn't written yet (it ends at the reader's answer or the deadline).
     private var lookup: Task<Void, Never>?
+    /// The reader call itself, which may outlive its deadline when the reader ignores cancellation: while it
+    /// runs, later clicks are `skipped`, so hung Accessibility calls never pile up (V3).
+    private var readerCall: Task<AXElementInfo?, Never>?
     private var flushing: Task<Void, Never>?
     private var isClosed = false
+    /// Set when `finish` begins: input is refused from then on.
+    private var isFinishing = false
 
     /// Creates the file and buffers the header. `startedAt` is the first frame's host time.
     public init(_ configuration: Configuration, reader: (any AXReader)?, startedAt host: Double) throws {
         self.configuration = configuration
         self.reader = reader
-        writer = try TimelineWriter(url: configuration.url, header: configuration.header, limits: configuration.limits)
+        var header = configuration.header
+        // Without a reader no element line can appear: the header says so.
+        header.hasElements = header.hasElements && reader != nil
+        writer = try TimelineWriter(url: configuration.url, header: header, limits: configuration.limits)
         areaOrigin = configuration.header.target.area.origin
         clock.begin(at: host)
     }
@@ -104,7 +113,8 @@ public actor TimelineRecorder {
         flushing = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: interval)
-                await self?.flush()
+                guard let self else { return }
+                await self.flush()
             }
         }
     }
@@ -114,27 +124,33 @@ public actor TimelineRecorder {
         writer.flush()
     }
 
+    /// False once `finish` has begun or after `discard`.
+    public var acceptsInput: Bool { !isClosed && !isFinishing }
+
     public func pause(at host: Double) {
-        guard !isClosed, !clock.isPaused else { return }
+        guard acceptsInput, !clock.isPaused else { return }
         writePendingScroll()
+        // A press open across the pause can't be paired: its release is in the cut.
+        openClicks = [:]
         clock.pause(at: host)
         write(.pause, t: milliseconds(clock.elapsed(at: host)))
     }
 
     public func resume(at host: Double) {
-        guard !isClosed, clock.isPaused else { return }
+        guard acceptsInput, clock.isPaused else { return }
         clock.resume(at: host)
         write(.resume, t: milliseconds(clock.elapsed(at: host)))
     }
 
     public func record(_ input: TimelineInput, at host: Double) {
-        guard !isClosed, let ms = clock.milliseconds(for: host) else { return }
+        guard acceptsInput, let ms = clock.milliseconds(for: host) else { return }
         let t = max(ms, lastT)
         switch input {
         case .move(let point):
             let relative = relativeTo(point)
             if let last = lastMove {
-                let minimumGap = 1000 / max(configuration.header.cursorHz, 1)
+                // Three quarters of the sampling period, so a sampler's jitter doesn't drop samples.
+                let minimumGap = 750 / max(configuration.header.cursorHz, 1)
                 let dx = relative.x - last.at.x
                 let dy = relative.y - last.at.y
                 guard t - last.t >= minimumGap, (dx * dx + dy * dy).squareRoot() >= Self.minimumMove else { return }
@@ -181,12 +197,13 @@ public actor TimelineRecorder {
 
     /// Returns once the in-flight element lookup, if any, has written its line (at most the lookup timeout).
     public func waitForLookup() async {
-        if let lookup { await lookup.value }
+        while let lookup { await lookup.value }
     }
 
     /// Writes the in-flight element line, `end`, flushes and fsyncs. Later calls do nothing.
     public func finish(at host: Double) async -> TimelineSummary {
-        if !isClosed {
+        if !isClosed, !isFinishing {
+            isFinishing = true
             writePendingScroll()
             await waitForLookup()
             close()
@@ -199,6 +216,7 @@ public actor TimelineRecorder {
     public func discard() async {
         close()
         lookup?.cancel()
+        readerCall?.cancel()
         writer.discard()
     }
 
@@ -240,16 +258,26 @@ public actor TimelineRecorder {
     }
 
     private func lookUpElement(click: Int, at point: Point2D, t: Int) {
-        guard let reader, lookup == nil else {
+        guard let reader, lookup == nil, readerCall == nil else {
             writer.append(TimelineLine(t: t, event: .elementStatus(click: click, .skipped)))
             return
+        }
+        let call = Task<AXElementInfo?, Never> { try? await reader.element(at: point) }
+        readerCall = call
+        Task {
+            _ = await call.value
+            self.readerCallEnded(call)
         }
         let timeout = configuration.lookupTimeout
         let origin = areaOrigin
         lookup = Task {
-            let outcome = await Self.race(reader, point, timeout)
+            let outcome = await Self.race(call, timeout)
             self.lookupFinished(click: click, t: t, origin: origin, outcome: outcome)
         }
+    }
+
+    private func readerCallEnded(_ call: Task<AXElementInfo?, Never>) {
+        if readerCall == call { readerCall = nil }
     }
 
     private func lookupFinished(click: Int, t: Int, origin: Point2D, outcome: LookupOutcome) {
@@ -271,19 +299,22 @@ public actor TimelineRecorder {
         writer.append(TimelineLine(t: t, event: event))
     }
 
-    /// The reader against the deadline. Doesn't wait for a reader that ignores cancellation.
-    private static func race(_ reader: any AXReader, _ point: Point2D, _ timeout: Duration) async -> LookupOutcome {
+    /// The reader's answer against the deadline. Doesn't wait for a reader that ignores cancellation; the
+    /// deadline cancels the call, and an answer cancels the timer.
+    private static func race(_ call: Task<AXElementInfo?, Never>, _ timeout: Duration) async -> LookupOutcome {
         let once = Once<LookupOutcome>()
         return await withCheckedContinuation { continuation in
             once.set(continuation)
-            let read = Task {
-                let info = try? await reader.element(at: point)
-                once.resume(.found(info ?? nil))
+            let timer = Task {
+                try? await Task.sleep(for: timeout)
+                guard !Task.isCancelled else { return }
+                call.cancel()
+                once.resume(.timedOut)
             }
             Task {
-                try? await Task.sleep(for: timeout)
-                read.cancel()
-                once.resume(.timedOut)
+                let info = await call.value
+                timer.cancel()
+                once.resume(.found(info))
             }
         }
     }

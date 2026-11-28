@@ -243,7 +243,7 @@ enum TimelineTesting {
         defer { dir.remove() }
         let (recorder, url) = try T.recorder(in: dir)
         await recorder.record(.move(T.global(1, 1)), at: T.at(0))
-        #expect(try Data(contentsOf: url).isEmpty)
+        #expect(try T.lines(url).isEmpty)
         await recorder.flush()
         #expect(try T.lines(url).count == 1)
         await recorder.discard()
@@ -260,7 +260,7 @@ enum TimelineTesting {
         await recorder.startFlushing()
         await recorder.record(.move(T.global(1, 1)), at: T.at(0))
         var waited = 0
-        while (try Data(contentsOf: url)).isEmpty, waited < 500 {
+        while (try T.lines(url)).isEmpty, waited < 500 {
             try await Task.sleep(for: .milliseconds(10))
             waited += 1
         }

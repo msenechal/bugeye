@@ -26,9 +26,11 @@ public struct FakeAXReader: AXReader {
             for waiter in waiters { waiter.resume() }
         }
 
-        /// Returns once `count` lookups have reached the gate. Polls; for tests only.
-        public func waitUntilEntered(count: Int) async {
-            while entered < count { await Task.yield() }
+        /// Returns once `count` lookups have reached the gate, or after `limit` so a regression fails its test
+        /// instead of hanging the suite. Polls; for tests only.
+        public func waitUntilEntered(count: Int, limit: Duration = .seconds(5)) async {
+            let deadline = ContinuousClock.now + limit
+            while entered < count, ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(1)) }
         }
 
         func pass() async {

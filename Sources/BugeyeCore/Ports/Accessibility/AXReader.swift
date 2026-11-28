@@ -6,20 +6,24 @@ public struct AXElementInfo: Hashable, Sendable {
     /// "AXSecureTextField", "AXSearchField", …
     public var subrole: String?
     /// Always nil for a secure element.
-    public var title: String?
+    public private(set) var title: String?
     /// Static text only. Always nil for text-entry and secure elements: typed text is never read (`design/11` §6).
     /// Not Codable on purpose: decoding would bypass the rule the initializer enforces.
-    public var text: String?
+    public private(set) var text: String?
     /// In global points.
     public var frame: Rect2D
     public var isTextEntry: Bool
-    /// A secure field (a password): forces `title` and `text` to nil.
-    public var isSecure: Bool
+    /// A secure field (a password): forces `title` and `text` to nil. Also true for the `AXSecureTextField`
+    /// subrole, so an adapter that forgets the flag still withholds the field.
+    public private(set) var isSecure: Bool
+
+    public static let secureSubrole = "AXSecureTextField"
 
     public init(
         role: String, subrole: String? = nil, title: String?, text: String?, frame: Rect2D, isTextEntry: Bool,
         isSecure: Bool = false
     ) {
+        let isSecure = isSecure || subrole == Self.secureSubrole
         self.role = role
         self.subrole = subrole
         self.title = isSecure ? nil : title
