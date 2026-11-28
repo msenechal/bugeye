@@ -32,6 +32,8 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (final review A, Minor 5): the text probe keeps its loose width bound (ink between 0.8 × and the measured width + 1 px) instead of the plan's "within 1 px": ink bounds exclude the side bearings that `CTLineGetTypographicBounds` includes, so an exact match would test Core Text, not the executor. Font agreement is by construction: both call `CoreTextFonts.font(for:)`. (cost if wrong: low.)
 - Ruling (final review A, Minor 8): the executor calls the blur provider synchronously; slice C's canvas provider returns a cached result or nil and computes off the main actor. (cost if wrong: none.)
 
+- Ruling (claude-review A, Important): nested group opacities now multiply. The executor keeps a stack of effective alphas, and an isolated group's children start again from 1 inside its layer, as Core Graphics resets alpha in a transparency layer. A nested group's shadow replaces its parent's for the drawing inside it (documented). Probe tests cover 0.5 inside 0.5 (non-isolated and isolated inner group) and an isolated parent. They can't be seen failing on Linux; the macOS job is the check. (cost if wrong: none.)
+
 ## Waiting on
 
 - Capture's and Quick Access's wiring PRs, before slice D merges and before the manual pass (contracts §9).
