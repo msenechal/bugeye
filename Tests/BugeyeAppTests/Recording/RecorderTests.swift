@@ -256,13 +256,18 @@ enum Samples {
         let mov = try await Samples.movie(in: dir)
         let mp4 = dir.file("late.mp4")
         let blocked = ProgressBox()
+        let release = DispatchSemaphore(value: 0)
         let started = ContinuousClock.now
-        let outcome = await MovieConverter.convert(mov, to: mp4, deadline: .milliseconds(300)) { value in
+        // The deadline leaves room for loading the movie on a busy runner, so the pump is reached and then stuck
+        // until the test releases it (macos run 46127213310 reached the deadline before the first sample).
+        let outcome = await MovieConverter.convert(mov, to: mp4, deadline: .seconds(1)) { value in
             guard blocked.values.isEmpty else { return }
             blocked.add(value)
-            Thread.sleep(forTimeInterval: 2)
+            _ = release.wait(timeout: .now() + 10)
         }
-        #expect(ContinuousClock.now - started < .milliseconds(1500))
+        let elapsed = ContinuousClock.now - started
+        release.signal()
+        #expect(elapsed < .seconds(5))
         #expect(outcome == .keptMovie(reason: "timed out"))
         #expect(!blocked.values.isEmpty)
         #expect(FileManager.default.fileExists(atPath: mov.path))
