@@ -20,3 +20,4 @@ Final review of Wave 0 (PR #2, 28 Nov 2026), Minor findings:
 - M9: `.gitignore` doesn't list `docs/rd/` and `t.md` (CLAUDE.md says to keep them untracked).
 - M10: `#if DEBUG` blocks sit inline in `AppDelegate.swift`, against the `Debug*.swift` rule; move them to an `AppDelegate` extension in `DebugAppWiring.swift` or note the exception in CLAUDE.md.
 - M11: a skipped required check (`linux`/`macos` on a fork PR) counts as passing in GitHub rulesets, so a fork PR could merge without CI. Harmless for a one-user repo; note it in the ruleset or require the review too.
+- 28 Nov 2026, PR #2 claude-review (Minor): the debug channel serves clients one at a time on its accept thread, and `SO_RCVTIMEO` is per read, so a client trickling a byte every few seconds blocks all others. Add an overall per-connection deadline (~30 s) or a thread per client. Where: `Sources/BugeyeApp/DebugChannel.swift`.
