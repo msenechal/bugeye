@@ -69,9 +69,10 @@ import Testing
 
     @Test func closingBelowZeroCountsAnUnderflow() {
         var applied: [ActivationPolicy] = []
-        let windows = DocumentWindows { applied.append($0) }
+        var reported = 0
+        let windows = DocumentWindows(apply: { applied.append($0) }, onUnderflow: { reported += 1 })
         windows.closed()
-        #expect(windows.openCount == 0 && windows.underflows == 1 && applied == [])
+        #expect(windows.openCount == 0 && windows.underflows == 1 && applied == [] && reported == 1)
         windows.opened()
         #expect(windows.openCount == 1 && applied == [.regular])
     }

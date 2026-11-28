@@ -4,11 +4,16 @@ public enum ActivationPolicy: Hashable, Sendable { case accessory, regular }
 @MainActor
 public final class DocumentWindows {
     private let apply: @MainActor (ActivationPolicy) -> Void
+    private let onUnderflow: @MainActor () -> Void
     public private(set) var openCount = 0
     public private(set) var underflows = 0
 
-    public init(apply: @escaping @MainActor (ActivationPolicy) -> Void) {
+    /// `onUnderflow` runs on each `closed()` below 0, so the shell can log its fault (K37).
+    public init(
+        apply: @escaping @MainActor (ActivationPolicy) -> Void, onUnderflow: @escaping @MainActor () -> Void = {}
+    ) {
         self.apply = apply
+        self.onUnderflow = onUnderflow
     }
 
     /// 0 → 1 applies `.regular`.
@@ -21,6 +26,7 @@ public final class DocumentWindows {
     public func closed() {
         guard openCount > 0 else {
             underflows += 1
+            onUnderflow()
             return
         }
         openCount -= 1
