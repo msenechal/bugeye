@@ -2,6 +2,11 @@
 
 Minor findings from final reviews, and work noticed but out of scope. Newest first. Each entry: date, source (PR or review), the finding, where.
 
+Final review of the Wave 1 contracts (PR #3, 28 Nov 2026), Minor findings not fixed in its fix pass:
+- M1: `CaptureFileWriter` failure paths without a test: a cross-volume `move` whose final source removal fails (the placed copy must be removed and the source kept), a failed `copy` leaving its source untouched, and `write(requireExisting: true)` failing part-way (temp removed, target untouched). Add a seam for the source removal and the three assertions. Where: `Tests/BugeyeCoreTests/CaptureFileWriterContractTests.swift`.
+- M5 (noted, not fixed): `TerminationGate` has no timeout; a participant that never returns keeps the app in `.terminateLater`. The spec asks for none; the doc comment now says participants must not rely on default-mode run-loop sources. Consider logging a participant that takes longer than a few seconds. Where: `Sources/BugeyeFeatures/TerminationGate.swift`.
+- M6 (partly): `AppServicesTests` still uses `"/Users/m"` as its home (Wave 0's precedent; nothing writes there today). Once epic installs run inside `AppServices`, pass a `TempDirectory` home. Where: `Tests/BugeyeAppTests/AppServicesTests.swift`.
+
 - 27 Nov 2026, PR #2 claude-review: `scripts/guards.sh` checks workflow conditions by substring (comment lines now excluded). Parse the YAML per job (e.g. `yq`) and require the same-repository and draft conditions on each job's `if:`, so a weakening `||` branch can't pass. Where: `scripts/guards.sh` rule 5.
 
 - 27 Nov 2026, PR #2 claude-review (round 3, Minor): `CaptureFileWriter` doesn't fsync the temp file before `rename(2)` (the POSIX mode is now kept; creation date and ACLs are not). Where: `Sources/BugeyeCore/Files/CaptureFileWriter.swift`.

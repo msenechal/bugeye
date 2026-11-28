@@ -30,6 +30,7 @@ Trust this file and `git log` over memory. Contract amendments (K2) add their ru
 | 19 | done | 5ad916c | not compiled here; macOS run 46092621392 found a missing `import Foundation` (fixed ad1fd82) |
 | 20 | done | 1a02357 | not compiled here |
 | 21–22 | done | b4e36a4 | not compiled here; macOS run 46092736765 failed one test (`performActionForItem` needs a running NSApp), fixed 7b34a14 |
+| review | done | (see rulings) | fresh final review: 0 Critical, 3 Important, 7 Minor; fix pass below |
 | macOS | green | 7b34a14 | manual run https://github.com/msenechal/bugeye/actions/runs/46092982896: build, all tests, bundle, release symbols |
 
 ## Rulings
@@ -48,6 +49,11 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 - Ruling: `AppServices.init` throws `LaunchError` (`.conflicts` or `.duplicates(router:settingsPanes:debugCommands:)`) instead of `FeatureRegistryError`, and takes an `extraInstall` closure (tests only) so the duplicate-id launch failures can be tested while every wiring is empty. It also takes `requestNotificationAuthorization`, which `AppDelegate` calls at launch, because `AppContext.notifier` is the port, not the adapter. (cost if wrong: none.)
 - Ruling: `MenuBarController` draws through a `StatusItemDisplay` protocol (the real one wraps `NSStatusItem`), so the override's badge, label, menu and restore are tested without a status item, as §4.5 asks. (cost if wrong: none.)
 - Ruling: the `macos` job was reached with manual `workflow_dispatch` runs on the branch while the PR was a draft (CLAUDE.md allows it), so `claude-review` didn't re-run on every compile fix. (cost if wrong: none.)
+
+- Ruling (final review I1, Important): the launch-failure tests register test-only ids (`test.item`, `test.pane`, `test.command`) and check the list contains them, instead of `capture` / `quickAccess.stack` compared to the whole list, which Capture's and Quick Access's own registrations would have broken (K20). (cost if wrong: none.)
+- Ruling (final review I2, Important): where `renameatx_np` answers `ENOTSUP` or `EINVAL` (exFAT, SMB, NFS have no `RENAME_EXCL` / `RENAME_SWAP`), the writer falls back to a check-then-rename for both the no-replace rename and `requireExisting`. That fallback can race with another writer between the check and the rename; the atomic primitives stay the path on APFS and HFS+. Seams `nativeNoReplace` / `nativeSwap`; tests failed first. The swapped-out old file is now removed even if `unlink` fails (M2). (cost if wrong: low; a narrow race on non-APFS volumes only, where the alternative was every save failing.)
+- Ruling (final review I3, Important): `copy(_:to:identity:)` onto its own source (any spelling of the path, or a hard link) throws the new `CaptureFileWriter.SameFile` and changes nothing, so the source is never changed (K28). It has no user-visible text: Quick Access treats it as "nothing to do". Test failed first. (cost if wrong: low; if Quick Access wants a notice, it needs a settled string, an additive amendment.)
+- Ruling (final review M3, M4, M5, M6, M7, Minor): fixed in the fix pass: a test pins that a subscriber added during delivery gets only later events (characterises code the review found correct, so it passed at once); the debug handler is created before the `onLaunch` steps so `events` includes what they publish; `TerminationGate`'s doc says participants must not rely on default-mode run-loop sources; the shell tests use a `TempDirectory` home; `linux.yml` passes `base_ref` through `env:`. M1, the rest of M5 and `AppServicesTests`' home are in `docs/backlog.md` (this PR is contract, so it may write the backlog). (cost if wrong: none.)
 
 ## Waiting on user
 
