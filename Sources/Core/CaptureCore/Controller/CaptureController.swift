@@ -76,8 +76,8 @@ public final class CaptureController: AreaSelector {
         }
     }
 
-    /// Returns once the flow is in `phase` (now, or after a later event). Tests and the debug channel use it instead
-    /// of polling.
+    /// Returns once the flow is in `phase`: now, or the next time it enters it. A phase entered and left before the
+    /// call isn't seen, so callers wait for a phase they know is coming. Tests use it instead of polling.
     public func waitUntil(_ phase: CaptureFlow.Phase) async {
         guard flow.phase != phase else { return }
         await withCheckedContinuation { phaseWaiters.append((phase, $0)) }
@@ -113,6 +113,12 @@ public final class CaptureController: AreaSelector {
 
     /// The live session, if any.
     public var session: SessionID? { flow.session }
+
+    /// Sessions whose frozen frames are still held (tests: a finished or cancelled session holds none).
+    public var heldFrameSessions: Int { frames.count }
+
+    /// Freezes, window captures and deliveries still running.
+    public var inFlightCount: Int { inFlight.count }
 
     /// Waits until every freeze, window capture and delivery started so far has finished (tests, debug).
     public func settle() async {
@@ -159,8 +165,10 @@ public final class CaptureController: AreaSelector {
         case .redraw(let session, let display, let damage):
             shell?.redraw(session, display: display, damage: damage)
         case .registerEscape:
-            _ = registrar.register(CaptureModule.ID.escape, key: .escape) { [weak self] in self?.send(.globalEscape) }
-            shell?.log(.hotkeys, "escape on")
+            let ok = registrar.register(CaptureModule.ID.escape, key: .escape) { [weak self] in
+                self?.send(.globalEscape)
+            }
+            shell?.log(.hotkeys, ok ? "escape on" : "escape taken")
         case .unregisterEscape:
             registrar.unregister(CaptureModule.ID.escape)
             shell?.log(.hotkeys, "escape off")
@@ -213,7 +221,10 @@ public final class CaptureController: AreaSelector {
     private func track(_ work: @escaping @MainActor () async -> Void) {
         let key = nextTask
         nextTask += 1
-        inFlight[key] = Task { @MainActor in await work() }
+        inFlight[key] = Task { @MainActor [weak self] in
+            await work()
+            self?.inFlight[key] = nil
+        }
     }
 
     private func freeze(_ session: SessionID, _ target: FreezeTarget) {
@@ -239,6 +250,8 @@ public final class CaptureController: AreaSelector {
             }.value
             guard let self else { return }
             let windows = await windowTasks[session]?.value ?? []
+            // A freeze that outlived its session (cancelled meanwhile) changes nothing and keeps no frames.
+            guard flow.session == session, flow.phase == .freezing else { return }
             switch result {
             case .success(let frozen):
                 let ms = Int((clock().timeIntervalSince(start) * 1000).rounded())
@@ -292,23 +305,19 @@ public final class CaptureController: AreaSelector {
         let pipeline = environment.pipeline
         let router = output
         let timeZone = environment.timeZone
-        let sources: [(Delivery, CapturedImage?)] = deliveries.map { delivery in
+        // The crop itself runs off the main actor, in `prepare`.
+        let sources: [(Delivery, CapturedImage?, PixelRect?)] = deliveries.map { delivery in
             switch delivery.source {
-            case .window: (delivery, windowImages[session])
+            case .window: (delivery, windowImages[session], nil)
             case .frame(let display, let crop):
-                (
-                    delivery,
-                    frames[session]?.first { $0.display.id == display }.flatMap { frozen in
-                        crop.map { pipeline.crop(frozen.image, to: $0.raw) } ?? frozen.image
-                    }
-                )
+                (delivery, frames[session]?.first { $0.display.id == display }?.image, crop)
             }
         }
         track { [weak self] in
             var notices: [Notice] = []
-            for (delivery, image) in sources {
+            for (delivery, image, crop) in sources {
                 let prepared: Prepared = await Task.detached {
-                    Self.prepare(image, delivery: delivery, settings: settings, pipeline: pipeline)
+                    Self.prepare(image, crop: crop, delivery: delivery, settings: settings, pipeline: pipeline)
                 }.value
                 guard let self else { return }
                 switch prepared {
@@ -339,11 +348,14 @@ public final class CaptureController: AreaSelector {
         case failed(String)
     }
 
-    /// Downscale (when on and scale > 1), encode, preview. Off the main actor.
+    /// Crop, downscale (when on and scale > 1), encode, preview. Off the main actor.
     nonisolated static func prepare(
-        _ image: CapturedImage?, delivery: Delivery, settings: CaptureSettings, pipeline: any ImagePipeline
+        _ image: CapturedImage?, crop: PixelRect?, delivery: Delivery, settings: CaptureSettings,
+        pipeline: any ImagePipeline
     ) -> Prepared {
-        guard var image else { return .failed(CaptureStrings.displayDisconnected) }
+        guard let source = image, var image = crop.map({ pipeline.crop(source, to: $0.raw) }) ?? source else {
+            return .failed(CaptureStrings.displayDisconnected)
+        }
         var ppp = delivery.scale
         if settings.downscaleToPoints, delivery.scale > 1, let small = pipeline.downscale(image, by: 1 / delivery.scale)
         {

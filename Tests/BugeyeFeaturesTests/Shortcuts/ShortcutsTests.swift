@@ -286,6 +286,18 @@ final class ShortcutsHarness {
         #expect(h.registrations["capture.area"] == false)
     }
 
+    @Test func restoreDefaultsSwapsKeysBetweenRowsWithoutReportingThemTaken() {
+        let h = ShortcutsHarness()
+        h.model.registerAll()
+        h.model.typed(KeyCombo("x", [.control, .option]), for: "capture.fullscreen")
+        h.model.typed(KeyCombo("3", [.shift, .command]), for: "capture.area")
+        #expect(h.registrar.registered["capture.area"] == shiftCmd3)
+        h.model.restoreDefaults()
+        #expect(h.model.rows.allSatisfy { $0.message == nil && $0.registered })
+        #expect(h.registrar.registered["capture.fullscreen"] == shiftCmd3)
+        #expect(h.registrar.registered["capture.area"] == shiftCmd4)
+    }
+
     @Test func comboConvertsToAGlobalKey() {
         #expect(
             KeyCombo("3", [.option, .shift, .command]).globalKey

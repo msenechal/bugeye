@@ -103,7 +103,8 @@ public final class FakeImagePipeline: ImagePipeline {
     }
 }
 
-/// Registrations in memory. Keys in `taken` are held by "another app"; `press(id)` runs a registration's handler.
+/// Registrations in memory. Keys in `taken` are held by "another app", and a key another id holds is refused too,
+/// as Carbon refuses an in-process duplicate; `press(id)` runs a registration's handler.
 @MainActor
 public final class FakeHotkeyRegistrar: HotkeyRegistrar {
     public var taken: Set<GlobalKey> = []
@@ -116,7 +117,7 @@ public final class FakeHotkeyRegistrar: HotkeyRegistrar {
 
     public func register(_ id: String, key: GlobalKey, onPress: @escaping @MainActor () -> Void) -> Bool {
         unregister(id)
-        let ok = !taken.contains(key)
+        let ok = !taken.contains(key) && !registered.values.contains(key)
         attempts.append((id, key, ok))
         guard ok else { return false }
         registered[id] = key

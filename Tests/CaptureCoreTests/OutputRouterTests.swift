@@ -138,11 +138,12 @@ import Testing
         #expect(result.notices == [Notice(title: "Capture failed", body: "Couldn't write the file.")])
     }
 
-    @Test func folderFallbackAndTempFailureGiveBothNotices() throws {
+    @Test func whenTheFolderAndTheTempWriteBothFailOnlyCaptureFailedIsPosted() throws {
         let setup = Setup()
         try Data().write(to: setup.dir.url.appendingPathComponent("Caches"))
         let result = setup.router.deliver(request(setup))
-        #expect(result.notices.map(\.title) == ["Couldn't save to folder", "Capture failed"])
+        #expect(result.notices.map(\.title) == ["Capture failed"])
+        #expect(!result.logs.contains { $0.hasPrefix("kept in temp") })
     }
 }
 

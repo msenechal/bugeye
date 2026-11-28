@@ -55,16 +55,13 @@ public struct OutputRouter: Sendable {
         var notices: [Notice] = []
         var logs: [String] = []
         var saved: URL?
+        var folderError: (any Error)?
         if request.settings.saveToFolder {
             do {
                 saved = try create(request, name: name, in: request.saveFolder, createFolder: false)
                 logs.append("saved \(saved!.lastPathComponent)")
             } catch {
-                notices.append(
-                    Notice(
-                        title: OutputStrings.folderUnavailableTitle,
-                        body: OutputStrings.folderUnavailableBody(path: request.displayedSaveFolder)))
-                logs.append("kept in temp \(name): \(Self.reason(error))")
+                folderError = error
             }
         }
         let url: URL
@@ -73,6 +70,14 @@ public struct OutputRouter: Sendable {
         } else {
             do {
                 url = try create(request, name: name, in: request.tempFolder, createFolder: true)
+                // The folder notice only once the capture really is kept temporarily.
+                if let folderError {
+                    notices.append(
+                        Notice(
+                            title: OutputStrings.folderUnavailableTitle,
+                            body: OutputStrings.folderUnavailableBody(path: request.displayedSaveFolder)))
+                    logs.append("kept in temp \(url.lastPathComponent): \(Self.reason(folderError))")
+                }
             } catch {
                 logs.append("failed screenshot: \(Self.reason(error))")
                 if request.settings.copyToClipboard {

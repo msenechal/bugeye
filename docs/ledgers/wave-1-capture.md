@@ -50,6 +50,13 @@ Slice 2:
 - Ruling: an unreadable `com.apple.symbolichotkeys` counts as every screenshot entry missing (so on, with its default key), which is macOS's own state on a fresh account. (cost if wrong: low; at worst a false conflict notice.)
 - Ruling: the Shortcuts model's launch notices come in the order macOS conflicts, then taken keys; a typed combo that registers but is taken stays stored with the taken message (§5.6: "A binding that fails to register stays stored"). (cost if wrong: none.)
 
+Final review of PR #20 (slice 2, fresh reviewer): 0 Critical, 2 Important, 7 Minor. Fix pass:
+
+- Ruling (review I1, Important): a freeze that finishes after its session ended (a selector cancelled mid-freeze) returns before storing frames, so no native frame outlives its session. Test failed first (`heldFrameSessions`). (cost if wrong: none.)
+- Ruling (review I2, Important): `ShortcutsModel.registerAll` releases every row before registering any, so Restore Defaults can swap keys between rows; `FakeHotkeyRegistrar` now refuses a key another id holds, as Carbon does. Tests failed first. (cost if wrong: none.)
+- Ruling (review M1): with the folder unusable and the temp write failing too, only `Capture failed` is posted and nothing logs `kept in temp`. Test failed first. (cost if wrong: none.)
+- Ruling (review M2–M7): finished tasks leave `inFlight`; the frame crop runs off the main actor in `prepare`; a refused Esc logs `escape taken`; `HotkeyRegistrar` documents that callers record outcomes (C27); the area test asserts close before reactivate; `waitUntil` documents that it sees only the next entry into a phase. (cost if wrong: none.)
+
 ## Waiting on user
 
 ## Backlog:

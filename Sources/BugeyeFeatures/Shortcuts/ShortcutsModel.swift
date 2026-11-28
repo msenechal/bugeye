@@ -90,6 +90,8 @@ public final class ShortcutsModel {
     /// Registers every binding: at launch (an `onLaunch` step) and from the pane's Try Again on any row.
     public func registerAll() {
         system = systemCombos()
+        // Release every row first, so rows can swap keys (Restore Defaults) without one refusing the other's.
+        for row in rows { registrar.unregister(row.spec.id) }
         for index in rows.indices { register(index) }
         changed()
     }

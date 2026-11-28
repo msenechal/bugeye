@@ -122,7 +122,8 @@ public struct GlobalKey: Hashable, Sendable {
     public static let escape = GlobalKey("\u{1B}")
 }
 
-/// Global hotkeys (Carbon `RegisterEventHotKey` on macOS, signature 'BgEy').
+/// Global hotkeys (Carbon `RegisterEventHotKey` on macOS, signature 'BgEy'). It records nothing itself: callers
+/// report outcomes (the Shortcuts model sets `AppContext.hotkeyStatus`, C27), so the temporary Esc never shows there.
 @MainActor
 public protocol HotkeyRegistrar: AnyObject {
     /// Registers `key` under `id`, first releasing any key `id` held. False when another app holds the key.

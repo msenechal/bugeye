@@ -92,7 +92,11 @@ final class ControllerHarness {
         #expect(h.shell.logged(.hotkeys) == ["escape on", "escape off"])
         #expect(h.shell.logged(.capture).contains("freeze 2 displays in 0 ms"))
         #expect(h.shell.logged(.capture).contains("saved Screenshot 2026-11-27 at 14.03.12.png"))
-        #expect(h.shell.calls.last == "reactivate" || h.shell.calls.contains("reactivate"))
+        // Leave: close, (sweep), reactivate, in that order, after the selection began.
+        let close = try #require(h.shell.calls.firstIndex(of: "close 1"))
+        let reactivate = try #require(h.shell.calls.firstIndex(of: "reactivate"))
+        #expect(close < reactivate)
+        #expect(h.shell.calls.firstIndex(of: "show 1")! < close)
     }
 
     @Test func everyDisplayIsFrozenOnceAndSavedInDisplayOrderWithOneTimestamp() async throws {
@@ -321,6 +325,19 @@ final class ControllerHarness {
         #expect(h.shell.shown.first?.0 == h.controller.session)
         h.controller.cancel(.recording)
         #expect(await second.value == .cancelled)
+    }
+
+    @Test func aFreezeFinishingAfterACancelKeepsNoFrames() async {
+        let h = ControllerHarness()
+        h.source.hold()
+        let task = Task { await h.controller.select(recording) }
+        await h.controller.waitUntil(.freezing)
+        h.controller.cancel(.recording)
+        #expect(await task.value == .cancelled)
+        h.source.release()
+        await h.controller.settle()
+        #expect(h.controller.heldFrameSessions == 0)
+        #expect(h.controller.inFlightCount == 0)
     }
 
     @Test func aSelectionWhileAScreenshotRunsAnswersBusy() async {

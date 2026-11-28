@@ -142,6 +142,14 @@ private let side = DisplayInfo(id: DisplayID(2), frame: Rect2D(x: 4, y: 0, width
         #expect(!registrar.press("a"))
     }
 
+    @Test func aKeyAnotherIdHoldsIsRefusedLikeCarbon() {
+        let registrar = FakeHotkeyRegistrar()
+        #expect(registrar.register("a", key: .escape) {})
+        #expect(!registrar.register("b", key: .escape) {})
+        registrar.unregister("a")
+        #expect(registrar.register("b", key: .escape) {})
+    }
+
     @Test func reRegisteringAnIdReplacesItsKey() {
         let registrar = FakeHotkeyRegistrar()
         _ = registrar.register("a", key: .escape) {}
