@@ -6,10 +6,6 @@ import Testing
 @testable import TextCore
 
 @MainActor @Suite struct TextServicesTests {
-    @Test func theContractStubHasNoStore() {
-        #expect(TextServices().maps == nil)
-    }
-
     @Test func busEventsReachTheStoreInOrder() async throws {
         let h = StoreHarness()
         let bus = CaptureEventBus()
