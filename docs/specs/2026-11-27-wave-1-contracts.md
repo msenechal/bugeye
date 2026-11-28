@@ -11,7 +11,7 @@ There was no brainstorm: the five epic specs are the input. Rulings I made (each
 | # | Ruling | Why |
 |---|---|---|
 | K1 | **One contracts PR lands first, alone, from one session.** Branch `feat/wave1-contracts`, from `main` once Wave 0 has merged; ledger `docs/ledgers/wave-1-contracts.md`. It absorbs Capture's former "PR 1" (Capture C1) and every epic's former "Contract needs". No epic session starts until it merges. | Every epic needs some of it; one session avoids five sessions racing on `BugeyeCore`, `BugeyeFeatures` and the shell (`design/14` §4 "contracts before code"). [Medium: the five sessions wait about a day for it.] |
-| K2 | **After the merge the contract is frozen.** A change to any file marked *contract* in §3 goes through a **contract amendment PR** (branch `feat/wave1-contracts-<slug>`, contract files only, one ruling in this spec's ledger and in the ledger of every epic that uses the changed item, see §5). Epics never edit contract files on their own branches. | A late change costs several sessions a rework; making it a separate, visible PR keeps it rare and reviewed. [Medium] |
+| K2 | **After the merge the contract is frozen.** A change to any file marked *contract* in §3 goes through a **contract amendment PR** (branch `feat/wave1-contracts-<slug>`, contract files only, one ruling in this spec's ledger, which each epic that uses the changed item copies into its own ledger on its own branch, K39, see §5). Epics never edit contract files on their own branches. | A late change costs several sessions a rework; making it a separate, visible PR keeps it rare and reviewed. [Medium] |
 | K3 | **What counts as contract: anything two Wave 1 epics use, or the shell needs.** A port only one Wave 1 epic uses is not frozen: the contracts PR **moves** its Wave 0 declaration, unchanged, into a folder that epic owns (§4.1.9), and the epic reshapes it with a ruling in its own ledger. The next wave's contracts PR promotes it when a second user appears. | Keeps the contracts PR small and lets each epic shape its own ports (Capture C8, OCR T4, Recording V3). [Low: a promotion later is a file move.] |
 | K4 | **The contracts PR implements shapes, fakes and plumbing, not features.** It writes: value types and protocols; fakes; the pure shared helpers every user needs identically (bus, writer additions, namer, folders, bindings, router, gates, menus, activity gating); the shell plumbing (wiring, panes, menus, status-item override, termination, main menu); and five small shared macOS adapters (clipboard, notifier, Screen Recording permission, Core Text measurer, `PixelBuffer` ↔ `CGImage`). Every screen, flow, overlay, panel and string table of a feature stays in its epic (§5). | `design/14` §4. The adapters are each under 100 lines and needed by two or more epics before any of them ships. [Low] |
 | K5 | **Names chosen once.** Editor events are `editingStarted` / `editingEnded` (Editor's names; Quick Access's `openedInEditor` / `closedInEditor` are renamed). Quick Access placements are `primary`, `menu`, `selection` (Quick Access's names; the Editor's `.strip` had no user and `.moreMenu` is `.menu`). | The editor names describe any document window, not only the editor; the strip is Quick Access's own and takes no foreign buttons except the primary. [Low: a rename.] |
@@ -30,14 +30,40 @@ There was no brainstorm: the five epic specs are the input. Rulings I made (each
 | K18 | **No `Package.swift` change.** Every fake needed is of a `BugeyeCore` type (`BugeyeTestSupport` sees only `BugeyeCore`, Wave 0 P14); Quick Access's handler fake is dropped, since a handler is two closures a test writes inline. | Feature branches never edit the manifest (Wave 0 W3). [Low] |
 | K19 | **No user Mac step.** Everything here is checked by `linux` and `macos` CI. The real notification banner, the permission prompt, the status item's look and the main menu in use are checked in Capture's, Recording's and the Editor's own Mac batches and manual passes. | Nothing here needs Screen Recording or a real display (`design/14` R8, R9). [Low] |
 
+Rulings added after the Wave 1 spec review (28 Nov 2026), one per finding (cost if wrong in brackets):
+
+| # | Ruling | Why |
+|---|---|---|
+| K20 | **No contract test asserts what the epics register.** The contracts PR rewrites `MenuBuilderTests.theMenuMatchesSpecSection5_3` to build its registry from `[GeneralModule()]`, not `AppServices.modules`. No contract test asserts the contents of `AppServices.modules`, or of a registry, menu, pane list or debug `modules` answer built from it, except through values computed from the five wiring lists (`modulesAreGeneralThenEveryWiringsModules`). The contracts PR's own shell tests (status-menu key from a binding, disabled unhandled item, Settings pane shown or hidden) use test-only modules. Checked in the final review. | Wave 1 spec review, finding 1: the first epic to fill its wiring would break a contract test it can't edit. [Low] |
+| K21 | **The epics' last (wiring) PRs merge in a fixed order** (§9): Capture; Quick Access; then the Editor, OCR and Recording, one at a time. Each epic's Mac batch and manual pass run once its predecessors' wiring PRs are on `main`; until then the session ledgers `Waiting on: <epic>` and continues. | Wave 1 spec review, finding 2: several batches and checklists need another epic's feature on `main`. [Low: a later epic waits a few days at most.] |
+| K22 | **`needs-mac-check` applies only once a feature is wired and reachable** (§9): on an epic's wiring PR and on later PRs that change the wired feature, never before. The batch on the wiring PR also runs the epic's real-framework adapter tests that hosted CI can't (Screen Recording, camera, microphone). | Wave 1 spec review, finding 3: before its wiring PR, nothing of the epic can be driven through the app. [Low] |
+| K23 | **The debug channel gains the commands the Mac batches need**, and an extension point (§4.5): `hotkey <id>`, `menu <id>`, `get <key>`, `set <key> <json>`, `events`; epics register their own commands (`quickAccess.stack`, `recording.state`, …) from their folders through `AppContext.debugCommands`. Debug builds only. | Wave 1 spec review, finding 4: batches "with no action from you" (`design/13` §4) need to trigger hotkeys, set settings and read state; Wave 0 answers only `ping` and `modules`, in contract files. [Low] |
+| K24 | **Every Wave 1 branch names its epic.** Epic branches, fix and stacked PRs included, are `feat/wave1-<epic>-<slice>`; ledgers are `docs/ledgers/wave-1-<epic>.md`. The ownership check fails, instead of skipping, a branch matching `^feat/wave-?1-` that isn't `feat/wave1-contracts…` or one of the five prefixes (§3). | Wave 1 spec review, finding 5: the `write-plan` skill's `feat/<wave>` names would skip the check silently. [Low] |
+| K25 | **`docs/*wave-1-<epic>*` matches by file name.** It means any path under `docs/` whose file name contains `wave-1-<epic>` (`*` crosses `/`), so an epic's plan, ledger and checklist pass its own check (§3). | Wave 1 spec review, finding 6: in a shell glob `*` doesn't cross `/`, so an epic's first ledger commit would fail. [Low] |
+| K26 | **`CLAUDE.md` is contract, and one wave-closing PR updates it.** An epic doesn't edit it; its wiring PR's description ends with a `CLAUDE.md changes` block (Features, Next and code-map lines). After the five wiring PRs merge, `feat/wave1-contracts-claude-md` applies every block and moves the epics' backlog items (K39) to `docs/backlog.md` (§9). | Wave 1 spec review, finding 7: `design/11` §7's "update it at each merge" would fail the ownership check and collide five times. [Low] |
+| K27 | **`CaptureFileWriter.write` gains `requireExisting`** (§4.1.2): with true, the final step replaces the target only if it still exists, else throws `TargetMissing` and leaves nothing behind. The editor's Save uses it. | Wave 1 spec review, finding 8: a Save racing Quick Access's Save recreated the file at its old path without its ID (`design/03`'s fixed bug, `design/11` §6). [Low] |
+| K28 | **`CaptureFileWriter.copy(_:to:identity:)`** (§4.1.2) copies a file with its preserved attributes and a new identity without reading it into memory. Quick Access's Save As… uses it for every kind. | Wave 1 spec review, finding 11: `write(_ data:)` would load a multi-GB recording into memory; the first build copied the file. [Low] |
+| K29 | **`SelectionResult.area` carries a `StoredArea`** (display, display-local rect, the display's size at selection time). Recording stores it as is. | Wave 1 spec review, finding 13: Recording needs the display size for Return's "changed size" rule and has no screen port. [Low] |
+| K30 | **The writer's errors have settled descriptions** (§4.1.2): `NoFreeName`, `RenameFailed` and `TargetMissing` conform to `LocalizedError`, tested character for character. | Wave 1 spec review, finding 15: notices show `<error>`, which was "The operation couldn't be completed. (… error 1.)". [Low] |
+| K31 | **Who publishes what, in Wave 1** (§4.1.1): `created` by Capture, Recording, Quick Access (Save As… copy) and the Editor (gone-file Save As… after a Delete); `saved` and `deleted` by Quick Access; `moved`, `edited`, `editingStarted` and `editingEnded` by the Editor. | Wave 1 spec review, finding 18: three epic specs disagreed on `moved`. [Low] |
+| K32 | **`recordingSetup` ends with the countdown** (§4.1.8): it covers selecting, configuring and countingDown; Recording's `starting` (the countdown has ended, the first frame hasn't arrived) holds `recording`, so screenshots work from the end of the countdown, as `design/04` §1.1 and §6 item 3 say. | Wave 1 spec review, finding 20: the table included `starting` while §6 and the design said the countdown's end. The documented boundary is kept rather than moved. [Low] |
+| K33 | **Hotkey ids are not settings keys.** The `hotkeyID` example is `"capture.area"`; Capture's ids are settled in Capture §5.1. | Wave 1 spec review, finding 21. [Low] |
+| K34 | **`AppContext.hotkeyStatus`** (§4.5): Capture's registrar records which hotkeys registered; the status menu shows no key for one that didn't, as the Shortcuts pane shows `None`. | Wave 1 spec review, finding 22: the menu and the pane disagreed about a key that failed to register. [Low] |
+| K35 | **An override entry's own `isEnabled` decides** whether it is enabled; the router's `isEnabled` applies to `MenuItemSpec` items only. | Wave 1 spec review, finding 23: two sources of truth. [Low] |
+| K36 | **`ThumbnailDecorations` drops a capture's decorations on `deleted`** (it subscribes to the bus). | Wave 1 spec review, finding 24: nothing ever removed Recording's badges. [Low] |
+| K37 | **`DocumentWindows` below 0 counts, not traps:** the count stays 0, `underflows` increments and the shell logs a fault. | Wave 1 spec review, finding 25: `assertionFailure` would crash the test that checks it. [Low] |
+| K38 | **`TextMeasuring` has a measurable budget:** under 1 ms for 64 characters on the user's Mac. | Wave 1 spec review, finding 29: "fast enough" had no number. [Low] |
+| K39 | **Shared docs files don't take parallel appends.** Epic sessions write backlog items into their own ledger under `Backlog:`; the wave-closing PR (K26) moves them to `docs/backlog.md`. An amendment PR writes its ruling only to `docs/ledgers/wave-1-contracts.md`; each affected epic copies it into its own ledger on its own branch. | Wave 1 spec review, finding 30: five branches appending to one file, or an amendment writing into five ledgers, conflict at merge. [Low] |
+| K40 | **One test builder for `AppContext`:** `AppContext.testing(home:…)`, every port defaulted to its fake, in `Tests/BugeyeAppTests/Support/AppContextTesting.swift` (contract). | Wave 1 spec review, finding 32: five epics would each write a near-copy. [Low] |
+
 ## 2. Scope
 
 In scope:
-1. `BugeyeCore`: the capture item, kinds, events and bus; the writer's `create` and `move`; the file namer; the capture folders; the Capture pane's output keys and the shared "couldn't save" notice; the `Notifier`, `ScreenCapturePermission` and `TextMeasuring` ports; `WindowID` and `DisplayInfo`'s documented frame; `PixelBuffer`'s convention; the display-list reshape; `AreaSelector`, its relay, and `ScreenActivity`; moving five single-epic ports to their owners.
+1. `BugeyeCore`: the capture item, kinds, events and bus; the writer's `create`, `move`, `copy` and `requireExisting`, and its error descriptions; the file namer; the capture folders; the Capture pane's output keys and the shared "couldn't save" notice; the `Notifier`, `ScreenCapturePermission` and `TextMeasuring` ports; `WindowID` and `DisplayInfo`'s documented frame; `PixelBuffer`'s convention; the display-list reshape; `AreaSelector`, its relay, and `ScreenActivity`; moving five single-epic ports to their owners.
 2. `BugeyeFeatures`: spec changes (`HotkeySpec.title`, `MenuItemSpec.hotkeyID`, Quick Access placements and kinds, main-menu items), new registry conflicts, `HotkeyBindings`, `ActionRouter`, Quick Access's action and decoration types, `MainMenu`, `DocumentWindows`, `TerminationGate`, `StatusItemOverride`, the Shortcuts pane's spec.
 3. `BugeyeTestSupport`: the new fakes and recorders; moving the moved ports' fakes.
 4. `MacAdapters/Shared/`: the five shared adapters.
-5. `BugeyeApp`: `AppContext`, the five wiring stubs, `AppServices` and `AppDelegate` rewired, the status menu's delegate, hotkey keys and override, the Settings pane registry, the main menu, termination, the Screen Recording alert relay, `NightChrome`.
+5. `BugeyeApp`: `AppContext` (with `HotkeyStatus`, `DebugCommands` and the `AppContext.testing` builder), the debug channel's new commands, the five wiring stubs, `AppServices` and `AppDelegate` rewired, the status menu's delegate, hotkey keys and override, the Settings pane registry, the main menu, termination, the Screen Recording alert relay, `NightChrome`.
 6. `Resources/Info.plist` usage strings, three fixture-app additions, `TextCore`'s `TextServices` stub.
 7. `scripts/ownership.sh`, its self-test, its `make` target and its `linux` step.
 8. Updating the Wave 0 tests the reshapes break, and moving the tests of moved declarations.
@@ -46,7 +72,7 @@ Out of scope: every feature behaviour (§5's "implements" column); the Capture-o
 
 ## 3. Ownership after the merge
 
-`docs/backlog.md` takes appends from anyone. `design/` is read-only for everyone. Every path not listed is **contract** (owned by the contracts PR and its amendments): `Package.swift`, `Makefile`, `scripts/`, `.github/`, `Resources/`, `Sources/BugeyeFixture/`, every file of `BugeyeCore`, `BugeyeFeatures`, `BugeyeTestSupport`, `MacAdapters`, `BugeyeApp` and their tests outside the folders below.
+`design/` is read-only for everyone. Every path not listed is **contract** (owned by the contracts PR and its amendments): `Package.swift`, `Makefile`, `scripts/`, `.github/`, `Resources/`, `Sources/BugeyeFixture/`, `CLAUDE.md` (K26), `docs/backlog.md` (K39), every file of `BugeyeCore`, `BugeyeFeatures`, `BugeyeTestSupport`, `MacAdapters`, `BugeyeApp` and their tests outside the folders below (`Tests/BugeyeAppTests/Support/` included, K40). Epics write backlog items into their own ledger under `Backlog:`; the wave-closing PR moves them (K39, §9).
 
 | Epic (branch prefix) | Writes only |
 |---|---|
@@ -56,12 +82,14 @@ Out of scope: every feature behaviour (§5's "implements" column); the Capture-o
 | Recording (`feat/wave1-recording-`) | `Sources/Core/RecordingCore/` · `Tests/RecordingCoreTests/` · `Sources/BugeyeCore/Ports/Recording/` · `Sources/BugeyeCore/Ports/Accessibility/` · `Sources/BugeyeCore/Timeline/` · `Tests/BugeyeCoreTests/{Recording,Accessibility,Timeline}/` · `Sources/BugeyeTestSupport/{Recording,Accessibility}/` · `Tests/BugeyeTestSupportTests/{Recording,Accessibility}/` · `Sources/Mac/MacAdapters/{Accessibility,Permissions}/` · `Tests/MacAdaptersTests/{Accessibility,Permissions}/` · `Sources/BugeyeApp/Recording/` · `Sources/BugeyeApp/Wiring/RecordingWiring.swift` · `Tests/BugeyeAppTests/Recording/` · `docs/*wave-1-recording*` |
 | OCR (`feat/wave1-ocr-`) | `Sources/Core/TextCore/` · `Tests/TextCoreTests/` · `Sources/BugeyeCore/Ports/Text/` · `Tests/BugeyeCoreTests/Text/` · `Sources/BugeyeTestSupport/Text/` · `Tests/BugeyeTestSupportTests/Text/` · `Sources/Mac/MacAdapters/{Text,Images}/` · `Tests/MacAdaptersTests/{Text,Images}/` · `Sources/BugeyeApp/Wiring/TextWiring.swift` · `Tests/BugeyeAppTests/Text/` · `docs/*wave-1-ocr*` |
 
+`docs/*wave-1-<epic>*` means any path under `docs/` whose **file name** contains `wave-1-<epic>` (here `*` crosses `/`, K25): `docs/ledgers/wave-1-capture.md`, `docs/plans/2026-11-28-wave-1-capture.md` and `docs/checklists/wave-1-capture.md` are Capture's. Every Wave 1 branch, fix and stacked PRs included, is `feat/wave1-<epic>-<slice>` for its epic (K24).
+
 Settings keys follow the same split: `capture.*` Capture, `quickAccess.*` Quick Access, `editor.*` Editor, `recording.*` Recording, `text.*` OCR; `saveFolder` and `ai.model` stay the shell's. Reading another epic's key is allowed only through a contract constant (`OutputSettings`, §4.1.4). A `CaptureEvent.origin` is the publishing module's `FeatureModule.id`.
 
 **The ownership check** (`scripts/ownership.sh`, K16):
-- It takes the branch from `OWNERSHIP_BRANCH`, else `GITHUB_HEAD_REF`, else the current branch, and the base from its first argument (default `origin/main`). A branch that isn't `feat/wave1-<epic>-…` for one of the five prefixes above prints `ownership: <branch> is not an epic branch, skipped` and passes.
+- It takes the branch from `OWNERSHIP_BRANCH`, else `GITHUB_HEAD_REF`, else the current branch, and the base from its first argument (default `origin/main`). A branch that isn't `feat/wave1-<epic>-…` for one of the five prefixes above prints `ownership: <branch> is not an epic branch, skipped` and passes, except a branch matching `^feat/wave-?1-` that isn't `feat/wave1-contracts…`: it prints `ownership: <branch> looks like a Wave 1 branch but has no known prefix` and fails (K24).
 - It lists `git diff --name-only --no-renames $(git merge-base <base> HEAD) HEAD` (a move counts as both paths) and prints `ownership <epic>: <path> belongs to <owner>` for each path outside the epic's row, `<owner>` being another epic, or `contract (needs a contract amendment, K2)`. Any line fails it.
-- `scripts/test-ownership.sh` builds a throwaway git repository and proves: an owned path passes; another epic's path, a contract file, and a rename out of the epic's folder each fail with the right owner; `docs/backlog.md` passes; a non-epic branch is skipped. `make guards` runs it; `make ownership` runs the check.
+- `scripts/test-ownership.sh` builds a throwaway git repository and proves: an owned path passes; another epic's path, a contract file, and a rename out of the epic's folder each fail with the right owner; `docs/ledgers/wave-1-capture.md`, `docs/plans/2026-11-28-wave-1-capture.md` and `docs/checklists/wave-1-capture.md` pass on a Capture branch and `docs/ledgers/wave-1-editor.md` fails there (K25); `docs/backlog.md` and `CLAUDE.md` fail as contract; a non-epic branch is skipped; `feat/wave-1-capture-x` and `feat/wave1-captur-x` fail as unknown Wave 1 branches (K24). `make guards` runs it; `make ownership` runs the check.
 - `linux.yml`: the checkout gets `fetch-depth: 0` and, for pull requests only, a step that marks the workspace safe for git inside the container (`git config --global --add safe.directory "$GITHUB_WORKSPACE"`) and runs `make ownership BASE=origin/${{ github.base_ref }}`.
 
 ## 4. The contract
@@ -151,11 +179,31 @@ public final class CaptureSubscription {
 
 Rules, each a test: `publish` reaches every live subscriber in subscription order, and a cancelled or dropped subscription gets nothing; nested publishes are delivered FIFO after the current event, to everyone; `item(_:)` follows `created`, `saved`, `moved` and `edited`, forgets on `deleted`, and neither stores nor forgets on `editingStarted`, `editingEnded` or an unknown change; a change for an unknown id is still delivered, not stored; prefixes and extensions are exactly as above.
 
+Publishers in Wave 1 (K31): `created` by Capture, Recording, Quick Access (the Save As… copy) and the Editor (a gone-file Save As… after the capture was deleted, Editor E20); `saved` and `deleted` by Quick Access; `moved` by the Editor (a gone-file Save As… while the bus still knows the capture); `edited`, `editingStarted` and `editingEnded` by the Editor. Every module may subscribe to any of them.
+
 #### 4.1.2 The writer (`Files/CaptureFileWriter.swift`; Capture, Quick Access, Recording; Editor uses Wave 0's `write`)
 
 ```swift
 extension CaptureFileWriter {
-    public struct NoFreeName: Error, Equatable { public let name: String }
+    /// errorDescription: `Too many files are already named like “<name>”.` (K30)
+    public struct NoFreeName: Error, Equatable, LocalizedError { public let name: String }
+    // Wave 0's `RenameFailed` gains `LocalizedError`; errorDescription: `The file couldn't be moved into place (error <errno>).`
+
+    /// errorDescription: `“<file name>” was moved or deleted.` (K27, K30)
+    public struct TargetMissing: Error, Equatable, LocalizedError { public let url: URL }
+
+    /// Wave 0's `write`, plus `requireExisting` (K27). With true, the final step replaces `url` only if it still
+    /// exists: an exchange (`renameatx_np(temp, url, RENAME_SWAP)` on macOS; on Linux `renameat2(RENAME_EXCHANGE)`
+    /// if `Glibc` exposes it, else a check-then-rename through the test seam), then the swapped-out old file is
+    /// removed. If `url` is gone, it throws `TargetMissing` and removes its temp file, so a capture moved or
+    /// deleted meanwhile is never recreated at its old path. False (the default) is Wave 0's behaviour.
+    public func write(_ data: Data, to url: URL, attributesFrom source: URL? = nil, identity: CaptureIdentity = .keep,
+                      requireExisting: Bool = false) throws
+
+    /// Copies `source` to `destination` without reading it into memory (K28): a clone or copy to a temp name beside
+    /// `destination`, the preserved attributes (P11) and `identity` set on it, then a rename over `destination`.
+    /// Replacing is allowed (the save panel already asked). The source is never changed; on failure no temp file remains.
+    public func copy(_ source: URL, to destination: URL, identity: CaptureIdentity) throws
 
     /// Writes a new capture file into `folder`, trying `name`, then `CaptureFileNamer.candidate(name, attempt: 2…999)`,
     /// never replacing a file. The identity attribute is set before the file appears under its final name.
@@ -172,7 +220,7 @@ extension CaptureFileWriter {
 }
 ```
 
-The no-replace primitive is `renameatx_np(…, RENAME_EXCL)` on macOS. On Linux it is `renameat2(…, RENAME_NOREPLACE)` if the Swift `Glibc` module exposes it, else `link(2)` then `unlink(2)` (both refuse an existing target); the contracts PR picks one and ledgers it. An internal seam lets Linux tests force the cross-volume path. Tests on Linux, through `FakeFileMetadataStore`: `create` suffixes on a clash and never touches the existing file; `move` same-volume keeps every attribute, `.new` replaces the id; the cross-volume path keeps the preserved attributes and removes the source; a failure leaves the source and no partial file; ` (2)` goes before the last extension only (`a.b.png` → `a.b (2).png`); `NoFreeName` after 999.
+The no-replace primitive is `renameatx_np(…, RENAME_EXCL)` on macOS. On Linux it is `renameat2(…, RENAME_NOREPLACE)` if the Swift `Glibc` module exposes it, else `link(2)` then `unlink(2)` (both refuse an existing target); the contracts PR picks one and ledgers it. An internal seam lets Linux tests force the cross-volume path. Tests on Linux, through `FakeFileMetadataStore`: `create` suffixes on a clash and never touches the existing file; `move` same-volume keeps every attribute, `.new` replaces the id; the cross-volume path keeps the preserved attributes and removes the source; a failure leaves the source and no partial file; ` (2)` goes before the last extension only (`a.b.png` → `a.b (2).png`); `NoFreeName` after 999; `write(requireExisting: true)` replaces an existing target keeping its attributes, and on a missing target throws `TargetMissing`, creates nothing and leaves no temp file; `copy` keeps the preserved attributes, writes the new identity, replaces an existing destination and leaves the source untouched (mirroring `move`'s tests); the three error descriptions character for character.
 
 #### 4.1.3 Names and folders (`Captures/CaptureFileNamer.swift`, `Captures/CaptureFolders.swift`; Capture, Recording)
 
@@ -246,8 +294,8 @@ public struct TextLineMetrics: Hashable, Sendable {
     public init(width: Double, ascent: Double, descent: Double)
 }
 
-/// Measures one line of text, no wrapping, in pixels at `font.size` (Core Text on macOS). Fast enough to call on
-/// the main actor for short strings. Editor (text annotations, step numbers), Recording (keystroke badge).
+/// Measures one line of text, no wrapping, in pixels at `font.size` (Core Text on macOS). Called on the main actor:
+/// under 1 ms for 64 characters on the user's Mac (K38). Editor (text annotations, step numbers), Recording (keystroke badge).
 public protocol TextMeasuring: Sendable {
     func measure(_ line: String, font: FontDescriptor) -> TextLineMetrics
 }
@@ -369,7 +417,8 @@ public struct SelectionRequest: Hashable, Sendable {
 }
 
 public enum SelectionResult: Hashable, Sendable {
-    case area(DisplayID, Rect2D)                              // display-local, top-left, points
+    /// Display-local, top-left, points, with the display's size at selection time (K29).
+    case area(StoredArea)
     case display(DisplayID)
     case window(WindowID, display: DisplayID, frame: Rect2D)  // frame in Cocoa global points
     case cancelled
@@ -400,8 +449,8 @@ public final class AreaSelectorRelay: AreaSelector {
 public final class ScreenActivity {
     public enum Activity: String, Hashable, Sendable {
         case screenshotSelection   // Capture: from request to idle, purpose .screenshot only
-        case recordingSetup        // Recording: selecting, configuring, countingDown, starting
-        case recording             // Recording: recording, paused, finishing
+        case recordingSetup        // Recording: selecting, configuring, countingDown (K32)
+        case recording             // Recording: starting, recording, paused, finishing
     }
     public enum Request: Hashable, Sendable { case screenshot, captureText, startRecording, findCapture }
     public init()
@@ -439,7 +488,8 @@ public struct MenuItemSpec: Hashable, Sendable {
     public var title: String
     public var shownKey: KeyCombo?
     public var slot: MenuSlot
-    /// The menu shows this hotkey's current binding instead of `shownKey` (K13), e.g. "capture.hotkey.area".
+    /// The menu shows this hotkey's current binding instead of `shownKey` (K13), e.g. "capture.area" (a `HotkeySpec.id`,
+    /// not its settings key, K33). No key is shown while that hotkey isn't registered (K34).
     public var hotkeyID: String?
     public init(id: String, title: String, shownKey: KeyCombo? = nil, slot: MenuSlot, hotkeyID: String? = nil)
 }
@@ -544,7 +594,8 @@ public enum ThumbnailDecoration: Hashable, Sendable {
 
 @MainActor
 public final class ThumbnailDecorations {
-    public init()
+    /// Subscribes to `bus`: a `deleted` event drops every provider's decorations for that capture (K36).
+    public init(bus: CaptureEventBus)
     /// Replaces everything `provider` shows on `capture`; [] removes it.
     public func set(_ decorations: [ThumbnailDecoration], for capture: CaptureID, from provider: String)
     /// All providers' decorations, providers in first-set order.
@@ -560,7 +611,8 @@ public final class ThumbnailDecorations {
 @MainActor
 public final class ActionRouter {
     public init()
-    /// For a `MenuItemSpec` id or a `StatusItemOverride.Entry` id. `isEnabled` is asked each time the menu opens.
+    /// For a `MenuItemSpec` id or a `StatusItemOverride.Entry` id. `isEnabled` is asked each time the menu opens, for
+    /// `MenuItemSpec` items only: an override entry's own `Entry.isEnabled` alone decides (K35).
     public func onMenuItem(_ id: String, isEnabled: @escaping @MainActor () -> Bool = { true },
                            perform: @escaping @MainActor () -> Void)
     /// For a `HotkeySpec` id; Capture's registrar calls `performHotkey` when the key is pressed.
@@ -645,8 +697,9 @@ public final class DocumentWindows {
     public private(set) var openCount: Int
     /// 0 → 1 applies `.regular`.
     public func opened()
-    /// 1 → 0 applies `.accessory`. Below 0 is an assertion failure and the count stays 0.
+    /// 1 → 0 applies `.accessory`. Below 0 the count stays 0 and `underflows` increments; the shell logs a fault (K37).
     public func closed()
+    public private(set) var underflows: Int
 }
 ```
 
@@ -663,6 +716,7 @@ public struct StatusItemOverride: Hashable, Sendable {
         public var id: String?            // nil: a separator
         public var title: String
         public var shownKey: KeyCombo?
+        /// Decides alone; the router's `isEnabled` isn't asked for override entries (K35).
         public var isEnabled: Bool
         public init(id: String?, title: String, shownKey: KeyCombo? = nil, isEnabled: Bool = true)
         public static let separator: Entry
@@ -744,6 +798,10 @@ final class AppContext {
     let statusItem: StatusItemState
     let documentWindows: DocumentWindows
     let termination: TerminationGate
+    let hotkeyStatus: HotkeyStatus
+    #if DEBUG
+    let debugCommands: DebugCommands
+    #endif
     /// Keeps a controller alive for the app's life.
     func retain(_ object: AnyObject)
     /// Runs after the menu bar exists, in registration order: global hotkeys, timers, crash recovery.
@@ -773,6 +831,32 @@ final class AppContext {
     func observe(_ handler: @escaping @MainActor () -> Void)
 }
 
+/// Which hotkeys registered (K34). Capture's registrar sets it; the status menu reads it.
+@MainActor final class HotkeyStatus {
+    /// True unless `setRegistered(id, false)` was the last call for `id`.
+    func isRegistered(_ id: String) -> Bool
+    func setRegistered(_ id: String, _ registered: Bool)
+}
+
+#if DEBUG
+/// Sources/BugeyeApp/Debug/DebugCommands.swift: the debug channel's commands (K23, design/13 §4). Every command runs
+/// on the main actor and answers one line.
+@MainActor final class DebugCommands {
+    /// `prefix` is the command's first word, e.g. "quickAccess.stack"; `handler` gets the rest of the line.
+    /// A duplicate prefix, or one of the built-in commands, is recorded and fails launch, as a router id does.
+    func register(_ prefix: String, _ handler: @escaping @MainActor (_ arguments: String) -> String)
+    private(set) var duplicates: [String]
+}
+#endif
+
+// Tests/BugeyeAppTests/Support/AppContextTesting.swift (contract, K40):
+// extension AppContext { static func testing(home: String, settings: InMemorySettingsStore = .init(),
+//     metadata: FakeFileMetadataStore = .init(), notifier: FakeNotifier = .init(), clipboard: FakeClipboard = .init(),
+//     screenPermission: FakeScreenCapturePermission = .init(granted: true),
+//     modules: [any FeatureModule] = [GeneralModule()]) -> AppContext }
+// Every port defaults to its fake; every shell object (bus, router, gates, …) is a fresh real instance; the
+// `applyActivationPolicy` closure records its calls. A test passes `home` from a `TempDirectory`.
+
 // Sources/BugeyeApp/Wiring/CaptureWiring.swift (and QuickAccess, Editor, Recording the same way).
 // Created by the contracts PR, owned by the epic afterwards; both members stay empty until its last PR (K7).
 @MainActor
@@ -791,9 +875,10 @@ enum TextWiring {
 // @MainActor public final class TextServices { public init() {} }
 ```
 
-- **`AppServices`**: `static let modules = [GeneralModule()] + CaptureWiring.modules + QuickAccessWiring.modules + EditorWiring.modules + RecordingWiring.modules + TextWiring.modules`. Its initializer takes every port (live adapters by default, fakes in tests) and an `applyActivationPolicy` closure, builds the registry and the `AppContext`, then calls the installs in the order Capture, Quick Access, Editor, Recording, Text, and keeps `text: TextServices`. It throws when `router.duplicates` or `settingsPanes.duplicates` isn't empty; `AppDelegate` logs a fault and terminates, as for registry conflicts. Wave 0's `waveZeroRegistersOnlyGeneral` becomes `modulesAreGeneralThenEveryWiringsModules`, computed from the wiring lists, so no epic edits it.
+- **`AppServices`**: `static let modules = [GeneralModule()] + CaptureWiring.modules + QuickAccessWiring.modules + EditorWiring.modules + RecordingWiring.modules + TextWiring.modules`. Its initializer takes every port (live adapters by default, fakes in tests) and an `applyActivationPolicy` closure, builds the registry and the `AppContext`, then calls the installs in the order Capture, Quick Access, Editor, Recording, Text, and keeps `text: TextServices`. It throws when `router.duplicates`, `settingsPanes.duplicates` or (debug builds) `debugCommands.duplicates` isn't empty; `AppDelegate` logs a fault and terminates, as for registry conflicts. Wave 0's `waveZeroRegistersOnlyGeneral` becomes `modulesAreGeneralThenEveryWiringsModules`, computed from the wiring lists, so no epic edits it. Wave 0's `MenuBuilderTests.theMenuMatchesSpecSection5_3` builds its registry from `[GeneralModule()]` instead of `AppServices.modules`. No contract test asserts the contents of `AppServices.modules`, or of a registry, menu, pane list or debug `modules` answer built from it, except through values computed from the five wiring lists; the contracts PR's new shell tests use test-only modules (K20).
+- **Debug channel** (K23): `DebugCommandHandler` keeps `ping` and `modules` and gains, each answering `ok`, a value, or `error: <reason>` on one line: `hotkey <id>` (→ `router.performHotkey`), `menu <id>` (→ `router.performMenuItem`), `get <key>` (the stored `SettingsValue` as JSON, or `null`), `set <key> <json>` (→ `SettingsStore`), `events` (the last 50 `CaptureEvent`s, oldest first, as one JSON array of `{change, id, file, origin}`, `file` being the file name only), and any prefix registered in `AppContext.debugCommands`. The channel hops to the main actor for every command. `scripts/check-release-symbols.sh`'s pattern gains `DebugCommands`. Epics register their commands inside `#if DEBUG` in their own folders.
 - **`AppDelegate`**: a status-menu id that isn't About, Settings or Quit goes to `router.performMenuItem`, logged `no action for <id>` when it returns false. After the menu bar is built it asks the notifier for authorization, then runs the `onLaunch` steps. `applicationShouldTerminate` returns `.terminateLater` and replies with `termination.shouldTerminate()`.
-- **`MenuBarController`**: becomes its menu's `NSMenuDelegate`. `menuNeedsUpdate` sets each module item's key from `HotkeyBindings.current` (items with `hotkeyID`) and its enabled state from `router.isMenuItemEnabled`. It observes `StatusItemState`: with an override, the item gets variable length and draws the badge (red `● ` + elapsed in monospaced digits; `❙❙ ` + elapsed; the `hourglass` symbol), sets the accessibility label and swaps in the override menu, whose ids go through the router; without one it restores the square glyph, the `Bugeye` label and the module menu.
+- **`MenuBarController`**: becomes its menu's `NSMenuDelegate`. `menuNeedsUpdate` sets each module item's key from `HotkeyBindings.current` (items with `hotkeyID`; no key while `hotkeyStatus.isRegistered(hotkeyID)` is false, K34) and its enabled state from `router.isMenuItemEnabled`. It observes `StatusItemState`: with an override, the item gets variable length and draws the badge (red `● ` + elapsed in monospaced digits; `❙❙ ` + elapsed; the `hourglass` symbol), sets the accessibility label and swaps in the override menu, whose ids go through the router; without one it restores the square glyph, the `Bugeye` label and the module menu.
 - **Settings**: `SettingsView` shows General and AI as today, and every other pane from `settingsPanes`; a pane with no registered view is not shown (so Shortcuts appears once Capture registers it).
 - **Main menu**: `DocumentWindows`' apply closure: `.regular` sets the policy, installs `NSApp.mainMenu` built from `MainMenu.entries` (items target the first responder with the spec's selector), then activates Bugeye; `.accessory` removes the main menu and sets the policy back. `LSUIElement` stays.
 - **`NightChrome`** (`Sources/BugeyeApp/Chrome/NightChrome.swift`, `design/01` §2.15, values from Quick Access §4): tokens (gradient `#2B3242` → `#1B1F29`; 1 px inner border white 8 %; text `#E8EAF0`; accent `#FFC93C`, hover `#FFD666`, text on accent `#1F2430`; control fill white 7 %, hover 12 %; dark appearance) and two SwiftUI styles, `nightPanel(cornerRadius:)` (default 10 pt) and `NightButtonStyle(accent:)`. Quick Access's thumbnails and Recording's options bar and countdown both use it (Quick Access Q9's cost case).
@@ -805,12 +890,12 @@ enum TextWiring {
 
 ## 5. Who implements what
 
-"Contracts" means the contracts PR writes the code and its tests; otherwise it writes the shape (and fake) and the named epic implements the behaviour.
+"Contracts" means the contracts PR writes the code and its tests; otherwise it writes the shape (and fake) and the named epic implements the behaviour. The order in which the epics' features reach `main` is §9.
 
 | Item | Used by | Behaviour implemented by |
 |---|---|---|
 | Bus, `CaptureItem`, kinds, changes | all | contracts |
-| `CaptureFileWriter.create` / `move` | Capture, Quick Access, Recording | contracts |
+| `CaptureFileWriter.create` / `move` / `copy`, `write(requireExisting:)` | Capture, Quick Access, Recording, Editor | contracts |
 | `CaptureFileNamer`, `CaptureFolders`, `OutputSettings`, `OutputStrings` | Capture, Recording (Quick Access via the writer) | contracts; Capture's janitor purges the temp folder |
 | `Notifier`, its adapter, `FakeNotifier` | Capture, Quick Access, Editor, Recording | contracts |
 | `ClipboardWriter` adapter | Capture, Quick Access, Editor, Recording | contracts |
@@ -831,27 +916,28 @@ enum TextWiring {
 | `TerminationGate` | Editor (`addAsk`), Recording (`addFinish`) | contracts |
 | `StatusItemOverride`, `StatusItemState`, its rendering | Recording | contracts; Recording builds the overrides |
 | `SettingsPanes`, Shortcuts pane spec | Capture, Quick Access, Recording | contracts; each epic its pane |
-| Wiring stubs, `AppContext`, `AppServices`, `AppDelegate` | all | contracts; each epic its wiring file |
+| Wiring stubs, `AppContext`, `AppContext.testing`, `AppServices`, `AppDelegate`, `HotkeyStatus` | all | contracts; each epic its wiring file; Capture's registrar sets `HotkeyStatus` |
+| Debug channel commands, `DebugCommands` | every Mac batch | contracts; each epic its own commands |
 | `NightChrome` | Quick Access, Recording | contracts |
 | Info.plist usage strings, fixture additions | Recording, Capture, OCR (Mac batches) | contracts |
 | `TextServices` stub | OCR | OCR |
 | Ownership check | all | contracts |
 
-**Amendment rule (K2).** A session that finds the contract short stops that slice, writes the smallest change as a contract amendment PR (contract files only, tests first), adds a ruling to `docs/ledgers/wave-1-contracts.md` and to each affected epic's ledger, and tells the other sessions through the user. Additive changes (a new `CaptureChange`, a new fake) need no other epic's agreement; a changed or removed shape does.
+**Amendment rule (K2).** A session that finds the contract short stops that slice, writes the smallest change as a contract amendment PR (contract files only, tests first), adds a ruling to `docs/ledgers/wave-1-contracts.md` only, and tells the other sessions through the user; each affected epic copies the ruling into its own ledger on its own branch (K39). Additive changes (a new `CaptureChange`, a new fake) need no other epic's agreement; a changed or removed shape does.
 
 ## 6. What the reconciliation changed for the user
 
 No settled string changed. These outcomes are now fixed where the epic specs disagreed or were silent; each follows the design docs, but you may want to confirm them:
 1. A recording's thumbnail shows its `▶ mm:ss` badge in Wave 1 (K12). Quick Access had deferred the badge; Recording expected it.
 2. On quit with unsaved editors and a running recording, the editors ask first; a Cancel leaves the recording running. Only after every editor agrees does the recording stop, convert and save (K11).
-3. ⇧⌘3, ⌥⇧⌘3 and ⇧⌘4 are refused (dropped and logged, like a request during a capture) from Record Screen's selection until its countdown ends; they work during the recording itself (`ScreenActivity`, `design/01` §1.2). The Capture spec didn't state it.
+3. ⇧⌘3, ⌥⇧⌘3 and ⇧⌘4 are refused (dropped and logged, like a request during a capture) from Record Screen's selection until its countdown ends; they work from then on, during the recording itself (`ScreenActivity`, `design/01` §1.2, `design/04` §1.1, K32). The Capture spec didn't state it.
 4. A module's status-menu item is disabled until its handler is registered, so nothing clickable does nothing (K13).
 
 ## 7. Testing
 
-- **Linux (`make test-core`):** every rule in §4.1–4.2: the bus rules; kinds; the writer (§4.1.2); namer and candidates; folders for a given home; `OutputSettings` defaults and bad values; `OutputStrings` character for character; `isBalanced`, `ellipse`, `roundedRect` and the rewritten display-list golden JSON covering every command; `AreaSelectorRelay` with and without a target; the `ScreenActivity` table, every activity × request; the new registry conflicts and `mainMenuItems` order; `KeyCombo(description:)` round trips for every Capture and Recording default, invalid strings, `isValidHotkey`; `HotkeyBindings.current` for missing, `none`, invalid and valid values; `ActionRouter` (unregistered ids return false or nil, duplicates recorded and the first kept, `isEnabled` asked each time, one opener per kind); `ThumbnailDecorations` (replace, remove with [], provider order, observers called); `DocumentWindows` (0→1 and 1→0 only, below 0 stays 0); `TerminationGate` (ask order, first false stops, finish only after every ask, a second call shares the first answer); `MainMenu.entries` against §4.2.5's table; every fake's self-test; the moved tests still pass where they moved.
+- **Linux (`make test-core`):** every rule in §4.1–4.2: the bus rules; kinds; the writer (§4.1.2); namer and candidates; folders for a given home; `OutputSettings` defaults and bad values; `OutputStrings` character for character; `isBalanced`, `ellipse`, `roundedRect` and the rewritten display-list golden JSON covering every command; `AreaSelectorRelay` with and without a target; the `ScreenActivity` table, every activity × request; the new registry conflicts and `mainMenuItems` order; `KeyCombo(description:)` round trips for every Capture and Recording default, invalid strings, `isValidHotkey`; `HotkeyBindings.current` for missing, `none`, invalid and valid values; `ActionRouter` (unregistered ids return false or nil, duplicates recorded and the first kept, `isEnabled` asked each time for menu items and never for override entries, one opener per kind); `DebugCommandHandler`'s built-in commands against fakes; `ThumbnailDecorations` (replace, remove with [], provider order, observers called, a `deleted` event drops the capture's decorations); `DocumentWindows` (0→1 and 1→0 only, below 0 stays 0 and counts in `underflows`); `TerminationGate` (ask order, first false stops, finish only after every ask, a second call shares the first answer); `MainMenu.entries` against §4.2.5's table; every fake's self-test; the moved tests still pass where they moved.
 - **`make guards`:** the existing guards and `scripts/test-ownership.sh` (§3).
-- **macOS CI:** the pasteboard item (PNG + file URL + text on one item); the notifier's no-bundle path logs and doesn't crash, and posts before authorization are held, through an injected center; `CoreTextMeasurer` (positive width, bold wider than regular for the same text, ascent and descent match `CTFont`); `PixelBufferImages` round trip byte for byte in sRGB, a P3 image kept in P3 when asked, `preview` of a 2000 px image is 480 px wide and of a 300 px image unchanged; `AppServices` builds with fakes and `modulesAreGeneralThenEveryWiringsModules`; launch fails on a duplicate router or pane id; the status menu's key comes from a changed binding and a module item without a handler is disabled; the override badge, label and menu are applied and restored, and a second owner is refused; the main menu is installed on `.regular` and removed on `.accessory` (injected apply); `applicationShouldTerminate` answers `.terminateLater` and replies with the gate's answer; Settings shows a registered pane and hides an unregistered one; `Info.plist` holds both usage strings; the fixture app builds.
+- **macOS CI:** the pasteboard item (PNG + file URL + text on one item); the notifier's no-bundle path logs and doesn't crash, and posts before authorization are held, through an injected center; `CoreTextMeasurer` (positive width, bold wider than regular for the same text, ascent and descent match `CTFont`); `PixelBufferImages` round trip byte for byte in sRGB, a P3 image kept in P3 when asked, `preview` of a 2000 px image is 480 px wide and of a 300 px image unchanged; `AppServices` builds with fakes and `modulesAreGeneralThenEveryWiringsModules`; `AppContext.testing` builds; no contract test asserts the live module list beyond values computed from the wiring lists, `MenuBuilderTests` included (K20); launch fails on a duplicate router, pane or debug-command id; the status menu's key comes from a changed binding, is absent for a hotkey `HotkeyStatus` marks unregistered, and a module item without a handler is disabled; the debug channel answers `hotkey`, `menu`, `get`, `set`, `events` and a registered command; the override badge, label and menu are applied and restored, and a second owner is refused; the main menu is installed on `.regular` and removed on `.accessory` (injected apply); `applicationShouldTerminate` answers `.terminateLater` and replies with the gate's answer; Settings shows a registered pane and hides an unregistered one; `Info.plist` holds both usage strings; the fixture app builds.
 
 ## 8. Done when
 
@@ -861,3 +947,28 @@ No settled string changed. These outcomes are now fixed where the epic specs dis
 4. The PR description has a table mapping every item of each epic's "Uses from the contracts" list to the merged file and name, checked by the session, so the five sessions start from names that exist.
 5. No step on your Mac (K19).
 6. You merge it; the five epic sessions are started (or told) only after that.
+
+## 9. Wave 1 sequencing
+
+How the six Wave 1 sessions' work reaches `main` (K21, K22, K24, K26, K39). Each epic spec points here.
+
+**Branches and ledgers.** Every Wave 1 branch, fix and stacked PRs included, is `feat/wave1-<epic>-<slice>` (`capture`, `quick-access`, `editor`, `recording`, `ocr`); the contracts PR and its amendments are `feat/wave1-contracts…`. Each epic's ledger is `docs/ledgers/wave-1-<epic>.md`, its plan `docs/plans/<date>-wave-1-<epic>.md`, its checklist `docs/checklists/wave-1-<epic>.md`. Backlog items go in the ledger under `Backlog:`.
+
+**Before the wiring PR.** An epic's PRs merge whenever they are green (R10); `main` shows nothing of the feature until its wiring PR (K7). These PRs get no `needs-mac-check` label.
+
+**Wiring PRs: merge order.** An epic's last PR, the one that fills `<Epic>Wiring.modules` and `install`, merges only after the wiring PRs it depends on are on `main`:
+
+| Order | Wiring PR | Merges after | Because |
+|---|---|---|---|
+| 1 | Capture | the contracts PR | Every other feature acts on captures |
+| 2 | Quick Access | Capture | Its batch and checklist take captures; nothing shows a thumbnail without `created` |
+| 3 | Editor | Quick Access | Its checklist opens captures with Quick Access's Edit and double-click |
+| 3 | OCR | Quick Access | Its batch takes area captures and uses Quick Access's Delete mid-read |
+| 3 | Recording | Capture and Quick Access | Its selection is Capture's `AreaSelector`, alert and registrar; its batch checks a Quick Access thumbnail is absent from the video. Its overlay PR (not the wiring PR) merges after the Editor's executor PR (K10) |
+| 4 | Wave-closing PR `feat/wave1-contracts-claude-md` | all five | Applies every wiring PR's `CLAUDE.md changes` block and moves the ledgers' `Backlog:` items to `docs/backlog.md` (K26, K39) |
+
+The three order-3 PRs merge one at a time, in whichever order they are ready, each rebased on `main` first.
+
+**Mac checks.** `needs-mac-check` (`design/14` §5 step 7) goes on an epic's wiring PR, and on any later PR that changes the wired feature, never earlier (the Editor has no Mac batch, Editor E16, so its PRs never get it): before the wiring PR nothing of the epic is reachable in the app. The batch runs on the wiring PR's head, rebased on `main`, once the PRs in its "Merges after" column are on `main`; until then the session ledgers `Waiting on: <epic>` and goes on with other work. The batch first runs the epic's macOS adapter tests that hosted CI can't run (Screen Recording, microphone, camera), then the epic's own batch list, driving the app through the debug channel (§4.5, K23). The manual pass follows on the same build. The wiring PR merges after the user says "all good".
+
+**Wave close.** The wiring PR's description ends with a `CLAUDE.md changes` block (Features, Next and code-map lines). No epic edits `CLAUDE.md` or `docs/backlog.md` (§3).
