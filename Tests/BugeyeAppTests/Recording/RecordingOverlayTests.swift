@@ -11,17 +11,35 @@ import Testing
         var now = 100.0
     }
 
-    @Test func clicksRingAtTheirAreaPointAndTheTimerStopsWhenDone() throws {
+    /// PR #24 review I7: a click in Quartz points rings at its point in the area, on a primary-display area and on
+    /// one with a negative origin; the timer stops by itself once the ring is done, on an empty frame.
+    @Test(arguments: [
+        // Cocoa area (100, 600, 400, 300) with a 1000 pt primary: Quartz top-left (100, 100).
+        (CGRect(x: 100, y: 600, width: 400, height: 300), Point2D(x: 150, y: 120)),
+        // Left of and above the primary: Quartz top-left (-1500, -300).
+        (CGRect(x: -1500, y: 1000, width: 400, height: 300), Point2D(x: -1450, y: -280)),
+    ])
+    func clicksRingAtTheirAreaPointAndTheTimerStopsWhenDone(area: CGRect, click: Point2D) throws {
         let clock = Clock()
         let overlay = RecordingOverlay(measurer: FakeTextMeasurer(), primaryHeight: { 1000 }, now: { clock.now })
-        // Cocoa area (100, 600, 400, 300): its Quartz top-left is (100, 100).
-        overlay.start(
-            area: CGRect(x: 100, y: 600, width: 400, height: 300), clicks: true, keys: false, showAllKeys: false)
-        #expect(overlay.windowIDs.count == 1)
-        overlay.click(.left, at: Point2D(x: 150, y: 120))
+        overlay.start(area: area, clicks: true, keys: false, showAllKeys: false)
+        overlay.click(.left, at: click)
+        var expected = ClickRings()
+        expected.click(.left, at: Point2D(x: 50, y: 20), time: 100)
+        #expect(overlay.rings == expected)
         #expect(overlay.isAnimating)
-        overlay.stop()
+        clock.now = 100 + ClickRings.duration / 2
+        overlay.frame()
+        #expect(overlay.isAnimating)
+        clock.now = 100 + ClickRings.duration + 0.01
+        overlay.frame()
         #expect(!overlay.isAnimating)
+        let lastFrame = overlay.drawnLists
+        #expect(lastFrame.count == 1)
+        let empty = lastFrame.first?.commands.contains { if case .strokePath = $0 { true } else { false } } == false
+        #expect(empty)
+        overlay.stop()
+        #expect(overlay.windowIDs.isEmpty)
     }
 
     @Test func keysFollowTheShowAllKeysRuleAndRepeatsAreIgnored() {

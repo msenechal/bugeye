@@ -5,6 +5,8 @@ import BugeyeTestSupport
 import CoreMedia
 import Foundation
 import RecordingCore
+import ScreenCaptureKit
+import Synchronization
 import Testing
 
 @testable import BugeyeApp
@@ -51,6 +53,15 @@ enum Samples {
             presentationTimeStamp: CMTime(seconds: host, preferredTimescale: 48_000), packetDescriptions: nil,
             sampleBufferOut: &sample)
         return sample!
+    }
+
+    /// A frame carrying the status ScreenCaptureKit attaches.
+    static func frame(host: Double, _ status: SCFrameStatus) -> CMSampleBuffer {
+        let sample = video(host: host)
+        let array = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true)!
+        let dict = Unmanaged<NSMutableDictionary>.fromOpaque(CFArrayGetValueAtIndex(array, 0)!).takeUnretainedValue()
+        dict[SCStreamFrameInfo.status.rawValue] = NSNumber(value: status.rawValue)
+        return sample
     }
 
     static func writer(_ url: URL, audioSources: Int = 0) throws -> MovieWriter {
@@ -106,14 +117,61 @@ enum Samples {
         }
         #expect(out == url)
         #expect(abs(duration - 1.0) < 0.05)
+        // The 30 frames captured in the pause were dropped, not written (review I7).
+        #expect(writer.droppedSamples == 30)
         let asset = AVURLAsset(url: url)
         #expect(abs(try await asset.load(.duration).seconds - 1.0) < 0.1)
         let track = try #require(try await asset.loadTracks(withMediaType: .video).first)
+        let times = try Self.presentationTimes(of: track, in: asset)
+        #expect(times.count == 30)
+        #expect(Set(times).count == 30)
+        let last = times.max() ?? 0
+        #expect(last < 1.0)
         let format = try #require(try await track.load(.formatDescriptions).first)
         #expect(CMFormatDescriptionGetMediaSubType(format) == kCMVideoCodecType_H264)
         let primaries = CMFormatDescriptionGetExtension(
             format, extensionKey: kCMFormatDescriptionExtension_ColorPrimaries)
         #expect((primaries as? String) == (kCMFormatDescriptionColorPrimaries_ITU_R_709_2 as String))
+    }
+
+    /// The video samples' presentation times, in seconds.
+    static func presentationTimes(of track: AVAssetTrack, in asset: AVAsset) throws -> [Double] {
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(output)
+        reader.startReading()
+        var times: [Double] = []
+        while let sample = output.copyNextSampleBuffer() {
+            if CMSampleBufferGetNumSamples(sample) > 0 {
+                times.append(CMSampleBufferGetPresentationTimeStamp(sample).seconds)
+            }
+        }
+        return times
+    }
+
+    /// One LPCM buffer is 1024 samples of 1/48000 s: retiming keeps that, so a 1 s take has 1 s of audio
+    /// (review I3).
+    @Test func audioKeepsItsTiming() async throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let mov = try await Samples.movie(in: dir, seconds: 1, audioSources: 1)
+        let asset = AVURLAsset(url: mov)
+        let track = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+        let range = try await track.load(.timeRange)
+        #expect(abs(range.duration.seconds - 1.0) < 0.05)
+        #expect(range.start.seconds < 0.05)
+    }
+
+    @Test func aFailureIsReportedOnce() throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let writer = try Samples.writer(dir.file("f.mov"))
+        let reports = ProgressBox()
+        writer.onFailure = { _ in reports.add(1) }
+        writer.reportFailure("disk full")
+        writer.reportFailure("again")
+        #expect(reports.values.count == 1)
+        writer.cancel()
     }
 
     @Test func framesBeforeTheTakeAreDiscardedAndNoFramesDeletesTheFile() async throws {
@@ -138,7 +196,7 @@ enum Samples {
         writer.cancel()
     }
 
-    @Test func finishingAFailedWriterThrowsInsteadOfRaising() async throws {
+    @Test func finishingAWriterThatStoppedThrowsInsteadOfRaising() async throws {
         let dir = try TempDirectory()
         defer { dir.remove() }
         let writer = try Samples.writer(dir.file("d.mov"))
@@ -190,14 +248,27 @@ enum Samples {
         #expect(progress.values.last.map { $0 > 0.5 } == true)
     }
 
+    /// A pump stuck in AVFoundation can't hold the deadline up: `convert` returns when it passes, keeps the
+    /// `.mov`, and the partial `.mp4` is gone once the job ends (review I6, I7).
     @Test func aMissedDeadlineKeepsTheMovie() async throws {
         let dir = try TempDirectory()
         defer { dir.remove() }
         let mov = try await Samples.movie(in: dir)
         let mp4 = dir.file("late.mp4")
-        let outcome = await MovieConverter.convert(mov, to: mp4, deadline: .zero)
+        let blocked = ProgressBox()
+        let started = ContinuousClock.now
+        let outcome = await MovieConverter.convert(mov, to: mp4, deadline: .milliseconds(300)) { value in
+            guard blocked.values.isEmpty else { return }
+            blocked.add(value)
+            Thread.sleep(forTimeInterval: 2)
+        }
+        #expect(ContinuousClock.now - started < .milliseconds(1500))
         #expect(outcome == .keptMovie(reason: "timed out"))
+        #expect(!blocked.values.isEmpty)
         #expect(FileManager.default.fileExists(atPath: mov.path))
+        for _ in 0..<100 where FileManager.default.fileExists(atPath: mp4.path) {
+            try await Task.sleep(for: .milliseconds(50))
+        }
         #expect(!FileManager.default.fileExists(atPath: mp4.path))
     }
 
@@ -226,30 +297,123 @@ final class ProgressBox: @unchecked Sendable {
     }
 }
 
+/// A host clock the test sets.
+final class TestHostClock: Sendable {
+    private let value: Mutex<Double>
+    init(_ start: Double) { value = Mutex(start) }
+    var now: Double { value.withLock { $0 } }
+    func set(_ new: Double) { value.withLock { $0 = new } }
+}
+
 @Suite struct StreamRecorderTests {
+    /// Complete frames at 30 fps from `start` for `seconds`.
+    private func frames(_ recorder: StreamRecorder, from start: Double, seconds: Double) {
+        var t = start
+        while t < start + seconds - 1e-9 {
+            recorder.feed(Samples.frame(host: t, .complete), of: .screen)
+            t += 1.0 / 30
+        }
+    }
+
+    private func hasStarted(_ recorder: StreamRecorder, _ writer: MovieWriter) -> Bool {
+        recorder.queue.sync { writer.hasStarted }
+    }
+
     @Test func samplesThroughTheQueueAndTheFailureLatch() async throws {
         let dir = try TempDirectory()
         defer { dir.remove() }
-        let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks())
+        let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks(), now: { 100.5 })
         let writer = try Samples.writer(dir.file("s.mov"), audioSources: 1)
         recorder.attach(writer, systemAudio: true)
         recorder.beginTake()
         for n in 0..<15 {
             let host = 100 + Double(n) / 30
-            recorder.handle(Samples.video(host: host), of: .screen)
-            recorder.handle(Samples.audio(host: host), of: .audio)
+            recorder.feed(Samples.frame(host: host, .complete), of: .screen)
+            recorder.feed(Samples.audio(host: host), of: .audio)
         }
         recorder.simulateFailure(.other("first"))
         recorder.simulateFailure(.other("second"))
         #expect(recorder.currentFailure == .other("first"))
-        recorder.now = { 100.5 }
         guard case .movie(_, let duration) = try await recorder.stop() else {
             Issue.record("no movie")
             return
         }
         #expect(abs(duration - 0.5) < 0.05)
         // After stop, a late sample finds no writer.
-        recorder.handle(Samples.video(host: 101), of: .screen)
+        recorder.feed(Samples.frame(host: 101, .complete), of: .screen)
+    }
+
+    /// Blank and status-less frames never start the take; idle ones start it with the last complete frame, so a
+    /// still screen starts recording when the countdown ends (review I2, I7).
+    @Test func onlyRealPicturesStartTheTake() async throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks(), now: { 100.5 })
+        let writer = try Samples.writer(dir.file("i.mov"))
+        recorder.attach(writer)
+        // A countdown frame: cached, not written (the take isn't armed).
+        recorder.feed(Samples.frame(host: 99.9, .complete), of: .screen)
+        recorder.beginTake()
+        recorder.feed(Samples.frame(host: 99.95, .blank), of: .screen)
+        recorder.feed(Samples.video(host: 99.97), of: .screen)
+        recorder.feed(Samples.frame(host: 99.98, .started), of: .screen)
+        #expect(!hasStarted(recorder, writer))
+        recorder.feed(Samples.frame(host: 100, .idle), of: .screen)
+        #expect(hasStarted(recorder, writer))
+        frames(recorder, from: 100 + 1.0 / 30, seconds: 0.4)
+        guard case .movie(_, let duration) = try await recorder.stop() else {
+            Issue.record("no movie")
+            return
+        }
+        #expect(abs(duration - 0.5) < 0.05)
+    }
+
+    @Test func blankFramesOnlyMakeNoMovie() async throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let url = dir.file("b.mov")
+        let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks(), now: { 101 })
+        recorder.attach(try Samples.writer(url))
+        recorder.beginTake()
+        recorder.feed(Samples.frame(host: 100, .blank), of: .screen)
+        recorder.feed(Samples.frame(host: 100.1, .idle), of: .screen)
+        #expect(try await recorder.stop() == .noFrames)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test func pauseAndResumeAreStampedOnTheQueue() async throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let clock = TestHostClock(100)
+        let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks(), now: { clock.now })
+        recorder.attach(try Samples.writer(dir.file("p.mov")))
+        recorder.beginTake()
+        let stamps = ProgressBox()
+        frames(recorder, from: 100, seconds: 0.5)
+        clock.set(100.5)
+        recorder.pause { stamps.add($0) }
+        frames(recorder, from: 100.5, seconds: 0.5)
+        clock.set(101)
+        recorder.resume { stamps.add($0) }
+        frames(recorder, from: 101, seconds: 0.5)
+        clock.set(101.5)
+        guard case .movie(_, let duration) = try await recorder.stop() else {
+            Issue.record("no movie")
+            return
+        }
+        #expect(stamps.values == [100.5, 101])
+        #expect(abs(duration - 1.0) < 0.05)
+    }
+
+    @Test func aWriterFailureIsReported() throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks())
+        let writer = try Samples.writer(dir.file("w.mov"))
+        recorder.attach(writer)
+        recorder.queue.sync { writer.reportFailure("disk full") }
+        #expect(recorder.currentFailure == .other("disk full"))
+        writer.cancel()
     }
 
     @Test func cancelDeletesTheMovie() async throws {
@@ -259,10 +423,21 @@ final class ProgressBox: @unchecked Sendable {
         let recorder = StreamRecorder(callbacks: StreamRecorder.Callbacks())
         recorder.attach(try Samples.writer(url))
         recorder.beginTake()
-        recorder.handle(Samples.video(host: 100), of: .screen)
+        recorder.feed(Samples.frame(host: 100, .complete), of: .screen)
         await recorder.cancel()
         await recorder.cancel()
         #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
+    /// A cancel while `prepare` is loading the content: the stream is never installed (review C1).
+    @Test func aCancelBeforeInstallingWins() async {
+        let fresh = StreamRecorder(callbacks: StreamRecorder.Callbacks())
+        #expect(fresh.installIfLive {})
+        let cancelled = StreamRecorder(callbacks: StreamRecorder.Callbacks())
+        await cancelled.cancel()
+        var ran = false
+        #expect(!cancelled.installIfLive { ran = true })
+        #expect(!ran)
     }
 }
 

@@ -5,6 +5,7 @@ import BugeyeFeatures
 import CoreMedia
 import Foundation
 import RecordingCore
+import Synchronization
 import os
 
 /// What the controller needs from a recorder: `StreamRecorder` in the app, a fake in tests.
@@ -86,6 +87,18 @@ final class RecordingController {
         var display: @MainActor (DisplayID) -> (bounds: CGRect, scale: Double)?
         /// The primary display's height, for Cocoa ↔ Quartz.
         var primaryHeight: @MainActor () -> CGFloat
+        /// How long Stop (the stream's stop and the movie's finish) and the first-frame preview may take before
+        /// the take is ended without them, so ⌘Q never waits forever (backlog M6, PR #23 review I3).
+        var stopDeadline: Duration = .seconds(10)
+    }
+
+    /// What the timeline gets, in order: one consumer per timeline (PR #22 review, outside the PR).
+    enum TimelineCommand: Sendable {
+        case input(TimelineInput, Double)
+        case pause(Double)
+        case resume(Double)
+        case finish(Double)
+        case discard
     }
 
     private let context: AppContext
@@ -107,6 +120,13 @@ final class RecordingController {
     private var firstFrameDate = Date()
     private var quitWaiters: [CheckedContinuation<Void, Never>] = []
     private var bubbleWish: BubbleWish?
+    /// The timeline's ordered feed, once it exists.
+    private var timelineFeed: AsyncStream<TimelineCommand>.Continuation?
+    /// Pause and resume stamps that came before the timeline existed (a pause before the first frame, or while
+    /// it was being created): replayed into it (PR #23 review I4).
+    private var pendingStamps: [TimelineCommand] = []
+    /// A followed window's latest recorded rect, Quartz global, clamped like the stream's (review I2).
+    private var followedWindow: (id: WindowID, quartz: CGRect)?
 
     init(context: AppContext, dependencies: Dependencies) {
         self.context = context
@@ -231,6 +251,7 @@ final class RecordingController {
         switch effect {
         case .selection(let request):
             guard let s = flow.state.session else { return }
+            followedWindow = nil
             Task {
                 let result = await context.areaSelector.select(request)
                 let devices = deps.devices()
@@ -274,11 +295,13 @@ final class RecordingController {
         case .beginTake(let s):
             recorders[s]?.beginTake()
         case .pauseRecorder(let s):
-            let timeline = timeline
-            recorders[s]?.pause { host in Task { await timeline?.pause(at: host) } }
+            recorders[s]?.pause { host in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.feedTimeline(.pause(host)) } }
+            }
         case .resumeRecorder(let s):
-            let timeline = timeline
-            recorders[s]?.resume { host in Task { await timeline?.resume(at: host) } }
+            recorders[s]?.resume { host in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.feedTimeline(.resume(host)) } }
+            }
         case .stopRecorder(let s):
             stopRecorder(s)
         case .cancelRecorder(let s):
@@ -395,7 +418,8 @@ final class RecordingController {
                 width: area.rect.width, height: area.rect.height)
         case .display:
             return display.bounds
-        case .window(_, _, let cocoa):
+        case .window(let id, _, let cocoa):
+            if let followed = followedWindow, followed.id == id { return followed.quartz }
             let quartzY = deps.primaryHeight() - (cocoa.origin.y + cocoa.size.height)
             return CGRect(x: cocoa.origin.x, y: quartzY, width: cocoa.size.width, height: cocoa.size.height)
         }
@@ -423,7 +447,15 @@ final class RecordingController {
                 height: quartz.height),
             display: Size2D(width: display.bounds.width, height: display.bounds.height))
         var window: CGWindowID?
-        if case .window(let id, _, _) = request.target { window = id.rawValue }
+        if case .window(let id, _, _) = request.target {
+            window = id.rawValue
+            followedWindow = (
+                id,
+                CGRect(
+                    x: display.bounds.minX + local.origin.x, y: display.bounds.minY + local.origin.y,
+                    width: local.width, height: local.height)
+            )
+        }
         if request.options.clicks || request.options.keys, let cocoa = frame(of: request.target) {
             deps.overlays?.show(area: cocoa)
         }
@@ -434,13 +466,13 @@ final class RecordingController {
         let streamRequest = StreamRequest(
             display: request.target.display.rawValue,
             sourceRect: CGRect(x: local.origin.x, y: local.origin.y, width: local.width, height: local.height),
-            displaySize: display.bounds.size, options: request.options, window: window,
+            options: request.options, window: window,
             overlayWindowIDs: exceptions,
             output: folder.appendingPathComponent(TakeRecovery.movieName(take: take)))
         let callbacks = StreamRecorder.Callbacks(
             firstFrame: { [weak self] host, date in self?.firstFrame(s, host: host, date: date) },
             failed: { [weak self] failure in self?.send(.recorderFailed(s, Self.failure(failure))) },
-            areaMoved: { [weak self] rect in self?.areaMoved(rect) },
+            areaMoved: { [weak self] rect in self?.areaMoved(s, rect) },
             log: { [weak self] text in self?.logger.info("\(text, privacy: .public)") })
         lastScale = display.scale
         let recorder = deps.makeRecorder(callbacks)
@@ -456,6 +488,12 @@ final class RecordingController {
         Task {
             do {
                 try await recorder.prepare(streamRequest)
+                // Cancelled or stopped while it was preparing: the effect found nothing to stop then, so stop
+                // what `prepare` started now (PR #23 review C1, R3).
+                guard recorders[s] === recorder else {
+                    await recorder.cancel()
+                    return
+                }
                 send(.recorderReady(s))
             } catch let failure as StreamRecorder.Failure {
                 send(.recorderFailed(s, Self.failure(failure)))
@@ -477,22 +515,28 @@ final class RecordingController {
         send(.takeStarted(s, hostTime: host, date: date))
     }
 
-    private func areaMoved(_ displayLocal: CGRect) {
-        guard case .window(_, let display, _)? = currentTarget, let bounds = deps.display(display)?.bounds else {
-            return
-        }
+    /// A followed window moved. Only the current session's recorder moves anything; the border is red only once
+    /// the take is live (§5.1, PR #23 review I1).
+    private func areaMoved(_ s: SessionID, _ displayLocal: CGRect) {
+        guard flow.state.session == s, case .window(let id, let display, _)? = currentTarget,
+            let bounds = deps.display(display)?.bounds
+        else { return }
         let quartz = displayLocal.offsetBy(dx: bounds.minX, dy: bounds.minY)
+        followedWindow = (id, quartz)
         let cocoa = CGRect(
             x: quartz.minX, y: deps.primaryHeight() - quartz.maxY, width: quartz.width, height: quartz.height)
-        deps.surfaces.showBorder(cocoa, recording: true)
+        let live: Bool
+        switch flow.state {
+        case .recording, .paused: live = true
+        default: live = false
+        }
+        deps.surfaces.showBorder(cocoa, recording: live)
         deps.surfaces.moveBubble(area: cocoa)
         deps.overlays?.move(area: cocoa)
-        let timeline = timeline
-        let now = deps.hostNow()
-        Task {
-            await timeline?.record(
-                .area(Rect2D(x: quartz.minX, y: quartz.minY, width: quartz.width, height: quartz.height)), at: now)
-        }
+        feedTimeline(
+            .input(
+                .area(Rect2D(x: quartz.minX, y: quartz.minY, width: quartz.width, height: quartz.height)),
+                deps.hostNow()))
     }
 
     private func stopRecorder(_ s: SessionID) {
@@ -501,24 +545,31 @@ final class RecordingController {
             return
         }
         let request = requests.removeValue(forKey: s)
+        let deadline = deps.stopDeadline
         Task {
             let result: StopResult
-            do {
-                switch try await recorder.stop() {
-                case .movie(let url, let duration): result = .movie(url, duration: duration)
-                case .noFrames: result = .noFrames
-                }
-            } catch {
-                // A failed writer leaves its fragments: keep them if anything is there (`design/04` §3).
+            switch await Deadline.race(deadline, { try await recorder.stop() }) {
+            case .success(.movie(let url, let duration))?:
+                result = .movie(url, duration: duration)
+            case .success(.noFrames)?:
+                result = .noFrames
+            case .failure(let error)?:
                 logger.error("failed: \(error.localizedDescription, privacy: .public)")
-                if let url = request?.output, let size = Self.size(of: url), size >= TakeRecovery.minimumMovieBytes {
-                    result = .movie(url, duration: 0)
-                } else {
-                    result = .noFrames
-                }
+                result = await Self.fragments(request?.output)
+            case nil:
+                logger.error("failed: stop timed out")
+                result = await Self.fragments(request?.output)
             }
             send(.stopped(s, result))
         }
+    }
+
+    /// A failed or stuck writer leaves its fragments: keep them if anything is there (`design/04` §3), with the
+    /// duration they hold.
+    nonisolated private static func fragments(_ url: URL?) async -> StopResult {
+        guard let url, let size = size(of: url), size >= TakeRecovery.minimumMovieBytes else { return .noFrames }
+        let duration = (try? await AVURLAsset(url: url).load(.duration).seconds) ?? 0
+        return .movie(url, duration: duration.isFinite ? duration : 0)
     }
 
     nonisolated private static func size(of url: URL) -> Int64? {
@@ -559,8 +610,14 @@ final class RecordingController {
         let timelineURL = timelineURL
         self.timelineURL = nil
         let firstFrame = deps.firstFrame
+        let deadline = deps.stopDeadline
         Task {
-            let preview = await firstFrame(url)
+            let preview: PixelBuffer?
+            if case .success(let image)? = await Deadline.race(deadline, { await firstFrame(url) }) {
+                preview = image
+            } else {
+                preview = nil
+            }
             let item = await delivery.deliver(
                 movie: url, date: date ?? Date(), duration: duration, pixelsPerPoint: scale, timeline: timelineURL,
                 preview: preview)
@@ -609,14 +666,62 @@ final class RecordingController {
 
     private func input(_ input: TimelineInput, host: Double) {
         if case .down(let button, let point, _) = input { deps.overlays?.click(button, at: point) }
-        let timeline = timeline
-        Task { await timeline?.record(input, at: host) }
+        feedTimeline(.input(input, host))
     }
 
     private func key(_ press: KeyPress, host: Double) {
         if !press.isRepeat { deps.overlays?.key(press) }
-        let timeline = timeline
-        Task { await timeline?.record(.key(press), at: host) }
+        feedTimeline(.input(.key(press), host))
+    }
+
+    /// Everything for the timeline goes through here, in order. Before the timeline exists, inputs are dropped
+    /// (they come before its origin) and pause and resume stamps wait for it.
+    private func feedTimeline(_ command: TimelineCommand) {
+        if let feed = timelineFeed {
+            feed.yield(command)
+            return
+        }
+        switch command {
+        case .pause, .resume:
+            if wantsTimeline { pendingStamps.append(command) }
+        case .input, .finish, .discard:
+            break
+        }
+    }
+
+    /// The single consumer of one timeline's commands.
+    private func attach(_ recorder: TimelineRecorder, startedAt host: Double) {
+        let (stream, feed) = AsyncStream.makeStream(of: TimelineCommand.self)
+        timelineFeed = feed
+        for stamp in pendingStamps {
+            switch stamp {
+            case .pause(let at): feed.yield(.pause(max(at, host)))
+            case .resume(let at): feed.yield(.resume(max(at, host)))
+            default: break
+            }
+        }
+        pendingStamps = []
+        let logger = timelineLogger
+        Task {
+            for await command in stream {
+                switch command {
+                case .input(let input, let at): await recorder.record(input, at: at)
+                case .pause(let at): await recorder.pause(at: at)
+                case .resume(let at): await recorder.resume(at: at)
+                case .finish(let at):
+                    let summary = await recorder.finish(at: at)
+                    logger.info("finish \(summary.events) events \(summary.bytes) bytes")
+                    for reason in summary.truncations {
+                        logger.info("truncated \(reason.rawValue, privacy: .public)")
+                    }
+                case .discard:
+                    await recorder.discard()
+                    logger.info("discarded")
+                }
+            }
+        }
+        // The focus line sent when the monitor started came before the timeline: send it again (PR #22 review I8).
+        monitor?.resendFocus()
     }
 
     // MARK: Timeline (§7)
@@ -665,6 +770,7 @@ final class RecordingController {
             await recorder.startFlushing()
             if self.wantsTimeline, self.timelineURL == url {
                 self.timeline = recorder
+                self.attach(recorder, startedAt: host)
                 timelineLogger.info("start \(take.uuidString.lowercased(), privacy: .public)")
             } else {
                 await recorder.discard()
@@ -675,24 +781,62 @@ final class RecordingController {
     private func finishTimeline() {
         wantsTimeline = false
         firstFrameHost = nil
-        guard let recorder = timeline else { return }
+        pendingStamps = []
+        guard timeline != nil, let feed = timelineFeed else { return }
         timeline = nil
-        let now = deps.hostNow()
-        let logger = timelineLogger
-        Task {
-            let summary = await recorder.finish(at: now)
-            logger.info("finish \(summary.events) events \(summary.bytes) bytes")
-            for reason in summary.truncations { logger.info("truncated \(reason.rawValue, privacy: .public)") }
-        }
+        timelineFeed = nil
+        feed.yield(.finish(deps.hostNow()))
+        feed.finish()
     }
 
     private func discardTimeline() {
         wantsTimeline = false
         firstFrameHost = nil
         timelineURL = nil
-        guard let recorder = timeline else { return }
+        pendingStamps = []
+        guard timeline != nil, let feed = timelineFeed else { return }
         timeline = nil
-        Task { await recorder.discard() }
-        timelineLogger.info("discarded")
+        timelineFeed = nil
+        feed.yield(.discard)
+        feed.finish()
+    }
+}
+
+/// Races work against a deadline: nil when the deadline passes first. The work keeps running, unobserved.
+enum Deadline {
+    /// Resumes its continuation once.
+    private final class Once<T: Sendable>: Sendable {
+        private let state = Mutex<CheckedContinuation<T, Never>?>(nil)
+
+        func set(_ continuation: CheckedContinuation<T, Never>) { state.withLock { $0 = continuation } }
+
+        func resume(_ value: T) {
+            let waiting = state.withLock { stored -> CheckedContinuation<T, Never>? in
+                defer { stored = nil }
+                return stored
+            }
+            waiting?.resume(returning: value)
+        }
+    }
+
+    static func race<T: Sendable>(
+        _ limit: Duration, _ work: @escaping @Sendable () async throws -> T
+    ) async -> Result<T, any Error>? {
+        let once = Once<Result<T, any Error>?>()
+        return await withCheckedContinuation { continuation in
+            once.set(continuation)
+            let timer = Task {
+                try? await Task.sleep(for: limit)
+                if !Task.isCancelled { once.resume(nil) }
+            }
+            Task {
+                do {
+                    once.resume(.success(try await work()))
+                } catch {
+                    once.resume(.failure(error))
+                }
+                timer.cancel()
+            }
+        }
     }
 }

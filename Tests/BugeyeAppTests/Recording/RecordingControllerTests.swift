@@ -10,15 +10,38 @@ import Testing
 
 /// A recorder that writes a small file on stop and reports what it was asked.
 final class FakeRecorder: RecorderDriving, @unchecked Sendable {
+    enum StopBehaviour { case movie, throwing, hanging }
+
     private let lock = NSLock()
     private var log: [String] = []
+    private var held = false
     var request: StreamRequest?
     var failPrepare: StreamRecorder.Failure?
+    var stopBehaviour = StopBehaviour.movie
+    let callbacks: StreamRecorder.Callbacks
+
+    init(callbacks: StreamRecorder.Callbacks = StreamRecorder.Callbacks()) {
+        self.callbacks = callbacks
+    }
 
     var calls: [String] {
         lock.lock()
         defer { lock.unlock() }
         return log
+    }
+
+    /// While held, `prepare` doesn't return.
+    var holdsPrepare: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return held
+        }
+        set {
+            lock.lock()
+            held = newValue
+            lock.unlock()
+        }
     }
 
     private func note(_ call: String) {
@@ -30,6 +53,8 @@ final class FakeRecorder: RecorderDriving, @unchecked Sendable {
     func prepare(_ request: StreamRequest) async throws {
         note("prepare")
         self.request = request
+        for _ in 0..<1000 where holdsPrepare { try? await Task.sleep(for: .milliseconds(5)) }
+        note("prepared")
         if let failPrepare { throw failPrepare }
     }
 
@@ -39,6 +64,13 @@ final class FakeRecorder: RecorderDriving, @unchecked Sendable {
 
     func stop() async throws -> MovieWriter.Result {
         note("stop")
+        switch stopBehaviour {
+        case .movie: break
+        case .throwing: throw MovieWriter.Failure.notWriting("disk full")
+        case .hanging:
+            try? await Task.sleep(for: .seconds(60))
+            return .noFrames
+        }
         guard let url = request?.output else { return .noFrames }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(repeating: 1, count: 100_000).write(to: url)
@@ -51,9 +83,13 @@ final class FakeRecorder: RecorderDriving, @unchecked Sendable {
 @MainActor
 final class FakeSurfaces: RecordingSurfaces {
     var calls: [String] = []
+    var borders: [CGRect] = []
     var answer = true
 
-    func showBorder(_ frame: CGRect, recording: Bool) { calls.append(recording ? "border red" : "border dashed") }
+    func showBorder(_ frame: CGRect, recording: Bool) {
+        calls.append(recording ? "border red" : "border dashed")
+        borders.append(frame)
+    }
     func closeBorder() { calls.append("close border") }
     func showBar(around selection: CGRect, wholeDisplay: Bool, state: OptionsBarState) { calls.append("bar") }
     func updateBar(_ state: OptionsBarState) { calls.append("update bar") }
@@ -81,8 +117,10 @@ final class FakeSurfaces: RecordingSurfaces {
         let controller: RecordingController
         let events: CaptureEventRecorder
 
-        init(selection: SelectionResult = .display(DisplayID(1)), convertOutcome: MovieConverter.Outcome? = nil) throws
-        {
+        init(
+            selection: SelectionResult = .display(DisplayID(1)), convertOutcome: MovieConverter.Outcome? = nil,
+            stopDeadline: Duration = .seconds(10)
+        ) throws {
             home = try TempDirectory("home")
             let settings = InMemorySettingsStore([
                 OutputSettings.Key.saveToFolder: .bool(false), OutputSettings.Key.copyToClipboard: .bool(false),
@@ -95,7 +133,7 @@ final class FakeSurfaces: RecordingSurfaces {
             controller = RecordingController(
                 context: context,
                 dependencies: RecordingController.Dependencies(
-                    makeRecorder: { _ in recorders.make() }, surfaces: surfaces, overlays: nil,
+                    makeRecorder: { recorders.make($0) }, surfaces: surfaces, overlays: nil,
                     permissions: FakeMediaPermissions([.accessibility: .denied]), reader: nil,
                     devices: { ([], []) }, freeBytes: { _ in 50_000_000_000 }, hostNow: { 1000 },
                     convert: { mov, mp4, _, progress in
@@ -105,15 +143,23 @@ final class FakeSurfaces: RecordingSurfaces {
                         return .converted(mp4)
                     },
                     firstFrame: { _ in nil },
-                    display: { _ in (CGRect(x: 0, y: 0, width: 1512, height: 982), 2) },
-                    primaryHeight: { 982 }))
+                    // Display 2 sits above and to the left of the primary: negative Quartz origin.
+                    display: { id in
+                        id == DisplayID(2)
+                            ? (CGRect(x: -1512, y: -300, width: 1512, height: 982), 2)
+                            : (CGRect(x: 0, y: 0, width: 1512, height: 982), 2)
+                    },
+                    primaryHeight: { 982 }, stopDeadline: stopDeadline))
         }
     }
 
     final class RecorderBox: @unchecked Sendable {
         private(set) var made: [FakeRecorder] = []
-        func make() -> FakeRecorder {
-            let recorder = FakeRecorder()
+        /// Applied to each recorder as it is made.
+        var configure: (FakeRecorder) -> Void = { _ in }
+        func make(_ callbacks: StreamRecorder.Callbacks) -> FakeRecorder {
+            let recorder = FakeRecorder(callbacks: callbacks)
+            configure(recorder)
             made.append(recorder)
             return recorder
         }
@@ -201,6 +247,84 @@ final class FakeSurfaces: RecordingSurfaces {
         try await record(rig)
         let stop = rig.context.statusItem.override?.menu.first { $0.id == RecordingMenu.stop }
         #expect(stop?.shownKey == KeyCombo("5", [.option, .shift, .command]))
+    }
+
+    /// PR #23 review C1: Esc while the recorder is still preparing. The cancel finds nothing to stop then, so
+    /// what `prepare` started is stopped when it returns.
+    @Test func aRecorderCancelledWhilePreparingIsStoppedWhenItReturns() async throws {
+        let rig = try Rig()
+        defer { rig.home.remove() }
+        rig.recorders.configure = { $0.holdsPrepare = true }
+        rig.controller.toggle()
+        await settle { rig.surfaces.calls.contains("bar") }
+        rig.controller.bar(.record)
+        await settle { rig.recorders.made.first?.calls.contains("prepare") == true }
+        let recorder = try #require(rig.recorders.made.first)
+        rig.controller.send(.cancel(s1()))
+        await settle { rig.controller.flow.state == .idle }
+        recorder.holdsPrepare = false
+        await settle { recorder.calls.last == "cancel" && recorder.calls.contains("prepared") }
+        let calls = recorder.calls
+        let prepared = try #require(calls.firstIndex(of: "prepared"))
+        let lastCancel = try #require(calls.lastIndex(of: "cancel"))
+        #expect(lastCancel > prepared)
+        #expect(rig.controller.flow.state == .idle)
+    }
+
+    /// PR #23 review I1: a window's move during the countdown keeps the border dashed; a stale session's moves
+    /// change nothing.
+    @Test func windowMovesFollowOnlyTheCurrentSessionAndStayDashedUntilLive() async throws {
+        let window = SelectionResult.window(
+            WindowID(9), display: DisplayID(1), frame: Rect2D(x: 100, y: 100, width: 400, height: 300))
+        let rig = try Rig(selection: window)
+        defer { rig.home.remove() }
+        rig.controller.toggle()
+        await settle { rig.surfaces.calls.contains("bar") }
+        rig.controller.bar(.record)
+        await settle { if case .countingDown(_, _, _, _, true) = rig.controller.flow.state { true } else { false } }
+        let recorder = try #require(rig.recorders.made.first)
+        recorder.callbacks.areaMoved(CGRect(x: 10, y: 20, width: 400, height: 300))
+        #expect(rig.surfaces.calls.last == "border dashed")
+        #expect(rig.surfaces.borders.last == CGRect(x: 10, y: 982 - 320, width: 400, height: 300))
+        let before = rig.surfaces.calls.count
+        for _ in 0..<3 { rig.controller.send(.countdownTick(s1())) }
+        rig.controller.send(.takeStarted(s1(), hostTime: 990, date: Date(timeIntervalSince1970: 1_795_788_192)))
+        // At go-live the border is where the window went, not where it was selected (review I2).
+        #expect(rig.surfaces.borders.last == CGRect(x: 10, y: 982 - 320, width: 400, height: 300))
+        #expect(rig.surfaces.calls.count > before)
+        rig.controller.send(.cancel(s1()))
+        await settle { rig.controller.flow.state == .idle }
+        let after = rig.surfaces.calls.count
+        recorder.callbacks.areaMoved(CGRect(x: 50, y: 50, width: 400, height: 300))
+        #expect(rig.surfaces.calls.count == after)
+    }
+
+    /// Backlog M6, PR #23 review I3: a Stop that throws or never returns still ends the take.
+    @Test func aStopThatThrowsOrHangsStillEnds() async throws {
+        for behaviour in [FakeRecorder.StopBehaviour.throwing, .hanging] {
+            let rig = try Rig(stopDeadline: .milliseconds(200))
+            defer { rig.home.remove() }
+            rig.recorders.configure = { $0.stopBehaviour = behaviour }
+            try await record(rig)
+            await rig.controller.finishForQuit()
+            #expect(rig.controller.flow.state == .idle)
+            #expect(rig.events.events.isEmpty)
+            #expect(rig.context.screenActivity.active.isEmpty)
+        }
+    }
+
+    /// A display with a negative Quartz origin: the stream gets display-local points, the border Cocoa points.
+    @Test func aSecondaryDisplayMapsBothWays() async throws {
+        let rig = try Rig(selection: .display(DisplayID(2)))
+        defer { rig.home.remove() }
+        rig.controller.toggle()
+        await settle { rig.surfaces.calls.contains("bar") }
+        #expect(rig.surfaces.borders.first == CGRect(x: -1512, y: 300, width: 1512, height: 982))
+        rig.controller.bar(.record)
+        await settle { rig.recorders.made.first?.calls.contains("prepare") == true }
+        let recorder = try #require(rig.recorders.made.first)
+        #expect(recorder.request?.sourceRect == CGRect(x: 0, y: 0, width: 1512, height: 982))
+        #expect(recorder.request?.display == 2)
     }
 
     /// Toggle, select, Record, ready, countdown: recording.

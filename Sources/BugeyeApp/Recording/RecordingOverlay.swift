@@ -35,8 +35,9 @@ final class RecordingOverlay: OverlayPresenting {
         timer?.invalidate()
     }
 
+    /// Only while shown: an id for a window that isn't on screen isn't in the stream (PR #24 review).
     var windowIDs: [CGWindowID] {
-        window.windowNumber > 0 ? [CGWindowID(window.windowNumber)] : []
+        window.isVisible && window.windowNumber > 0 ? [CGWindowID(window.windowNumber)] : []
     }
 
     func show(area: CGRect) {
@@ -80,6 +81,10 @@ final class RecordingOverlay: OverlayPresenting {
     /// Whether the timer is running (tests).
     var isAnimating: Bool { timer != nil }
 
+    /// What is drawn (tests).
+    var rings: ClickRings { view.rings }
+    var drawnLists: [DisplayList] { view.lists() }
+
     private func place(_ area: CGRect) {
         origin = CGPoint(x: area.minX, y: primaryHeight() - area.maxY)
         window.setFrame(area, display: true)
@@ -96,7 +101,8 @@ final class RecordingOverlay: OverlayPresenting {
         self.timer = timer
     }
 
-    private func frame() {
+    /// One timer tick; internal so tests can step it without a run loop.
+    func frame() {
         let time = now()
         view.time = time
         view.needsDisplay = true
