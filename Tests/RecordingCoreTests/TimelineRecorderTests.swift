@@ -308,7 +308,7 @@ enum TimelineTesting {
                         click: 1,
                         TimelineElement(
                             role: "AXButton", subrole: nil, title: "Save",
-                            frame: Rect2D(x: 600, y: 30, width: 60, height: 24)))),
+                            frame: Rect2D(x: 600, y: 30, width: 60, height: 24))!)),
                 TimelineLine(t: 200, event: .elementStatus(click: 2, .withheld)),
                 TimelineLine(t: 300, event: .elementStatus(click: 3, .none)),
             ])
