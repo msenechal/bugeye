@@ -49,6 +49,9 @@ public final class QuickAccessModel {
     /// The item of each Save in flight, following `edited`, `moved` and `saved` events even after the thumbnail went
     /// away, so the published `saved` is never a stale copy (claude-review on #10).
     private var saving: [CaptureID: CaptureItem] = [:]
+    /// Saves in flight whose capture was deleted meanwhile: their result publishes nothing, so no `saved` ever follows
+    /// a `deleted` (claude-review on #10).
+    private var savesOfDeleted: Set<CaptureID> = []
     private var fading: Set<CaptureID> = []
     private var loggedDecorations: Set<String> = []
 
@@ -183,8 +186,8 @@ public final class QuickAccessModel {
             if saving[id] != nil { saving[id] = event.item }
         case .deleted:
             pendingSaveAs[id] = nil
-            deleting[id] = nil
-            saving[id] = nil  // someone else published it; a Delete finishing later publishes nothing more
+            deleting[id] = nil  // someone else published it; a Delete finishing later publishes nothing more
+            if saving.removeValue(forKey: id) != nil { savesOfDeleted.insert(id) }
         default:
             break
         }
@@ -444,6 +447,10 @@ public final class QuickAccessModel {
             fail("copy", id, QuickAccessStrings.copyFailedTitle, QuickAccessStrings.copyFailedBody(name: name), &out)
         case .saved(let moved, let previousURL):
             busy.remove(id)
+            if savesOfDeleted.remove(id) != nil {
+                out.append(.log("saved \(moved.fileURL.lastPathComponent) after its capture was deleted"))
+                return
+            }
             // Only the file's place comes from the result; everything else is the item as it is now (contracts
             // §4.1.1: never publish a stale copy; final review of #10, M2).
             var item = saving.removeValue(forKey: id) ?? moved
@@ -462,12 +469,14 @@ public final class QuickAccessModel {
         case .saveFolderUnavailable(let path):
             busy.remove(id)
             saving[id] = nil
+            savesOfDeleted.remove(id)
             fail(
                 "save", id, QuickAccessStrings.saveFailedTitle, QuickAccessStrings.folderUnavailableBody(path: path),
                 logged: "the save folder is unavailable", &out)
         case .saveFailed(let text):
             busy.remove(id)
             saving[id] = nil
+            savesOfDeleted.remove(id)
             fail("save", id, QuickAccessStrings.saveFailedTitle, text, &out)
         case .savedCopy(let copy):
             busy.remove(id)
