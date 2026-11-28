@@ -43,7 +43,7 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: EventTimeline.url(for: id, home: home.url.path).path))
     }
 
-    @MainActor @Test func aDeletedRecordingLosesItsTimelineOtherKindsAndChangesDoNot() throws {
+    @MainActor @Test func aDeletedRecordingLosesItsTimelineOtherKindsAndChangesDoNot() async throws {
         let home = try TempDirectory("home")
         defer { home.remove() }
         let store = TimelineStore(home: home.url.path)
@@ -61,6 +61,9 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: EventTimeline.url(for: recording, home: home.url.path).path))
         #expect(FileManager.default.fileExists(atPath: EventTimeline.url(for: screenshot, home: home.url.path).path))
         bus.publish(CaptureEvent(change: .deleted, item: item(recording, .recording), origin: "quickAccess"))
+        // Deleted off the main actor (claude-review #4 minor 2): wait for it, bounded.
+        let deleted = await store.waitForDeletions()
+        #expect(deleted)
         #expect(!FileManager.default.fileExists(atPath: EventTimeline.url(for: recording, home: home.url.path).path))
         // A capture without a timeline: nothing to do, no error.
         bus.publish(CaptureEvent(change: .deleted, item: item(CaptureID(), .recording), origin: "quickAccess"))

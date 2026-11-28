@@ -92,7 +92,9 @@ public struct TimelineElement: Hashable, Sendable {
         self.init(role: info.role, subrole: info.subrole, title: info.title, frame: frame)
     }
 
-    public init(role: String, subrole: String?, title: String?, frame: Rect2D) {
+    /// Nil for the `AXSecureTextField` subrole, so a hand-written line can't carry a secure field's title.
+    public init?(role: String, subrole: String?, title: String?, frame: Rect2D) {
+        guard subrole != AXElementInfo.secureSubrole else { return nil }
         self.role = role
         self.subrole = subrole
         self.title = title.map { title in
@@ -452,9 +454,13 @@ public enum TimelineReader {
             if let status = o["status"] as? String {
                 event = TimelineElementStatus(rawValue: status).map { .elementStatus(click: click, $0) }
             } else if let role = o["role"] as? String, let frame = rect(o["frame"]) {
-                let element = TimelineElement(
+                if let element = TimelineElement(
                     role: role, subrole: o["subrole"] as? String, title: o["title"] as? String, frame: frame)
-                event = .element(click: click, element)
+                {
+                    event = .element(click: click, element)
+                } else {
+                    event = .elementStatus(click: click, .withheld)
+                }
             } else {
                 event = nil
             }

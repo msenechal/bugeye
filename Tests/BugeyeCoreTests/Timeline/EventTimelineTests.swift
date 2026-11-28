@@ -50,11 +50,11 @@ import Testing
 
     @Test func titlesAreCutTo120CharactersWithAnEllipsis() {
         let long = String(repeating: "é", count: 200)
-        let element = TimelineElement(role: "AXButton", subrole: nil, title: long, frame: .zero)
+        let element = TimelineElement(role: "AXButton", subrole: nil, title: long, frame: .zero)!
         #expect(element.title?.count == 120)
         #expect(element.title?.hasSuffix("…") == true)
         let exact = String(repeating: "x", count: 120)
-        #expect(TimelineElement(role: "AXButton", subrole: nil, title: exact, frame: .zero).title == exact)
+        #expect(TimelineElement(role: "AXButton", subrole: nil, title: exact, frame: .zero)!.title == exact)
     }
 }
 
@@ -72,7 +72,7 @@ import Testing
             line(1532, .up(id: 1, button: .left, at: Point2D(x: 640, y: 42)))
                 == #"{"t":1532,"k":"up","id":1,"b":"l","x":640,"y":42}"#)
         let save = TimelineElement(
-            role: "AXButton", subrole: nil, title: "Save", frame: Rect2D(x: 610, y: 30, width: 60, height: 24))
+            role: "AXButton", subrole: nil, title: "Save", frame: Rect2D(x: 610, y: 30, width: 60, height: 24))!
         #expect(
             line(1450, .element(click: 1, save))
                 == #"{"t":1450,"k":"element","click":1,"role":"AXButton","subrole":null,"title":"Save","frame":{"x":610,"y":30,"w":60,"h":24}}"#
@@ -108,7 +108,7 @@ import Testing
     }
 
     @Test func stringsAreEscaped() {
-        let element = TimelineElement(role: "AXButton", subrole: nil, title: "a\"b\\c\nd\u{1}", frame: .zero)
+        let element = TimelineElement(role: "AXButton", subrole: nil, title: "a\"b\\c\nd\u{1}", frame: .zero)!
         #expect(line(0, .element(click: 1, element)).contains(#""title":"a\"b\\c\nd\u0001""#))
     }
 
@@ -155,7 +155,7 @@ import Testing
                     click: 1,
                     TimelineElement(
                         role: "AXButton", subrole: "AXCloseButton", title: nil,
-                        frame: Rect2D(x: 1, y: 2, width: 3, height: 4)))),
+                        frame: Rect2D(x: 1, y: 2, width: 3, height: 4))!)),
             TimelineLine(t: 3, event: .elementStatus(click: 2, .timeout)),
             TimelineLine(t: 4, event: .scroll(at: Point2D(x: 5, y: 6), dx: 1.5, dy: -2)),
             TimelineLine(t: 5, event: .key(key)),
@@ -212,5 +212,18 @@ import Testing
             EventTimeline.url(for: id, home: "/Users/m").path
                 == "/Users/m/Library/Application Support/dev.msenechal.bugeye/Timelines/6f9619ff-8b86-d011-b42d-00c04fc964ff.timeline.jsonl"
         )
+    }
+}
+
+@Suite struct TimelineSecureDecodingTests {
+    /// claude-review #4 minor 1: a hand-written secure-field element line never keeps its title.
+    @Test func aSecureSubroleLineDecodesAsWithheld() throws {
+        #expect(
+            TimelineElement(role: "AXTextField", subrole: "AXSecureTextField", title: "hunter2", frame: .zero) == nil)
+        let header = TimelineReaderTests.header
+        let line =
+            #"{"t":1,"k":"element","click":1,"role":"AXTextField","subrole":"AXSecureTextField","title":"hunter2","frame":{"x":0,"y":0,"w":1,"h":1}}"#
+        let data = Data((TimelineLineEncoder.header(header) + "\n" + line + "\n").utf8)
+        #expect(try TimelineReader.read(data).lines == [TimelineLine(t: 1, event: .elementStatus(click: 1, .withheld))])
     }
 }
