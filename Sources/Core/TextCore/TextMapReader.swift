@@ -120,8 +120,10 @@ public struct TextMapReader: Sendable {
         }
         Task {
             guard (try? await timer.value) != nil else { return }
-            work.cancel()
+            // Record the timeout before cancelling the recogniser, so its own CancellationError can't win the race
+            // and be reported as a recognition failure (claude-review on #9).
             outcome.resume(.failure(TextMapError.timedOut(strip: strip)))
+            work.cancel()
         }
         do {
             let lines = try await withTaskCancellationHandler {
