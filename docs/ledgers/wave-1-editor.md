@@ -70,6 +70,18 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (slice C): the canvas's blur provider returns a cached result or nil, and computes a miss off the main actor before redrawing (`BlurCache.imageOrSchedule`). A blur being drawn or resized shows the plain image for a moment until its result is ready. Exports compute synchronously, off the main actor. (cost if wrong: low; a brief flash of the unblurred region on the canvas only, never in an export.)
 - Ruling (slice C): the prompts (`EditorPrompts`) are sheets on the editor's window, falling back to app-modal without one. Tests inject scripted answers. (cost if wrong: none.)
 - Ruling (slice C): the text view is an `NSTextView` with zero inset and zero line-fragment padding, a private `UndoManager` per entry (⌘Z undoes typing only), and no smart quotes or dashes. ⌥Return arrives as `insertNewlineIgnoringFieldEditor:` and inserts a newline. (cost if wrong: low; E6's model-rendered text is the next step if the field and the render differ visibly.)
+- Ruling (claude-review on #14, two Minors): fixed, with tests that failed first.
+  - Every successful write publishes `edited`, even when a newer save is queued. A queued save that then writes nothing (it fails, or the gone alert is cancelled) used to leave Quick Access's preview stale. Only the latest save marks the document saved. This replaces plan P9's "one `edited` instead of two".
+  - Save As does nothing once its window closed while the panel or the render was in progress.
+
+  (cost if wrong: none; at most one extra `edited` event.)
+
+- Ruling (final review C, core part):
+  - I3: an editor has at most one unsaved-changes prompt at a time. A second close, or a quit, awaits the one already up instead of queueing another sheet.
+  - I5: the render-failure message `The image couldn't be rendered.` is settled in `EditorStrings.renderFailed` and tested; the spec gave no text for it.
+  - Edited dot: `EditorHost.documentSaved` tells the shell after every `markSaved`, so a save from the close or quit prompt, or a gone-file Save As, clears the dot.
+
+  Tests failed first, at compile time for the new names. (cost if wrong: none.)
 
 ## Waiting on
 
