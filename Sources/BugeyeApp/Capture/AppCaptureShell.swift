@@ -38,7 +38,11 @@ final class AppCaptureShell: CaptureShell {
                 pixelWidth: frame.image.pixelWidth,
                 visibleTopInset: inset)
             let display = frame.display.id
-            view.render = { [weak self] in self?.controller?.overlay(for: display) }
+            // Only the live session's views draw: a leftover view draws nothing and ignores mouseEntered.
+            view.render = { [weak self] in
+                guard let controller = self?.controller, controller.session == session else { return nil }
+                return controller.overlay(for: display)
+            }
             view.send = { [weak self] in self?.controller?.send($0) }
             window.contentView = view
             window.orderFrontRegardless()

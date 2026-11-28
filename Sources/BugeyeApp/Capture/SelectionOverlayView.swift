@@ -21,8 +21,9 @@ final class SelectionOverlayView: NSView {
     /// Every rect invalidated since creation (tests read it).
     private(set) var damage: NSRect = .zero
 
-    private let horizontal = NSView()
-    private let vertical = NSView()
+    private let horizontal = PassThroughView()
+    private let vertical = PassThroughView()
+    private var trackingArea: NSTrackingArea?
     private let loupe: LoupeView
     private var lastLabelFrame: NSRect?
 
@@ -51,11 +52,17 @@ final class SelectionOverlayView: NSView {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        for area in trackingAreas { removeTrackingArea(area) }
-        addTrackingArea(
-            NSTrackingArea(
-                rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
-        )
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    /// Every click inside the overlay is the overlay's own: the crosshair lines and the loupe never take it.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = superview.map { convert(point, from: $0) } ?? point
+        return bounds.contains(local) ? self : nil
     }
 
     override func resetCursorRects() {
@@ -175,9 +182,13 @@ final class SelectionOverlayView: NSView {
 
     /// Shows crosshair and loupe at a point in this view, without redrawing the frozen image.
     func showPointer(at point: NSPoint) {
-        pointer = point
+        // A point outside the view (the pointer is on another display) hides crosshair and loupe.
+        pointer = bounds.contains(point) ? point : nil
         updateCursorViews()
     }
+
+    /// True while crosshair and loupe are shown (tests).
+    var showsCursorViews: Bool { !horizontal.isHidden }
 
     private func updateCursorViews() {
         let areaMode = render()?.mode != .window
@@ -214,6 +225,11 @@ final class SelectionOverlayView: NSView {
         send(.pointerMoved(session, display.id, point))
     }
 
+    override func mouseExited(with event: NSEvent) {
+        pointer = nil
+        updateCursorViews()
+    }
+
     override func mouseEntered(with event: NSEvent) {
         // A finished selection's view ignores a late mouseEntered (design/02 §3.1); the flow checks it too.
         guard render() != nil else { return }
@@ -238,8 +254,10 @@ final class SelectionOverlayView: NSView {
         send(.rightMouseDown(session))
     }
 
+    /// Esc, Space and Return; a held Space or Return doesn't repeat, and other keys are dropped without a beep.
     override func keyDown(with event: NSEvent) {
-        guard let key = Self.key(event.keyCode) else { return super.keyDown(with: event) }
+        guard let key = Self.key(event.keyCode) else { return }
+        if event.isARepeat, key != .escape { return }
         send(.key(session, key))
     }
 
@@ -252,6 +270,12 @@ final class SelectionOverlayView: NSView {
         default: nil
         }
     }
+}
+
+/// A view that never takes a click (the crosshair lines).
+@MainActor
+final class PassThroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// A 120 pt circle magnifying a 15 × 15-pixel sample without smoothing, with a white 2 pt ring and a red square
@@ -270,6 +294,8 @@ final class LoupeView: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext, let image, let sample else { return }
