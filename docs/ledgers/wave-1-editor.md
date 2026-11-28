@@ -114,6 +114,7 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (claude-review on #14, Minor): each drag writes into its own subfolder (`Bugeye-Drag/<uuid>/<capture name>`). The dropped file keeps the capture's name (§5.8), and a later drag never replaces a file another app may still be reading. The 24 h sweep removes old subfolders. Test failed first. (cost if wrong: none.)
 
 - Ruling (claude-review on #14, Minor, not changed): `EditorSessions` keeps its `fileExists` check and Save As's `realpath` comparisons on the main actor. Each user action does one cached metadata lookup (plus two `realpath` calls for Save As), and the check has to decide between the gone alert and a render before either starts (E19). Decode, render, encoding and the write itself stay off the main actor. If a capture on a network volume ever stalls the UI, the fix is an async existence check with the same ordering. (cost if wrong: low; a brief stall on a slow network volume.)
+- Ruling (claude-review on #18, Important): the drag handle's export is tied to the press that started it, by a generation counter that every press and release advances. A late export from an earlier press can no longer become the dragged file, and a release cancels the export (this was in the backlog as final review C's Minor). A test drives two presses against a slow first export. It can't be seen failing on Linux; the macOS job is the check. (cost if wrong: none.)
 
 ## Waiting on
 
@@ -122,4 +123,3 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 ## Backlog
 
 - Executor tests: a non-isolated group's single-fill alpha, line joins, a vertical gradient (final review A, Minor 6).
-- Drag handle: cancel the export on mouse-up and ignore a stale result by generation (final review C, Minor).

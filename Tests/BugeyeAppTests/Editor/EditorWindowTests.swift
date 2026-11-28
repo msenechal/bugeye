@@ -414,4 +414,27 @@ final class EditorAppFixture {
     @Test func theRenderFailureMessageIsTheSettledString() {
         #expect(EditorImages.ExportFailed().localizedDescription == "The image couldn't be rendered.")
     }
+
+    @Test func aLateExportFromAnEarlierPressNeverBecomesTheDraggedFile() async throws {
+        _ = NSApplication.shared
+        var gates: [CheckedContinuation<Void, Never>] = []
+        var calls = 0
+        let handle = EditorDragHandleView(writeFile: {
+            calls += 1
+            let n = calls
+            if n == 1 { await withCheckedContinuation { gates.append($0) } }
+            return URL(fileURLWithPath: "/tmp/drag-\(n).png")
+        })
+        handle.beginPress()  // slow export
+        while gates.isEmpty { await Task.yield() }
+        handle.endPress()
+        handle.beginPress()  // fast export
+        for _ in 0..<100 where handle.ready == nil { await Task.yield() }
+        #expect(handle.ready?.lastPathComponent == "drag-2.png")
+        gates.removeFirst().resume()
+        for _ in 0..<100 { await Task.yield() }
+        #expect(handle.ready?.lastPathComponent == "drag-2.png")
+        handle.endPress()
+        #expect(handle.ready == nil)
+    }
 }
