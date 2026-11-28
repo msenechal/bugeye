@@ -10,7 +10,8 @@ Trust this file and `git log` over memory.
 |---|---|---|---|
 | 1 core | `feat/wave1-recording-core` | https://github.com/msenechal/bugeye/pull/4 | ready, CI running |
 | 2 flow | `feat/wave1-recording-flow` (stacked on core) | https://github.com/msenechal/bugeye/pull/13 (draft) | in progress |
-| 3 layout | `feat/wave1-recording-layout` (stacked on flow) | | in progress |
+| 3 layout | `feat/wave1-recording-layout` (stacked on flow) | https://github.com/msenechal/bugeye/pull/16 (draft) | in progress |
+| 4 adapters | `feat/wave1-recording-adapters` (stacked on core) | https://github.com/msenechal/bugeye/pull/17 (draft) | macos run queued |
 
 ## Tasks
 
@@ -40,6 +41,7 @@ Trust this file and `git log` over memory.
 - I5 `startedAt` milliseconds now rounded by hand (no reliance on each platform's formatter); the Bool check and the date are verified by the `macos` job once the PR is ready (until then, unverified on Darwin).
 - I6 tests added: late lookup after discard, write error (`/dev/full`), cursor cap falling through to size, pause flushing a scroll group.
 - Minor fixed in the same pass: M1 (flush loop ends when the recorder is gone), M2 (header written at once), M3 (open clicks forgotten at pause), M4 (`AXElementInfo` fields `private(set)`; the `AXSecureTextField` subrole forces secure), M5 (timer cancelled when the reader answers), M7 (header `hasElements` false without a reader), M8 (gate wait bounded), M9 (dates without milliseconds read).
+- claude-review on #4 (2703ee8): 0 Critical, 0 Important, 2 Minor, both fixed with a failing test first: (1) a decoded element line with the `AXSecureTextField` subrole kept its title: `TimelineElement`'s field initializer is now failable for that subrole and the reader writes `withheld`; (2) `TimelineStore.observe` deleted on the main actor: deletions now run detached, and `waitForDeletions` reports them done.
 
 ## Rulings
 
@@ -70,7 +72,7 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 3): the badge shows named keys only with ⌘ or ⌃ unless Show all keystrokes is on (↩ alone is typing a newline). (cost if wrong: low.)
 - Ruling (slice 3): take recovery also delivers an `.mp4` left without its `.mov` (a crash after a finished conversion) and deletes a partial `.mp4` beside its `.mov` and a timeline whose movie is gone. (cost if wrong: low.)
 - Ruling (slice 3): the child-window fallback (V23) counts dropped frames only right after a filter update; a delivered frame ends the watch. (cost if wrong: low.)
-- Ruling: `TimelineStore.observe` deletes on the main actor: one `unlink` of a small file, not slow I/O. (cost if wrong: low.)
+- Ruling (superseded by claude-review #4 minor 2): `TimelineStore.observe` now deletes off the main actor.
 
 ## Waiting on
 

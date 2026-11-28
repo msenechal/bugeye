@@ -92,7 +92,7 @@ import Testing
             limits: TimelineLimits(cursorBytes: 1 << 20, totalBytes: headerBytes + keyBytes + 20 + 256, reserve: 256))
         writer.append(key)
         let element = TimelineElement(
-            role: "AXButton", subrole: nil, title: String(repeating: "x", count: 60), frame: .zero)
+            role: "AXButton", subrole: nil, title: String(repeating: "x", count: 60), frame: .zero)!
         writer.append(TimelineLine(t: 100, event: .element(click: 1, element)))
         writer.finish(t: 2000)
         let lines = try T.lines(dir.file("t.jsonl"))

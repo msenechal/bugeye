@@ -1,10 +1,13 @@
 import BugeyeCore
 import Foundation
+import Synchronization
 
 /// Where timelines live (V5): beside the take while recording, then under the capture's identity in
 /// Application Support, deleted when the capture is.
 public struct TimelineStore: Sendable {
     public let home: String
+    /// Deletions started by `observe` and not yet done.
+    private let pending = PendingCount()
 
     public init(home: String) {
         self.home = home
@@ -31,12 +34,33 @@ public struct TimelineStore: Sendable {
         try? FileManager.default.removeItem(at: EventTimeline.url(for: id, home: home))
     }
 
-    /// Deletes a recording's timeline when a `deleted` event for it reaches the bus.
+    /// Deletes a recording's timeline, off the main actor, when a `deleted` event for it reaches the bus.
     @MainActor
     public func observe(_ bus: CaptureEventBus) -> CaptureSubscription {
         bus.subscribe { event in
             guard event.change == .deleted, event.item.kind == .recording else { return }
-            delete(event.item.id)
+            let id = event.item.id
+            pending.add(1)
+            Task.detached {
+                delete(id)
+                pending.add(-1)
+            }
         }
     }
+
+    /// True once every deletion `observe` started is done; false after `limit`. For tests and quitting.
+    public func waitForDeletions(limit: Duration = .seconds(5)) async -> Bool {
+        let deadline = ContinuousClock.now + limit
+        while pending.value > 0 {
+            guard ContinuousClock.now < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return true
+    }
+}
+
+private final class PendingCount: Sendable {
+    private let count = Mutex(0)
+    var value: Int { count.withLock { $0 } }
+    func add(_ delta: Int) { count.withLock { $0 += delta } }
 }
