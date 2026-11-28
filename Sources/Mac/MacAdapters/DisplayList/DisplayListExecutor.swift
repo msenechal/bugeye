@@ -38,7 +38,8 @@ public struct DisplayListExecutor: Sendable {
     /// flips once about `list.size.height`, so the list must span the context's height; with true (a flipped
     /// `NSView`'s context, already y down) it draws as is. The graphics state, text matrix and text position are
     /// restored afterwards. Drawing stops at a `popGroup` with no matching push; groups left open at the end are
-    /// closed; a `clip` outside any group is ignored (`DisplayList.isBalanced` rejects it).
+    /// closed; a `clip` outside any group is ignored (`DisplayList.isBalanced` rejects it). Group opacities multiply
+    /// when nested; a nested group's shadow replaces its parent's for the drawing inside it.
     public func execute(_ list: DisplayList, in context: CGContext, contextIsFlipped: Bool) {
         context.saveGState()
         let textMatrix = context.textMatrix
@@ -54,6 +55,10 @@ public struct DisplayListExecutor: Sendable {
         }
         let scale = Self.deviceScale(of: context)
         var layers: [Bool] = []  // per open group: did it begin a transparency layer?
+        // The alpha a group's drawing composes with: `setAlpha` replaces the context's alpha, so nested groups
+        // multiply it here. Inside a transparency layer CG resets alpha to 1, so an isolated group's children start
+        // from 1 again.
+        var alphas: [Double] = [1]
 
         for command in list.commands {
             switch command {
@@ -102,7 +107,8 @@ public struct DisplayListExecutor: Sendable {
 
             case .pushGroup(let style):
                 context.saveGState()
-                if style.opacity < 1 { context.setAlpha(CGFloat(style.opacity)) }
+                let effective = (alphas.last ?? 1) * style.opacity
+                context.setAlpha(CGFloat(effective))
                 if let shadow = style.shadow {
                     // Device space is y up: a shadow that falls down the list has a negative device offset.
                     context.setShadow(
@@ -116,12 +122,15 @@ public struct DisplayListExecutor: Sendable {
                         context.beginTransparencyLayer(auxiliaryInfo: nil)
                     }
                     layers.append(true)
+                    alphas.append(1)
                 } else {
                     layers.append(false)
+                    alphas.append(effective)
                 }
 
             case .popGroup:
                 guard let layer = layers.popLast() else { return }
+                alphas.removeLast()
                 if layer { context.endTransparencyLayer() }
                 context.restoreGState()
 

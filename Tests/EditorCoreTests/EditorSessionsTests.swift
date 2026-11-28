@@ -18,6 +18,14 @@ final class FakeEditorHost: EditorHost {
     var exportCount = 0
     var onExport: (() -> Void)?
     var blockExports = false
+    var onAsk: ((String) -> Void)?
+    var blockLoads = false
+    private var loadGate: CheckedContinuation<Void, Never>?
+    var loadPending: Bool { loadGate != nil }
+    func releaseLoad() {
+        loadGate?.resume()
+        loadGate = nil
+    }
     private var pending: [CheckedContinuation<Void, Never>] = []
 
     var pendingExports: Int { pending.count }
@@ -25,6 +33,7 @@ final class FakeEditorHost: EditorHost {
 
     func load(_ item: CaptureItem) async -> Result<Size2D, EditorLoadFailure> {
         log.append("load \(item.fileURL.lastPathComponent)")
+        if blockLoads { await withCheckedContinuation { loadGate = $0 } }
         return loadResult
     }
     func showWindow(for session: EditorSession) { log.append("show \(session.name)") }
@@ -43,6 +52,7 @@ final class FakeEditorHost: EditorHost {
     }
     func askToSave(_ session: EditorSession) async -> SaveAnswer {
         log.append("ask \(session.name)")
+        onAsk?(session.name)
         return saveAnswers.isEmpty ? .cancel : saveAnswers.removeFirst()
     }
     func showGoneAlert(_ session: EditorSession) async -> Bool {
@@ -479,5 +489,121 @@ extension SessionFixture {
         bus.publish(CaptureEvent(change: .deleted, item: shot, origin: "quickAccess"))
         #expect(!last.isEnabled)
         dir.remove()
+    }
+}
+
+/// The final review's fix pass for slice B (I1–I4, Minors 3, 4).
+@MainActor
+@Suite struct EditorSessionsReviewTests {
+    @Test func saveAsOntoTheOriginalIsASaveThatKeepsTheID() async throws {
+        let f = try SessionFixture()
+        let session = await f.openAndEdit()
+        f.host.saveAsURLs = [f.item.fileURL.standardizedFileURL]
+        #expect(await f.sessions.saveAs(f.id) == .saved)
+        #expect(f.idAttribute(f.item.fileURL) == f.id.description)
+        #expect(f.contents(f.item.fileURL) == "png-1-1")
+        #expect(session.document?.isDirty == false)
+        #expect(f.recorder.events.last?.change == .edited)
+    }
+
+    @Test func aSaveFinishingAfterItsEditorClosedShowsNothingButStillPublishesEdited() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        f.host.blockExports = true
+        let save = Task { await f.sessions.save(f.id) }
+        while f.host.pendingExports < 1 { await Task.yield() }
+        f.sessions.didClose(f.id)
+        f.order = []
+        f.host.releaseExport()
+        _ = await save.value
+        #expect(f.contents(f.item.fileURL) == "png-1-1")
+        #expect(f.order == ["edited"])
+        #expect(!f.host.log.contains { $0.hasPrefix("retitle") || $0.hasPrefix("gone") })
+    }
+
+    @Test func aSaveWhoseFileVanishesAfterItsEditorClosedShowsNoAlert() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        f.host.blockExports = true
+        let save = Task { await f.sessions.save(f.id) }
+        while f.host.pendingExports < 1 { await Task.yield() }
+        f.sessions.didClose(f.id)
+        try FileManager.default.removeItem(at: f.item.fileURL)
+        f.host.releaseExport()
+        #expect(await save.value == .cancelled)
+        #expect(!f.host.log.contains { $0.hasPrefix("gone") })
+        #expect(f.host.failures.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: f.item.fileURL.path))
+    }
+
+    @Test func quitDuringASaveWaitsForItAndAsksNothing() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        f.host.blockExports = true
+        let save = Task { await f.sessions.save(f.id) }
+        while f.host.pendingExports < 1 { await Task.yield() }
+        let quit = Task { await f.sessions.shouldTerminate() }
+        for _ in 0..<50 { await Task.yield() }
+        f.host.releaseExport()
+        #expect(await save.value == .saved)
+        #expect(await quit.value == true)
+        #expect(!f.host.log.contains { $0.hasPrefix("ask") })
+    }
+
+    @Test func closeDuringASaveWaitsForItAndAsksNothing() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        f.host.blockExports = true
+        let save = Task { await f.sessions.save(f.id) }
+        while f.host.pendingExports < 1 { await Task.yield() }
+        let close = Task { await f.sessions.shouldClose(f.id) }
+        for _ in 0..<50 { await Task.yield() }
+        f.host.releaseExport()
+        #expect(await close.value == true)
+        _ = await save.value
+        #expect(!f.host.log.contains { $0.hasPrefix("ask") })
+    }
+
+    @Test func quitSkipsAnEditorClosedWhileAnotherWasAsking() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        let other = CaptureItem(
+            id: CaptureID(), fileURL: f.saveFolder.appendingPathComponent("B.png"), isSaved: true, kind: .screenshot,
+            createdAt: Date(), pixelsPerPoint: 1)
+        try Data("x".utf8).write(to: other.fileURL)
+        await f.sessions.open(other)
+        f.sessions.session(other.id)!.document!.apply { $0.annotations.append(Annotation(shape: .step(center: .zero))) }
+        f.host.onAsk = { [unowned f] name in if name == "Shot.png" { f.sessions.didClose(other.id) } }
+        f.host.saveAnswers = [.dontSave, .save]
+        #expect(await f.sessions.shouldTerminate() == true)
+        #expect(f.host.log.filter { $0.hasPrefix("ask") } == ["ask Shot.png"])
+    }
+
+    @Test func aFilePutBackAtItsPathSavesAgain() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        let data = try Data(contentsOf: f.item.fileURL)
+        try FileManager.default.removeItem(at: f.item.fileURL)
+        #expect(await f.sessions.save(f.id) == .cancelled)
+        try data.write(to: f.item.fileURL)
+        #expect(await f.sessions.save(f.id) == .saved)
+        #expect(f.contents(f.item.fileURL) == "png-1-1")
+    }
+
+    @Test func eventsAndASecondOpenForACaptureStillLoadingDoNotReachTheHost() async throws {
+        let f = try SessionFixture()
+        f.host.blockLoads = true
+        let first = Task { await f.sessions.open(f.item) }
+        while !f.host.loadPending { await Task.yield() }
+        await f.sessions.open(f.item)
+        var moved = f.item
+        moved.fileURL = f.saveFolder.appendingPathComponent("Moved.png")
+        f.bus.publish(CaptureEvent(change: .moved, item: moved, previousURL: f.item.fileURL, origin: "quickAccess"))
+        f.host.releaseLoad()
+        await first.value
+        #expect(!f.host.log.contains("forward"))
+        #expect(!f.host.log.contains { $0.hasPrefix("retitle") })
+        #expect(f.sessions.session(f.id)?.item.fileURL.lastPathComponent == "Moved.png")
+        #expect(f.host.log.last == "show Moved.png")
     }
 }

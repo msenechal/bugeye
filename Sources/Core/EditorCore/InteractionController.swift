@@ -285,6 +285,12 @@ public final class InteractionController {
         document.apply { $0.frame = enabled ? BackgroundFrame() : nil }
     }
 
+    /// A discrete frame edit (a fill swatch, the Shadow toggle): one step of its own (final review B, Minor 1).
+    public func applyFrame(_ frame: BackgroundFrame) {
+        finishPendingChanges()
+        document.apply { $0.frame = frame }
+    }
+
     /// A slider drag: begin, any number of `setFrame`, end → one step.
     public func beginFrameChange() {
         finishPendingChanges()

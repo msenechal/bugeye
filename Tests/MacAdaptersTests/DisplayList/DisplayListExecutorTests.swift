@@ -299,4 +299,34 @@ import Testing
         #expect(
             DisplayListExecutor().render(DisplayList(size: Size2D(width: .infinity, height: 4), commands: [])) == nil)
     }
+
+    @Test(arguments: [false, true])
+    func nestedGroupOpacitiesMultiply(innerIsolated: Bool) throws {
+        let list = DisplayList(
+            size: Size2D(width: 20, height: 10),
+            commands: [
+                .pushGroup(GroupStyle(opacity: 0.5)),
+                .fillPath(.rect(Rect2D(x: 0, y: 0, width: 10, height: 10)), color: Self.black),
+                .pushGroup(GroupStyle(opacity: 0.5, isolated: innerIsolated)),
+                .fillPath(.rect(Rect2D(x: 10, y: 0, width: 10, height: 10)), color: Self.black),
+                .popGroup,
+                .popGroup,
+            ])
+        let buffer = try Self.pixels(list)
+        #expect(abs(Int(buffer.pixel(x: 5, y: 5)?.alpha ?? 0) - 128) <= 2)
+        #expect(abs(Int(buffer.pixel(x: 15, y: 5)?.alpha ?? 0) - 64) <= 2)
+    }
+
+    @Test func anIsolatedGroupsChildrenStartFromFullOpacityInsideItsLayer() throws {
+        let list = DisplayList(
+            size: Size2D(width: 10, height: 10),
+            commands: [
+                .pushGroup(GroupStyle(opacity: 0.5, isolated: true)),
+                .pushGroup(GroupStyle(opacity: 0.5)),
+                .fillPath(.rect(Rect2D(x: 0, y: 0, width: 10, height: 10)), color: Self.black),
+                .popGroup,
+                .popGroup,
+            ])
+        #expect(abs(Int(try Self.pixels(list).pixel(x: 5, y: 5)?.alpha ?? 0) - 64) <= 2)
+    }
 }
