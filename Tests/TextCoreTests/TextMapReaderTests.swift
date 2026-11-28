@@ -161,3 +161,116 @@ import Testing
         #expect(text.calls.count == 2)
     }
 }
+
+/// A recogniser that ignores cancellation until the test releases it (Vision's `perform` may not be cancellable).
+final class StubbornReader: TextReader, Sendable {
+    private let released = Mutex(false)
+    private let started = Mutex(false)
+    private let sawCancel = Mutex(false)
+    var hasStarted: Bool { started.withLock { $0 } }
+    var sawCancellation: Bool { sawCancel.withLock { $0 } }
+    func release() { released.withLock { $0 = true } }
+
+    func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] {
+        started.withLock { $0 = true }
+        while !released.withLock({ $0 }) {
+            if Task.isCancelled { sawCancel.withLock { $0 = true } }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        throw FakeFailure("cancelled late")
+    }
+}
+
+@Suite struct TextMapReaderReviewTests {
+    func blank(_ width: Int, _ height: Int) throws -> PixelBuffer {
+        try PixelBuffer(width: width, height: height, fill: RGBA8(red: 255, green: 255, blue: 255))
+    }
+
+    @Test func aReaderThatIgnoresCancellationStillTimesOut() async throws {
+        let clock = ManualClock()
+        let stubborn = StubbornReader()
+        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: clock)
+        let image = try blank(10, 10)
+        let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
+        #expect(await eventually { stubborn.hasStarted && clock.sleepers == 1 })
+        let completion = Completion(task)
+        clock.advance(by: .seconds(10))
+        let finished = await eventually { completion.isDone }
+        stubborn.release()
+        #expect(finished)
+        await #expect(throws: TextMapError.timedOut(strip: 0)) { try await task.value }
+        #expect(await eventually { stubborn.sawCancellation })
+    }
+
+    @Test func anOuterCancelSurfacesAsCancellationEvenFromAStubbornReader() async throws {
+        let stubborn = StubbornReader()
+        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: ManualClock())
+        let image = try blank(10, 10)
+        let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
+        #expect(await eventually { stubborn.hasStarted })
+        let completion = Completion(task)
+        task.cancel()
+        let finished = await eventually { completion.isDone }
+        stubborn.release()
+        #expect(finished)
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
+    @Test func theTimeoutIsPerStripNotPerRead() async throws {
+        let clock = ManualClock()
+        let gate = FakeGate()
+        let text = FakeTextReader(steps: [.gate(gate, []), .hang])
+        let mapReader = TextMapReader(reader: text, files: FakeImageFileReader(), clock: clock)
+        let image = try blank(10, 8200)
+        let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
+        let completion = Completion(task)
+        #expect(await eventually { gate.waiting == 1 && clock.sleepers == 1 })
+        clock.advance(by: .seconds(9))
+        gate.open()
+        #expect(await eventually { text.calls.count == 2 && clock.sleepers == 1 })
+        clock.advance(by: .seconds(9))
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(!completion.isDone)
+        clock.advance(by: .seconds(1))
+        await #expect(throws: TextMapError.timedOut(strip: 1)) { try await task.value }
+    }
+
+    @Test func adjacentLinesOverlappingAtTheStripEdgeAreBothKept() async throws {
+        // Review I2: "A above" is entirely in strip 1's band, so strip 1's copy is dropped; the cut "B" must not
+        // take strip 0's copy of A with it, since the two only touch by 3 px.
+        let text = FakeTextReader(steps: [
+            .lines([ocr("A above", rect(0, 3950, 50, 35)), ocr("B cut", rect(0, 3982, 50, 18))]),
+            .lines([ocr("A above", rect(0, 150, 50, 35)), ocr("B whole", rect(0, 182, 50, 33))]),
+            .lines([]),
+        ])
+        let map = try await TextMapReader(reader: text, files: FakeImageFileReader())
+            .read(.buffer(try blank(100, 8200)), pixelsPerPoint: 2)
+        #expect(map.lines.map(\.text) == ["A above", "B whole"])
+    }
+
+    @Test func theBandCopyIsDroppedEvenWhenItDiffersAndALineEndingAtTheBandEdgeIsInIt() async throws {
+        let text = FakeTextReader(steps: [
+            .lines([ocr("from strip 0", rect(0, 3900, 50, 20)), ocr("edge 0", rect(100, 3980, 50, 20))]),
+            .lines([ocr("from strip 1", rect(5, 100, 50, 20)), ocr("edge 1", rect(105, 180, 50, 20))]),
+            .lines([]),
+        ])
+        let map = try await TextMapReader(reader: text, files: FakeImageFileReader())
+            .read(.buffer(try blank(200, 8200)), pixelsPerPoint: 2)
+        #expect(map.lines.map(\.text) == ["from strip 0", "edge 0"])
+    }
+}
+
+/// Becomes true once the watched task has finished, without the test having to await it.
+final class Completion: Sendable {
+    private let state = Mutex(false)
+    var isDone: Bool { state.withLock { $0 } }
+
+    init<T: Sendable>(_ task: Task<T, any Error>) {
+        Task { [state = self] in
+            _ = try? await task.value
+            state.finish()
+        }
+    }
+
+    private func finish() { state.withLock { $0 = true } }
+}
