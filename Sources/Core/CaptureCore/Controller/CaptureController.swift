@@ -120,6 +120,9 @@ public final class CaptureController: AreaSelector {
     /// Sessions whose frozen frames are still held (tests: a finished or cancelled session holds none).
     public var heldFrameSessions: Int { frames.count }
 
+    /// Sessions whose live window capture is still held.
+    public var heldWindowImages: Int { windowImages.count }
+
     /// Freezes, window captures and deliveries still running.
     public var inFlightCount: Int { inFlight.count }
 
@@ -291,6 +294,9 @@ public final class CaptureController: AreaSelector {
                 }
             }.value
             guard let self else { return }
+            // A result that outlived its session changes nothing and keeps no image (design/11 §6). The flow can't
+            // leave `finishing` while a window capture is awaited today; this keeps it so if that ever changes.
+            guard flow.session == session, flow.phase == .finishing else { return }
             switch result {
             case .success(let image):
                 windowImages[session] = image
