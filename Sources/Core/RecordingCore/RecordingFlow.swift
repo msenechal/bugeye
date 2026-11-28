@@ -215,6 +215,8 @@ public struct RecordingFlow: Sendable {
     /// Sessions whose recorder was prepared and not yet stopped or cancelled (R3).
     private var liveRecorders: Set<SessionID> = []
     private var progress: Double?
+    /// A timeline was started for the current take and not yet finished or discarded (R6).
+    private var timelineOpen = false
 
     public init(stopKey: KeyCombo? = nil) {
         self.stopKey = stopKey
@@ -428,13 +430,12 @@ public struct RecordingFlow: Sendable {
         case (.finishing(let s, .stopping, let notice, let startedAt, _), .stopped(_, .movie(let url, let duration))):
             state = .finishing(s, .converting, notice: notice, startedAt: startedAt, duration: duration)
             progress = nil
-            return [
-                .timeline(.finish),
-                .convert(s, url, deadline: DiskGuard.conversionDeadline(duration: duration)),
+            return closeTimeline(.finish) + [
+                .convert(s, url, deadline: DiskGuard.conversionDeadline(duration: duration))
             ]
         case (.finishing(let s, .stopping, _, _, _), .stopped(_, .noFrames)):
             state = .idle
-            return [.timeline(.discard), .notify(RecordingStrings.Notice.nothingRecorded)] + done(s)
+            return closeTimeline(.discard) + [.notify(RecordingStrings.Notice.nothingRecorded)] + done(s)
         case (.finishing(let s, .converting, _, _, _), .conversionProgress(_, let fraction)):
             progress = min(max(fraction, 0), 1)
             return [.statusItem(finishingOverride)]
@@ -471,7 +472,10 @@ public struct RecordingFlow: Sendable {
                 .overlays(start: true, clicks: options.clicks, keys: options.keys, showAllKeys: options.showAllKeys))
         }
         effects.append(.inputMonitor(start: true))
-        if options.timeline { effects.append(.timeline(.start)) }
+        if options.timeline {
+            timelineOpen = true
+            effects.append(.timeline(.start))
+        }
         effects += [.ticker(start: true), .statusItem(override(paused: false, take, nil))]
         return effects
     }
@@ -542,8 +546,9 @@ public struct RecordingFlow: Sendable {
         liveRecorders.insert(next)
         // The bubble stays through the new countdown (it is shown during set-up).
         var effects = windDown(take, stopping: false, keepBubble: take.options.camera) + cancelRecorder(s)
+        effects += closeTimeline(.discard)
         effects += [
-            .timeline(.discard), .statusItem(nil), .showBorder(take.target, .dashed), .activity(.end(.recording)),
+            .statusItem(nil), .showBorder(take.target, .dashed), .activity(.end(.recording)),
             .activity(.begin(.recordingSetup)), .countdown(Self.countdownStart),
             .prepareRecorder(next, RecorderRequest(target: take.target, options: take.options)),
             .log("finish \(s)"), .log("begin \(next)"),
@@ -553,9 +558,15 @@ public struct RecordingFlow: Sendable {
 
     private mutating func discard(_ s: SessionID, _ take: Take) -> [RecordingEffect] {
         state = .idle
-        return windDown(take, stopping: false) + cancelRecorder(s) + [
-            .timeline(.discard), .closeBorder, .statusItem(nil), .activity(.end(.recording)), .log("finish \(s)"),
+        return windDown(take, stopping: false) + cancelRecorder(s) + closeTimeline(.discard) + [
+            .closeBorder, .statusItem(nil), .activity(.end(.recording)), .log("finish \(s)"),
         ]
+    }
+
+    private mutating func closeTimeline(_ command: TimelineCommand) -> [RecordingEffect] {
+        guard timelineOpen else { return [] }
+        timelineOpen = false
+        return [.timeline(command)]
     }
 
     private func cameraLost(_ s: SessionID) -> [RecordingEffect] {
@@ -670,7 +681,7 @@ extension RecorderFailure {
 
 extension RecordingEvent {
     /// The session an async event belongs to; nil for toggle and quit.
-    var session: SessionID? {
+    public var session: SessionID? {
         switch self {
         case .toggle, .quitRequested: nil
         case .selected(let s, _, _, _, _), .option(let s, _), .permissionAnswered(let s, _, _), .record(let s, _),
