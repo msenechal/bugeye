@@ -110,6 +110,7 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
   (cost if wrong: low.)
 
 - Ruling (macos run 46124668545): that run failed on the contract test `DebugChannelTests.answersTheWaveOneCommandsOnTheMainActor`, which got no answer within its 5 s timeout. The cause was I2's `NSApp.activate()` in `show()`. Activating the unbundled test runner stalled its main thread on the hosted runner: `saveKeepsTheIDAndTheOtherAttributes` went from 0.29 s to 8.25 s and starved the debug channel, which answers on the main thread. Activation is now injected into `EditorManager` (`NSApp.activate()` in the app, a counter in tests). The opening test checks that every editor activates, not only the first. The contract test is unchanged. (cost if wrong: none.)
+- Ruling (claude-review on #14, Minor): each drag writes into its own subfolder (`Bugeye-Drag/<uuid>/<capture name>`). The dropped file keeps the capture's name (§5.8), and a later drag never replaces a file another app may still be reading. The 24 h sweep removes old subfolders. Test failed first. (cost if wrong: none.)
 
 ## Waiting on
 

@@ -383,7 +383,11 @@ public final class EditorSessions {
             let writer = environment.writer
             return try await Task.detached {
                 try DragFolder.prepare(folder, now: Date())
-                let url = folder.appendingPathComponent(source.lastPathComponent)
+                // Its own subfolder per drag: the file keeps the capture's name, and a later drag never replaces a
+                // file another app may still be reading (claude-review on #14).
+                let subfolder = folder.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                try FileManager.default.createDirectory(at: subfolder, withIntermediateDirectories: true)
+                let url = subfolder.appendingPathComponent(source.lastPathComponent)
                 try writer.write(exported.png, to: url, attributesFrom: source, identity: .new(CaptureID()))
                 return url
             }.value
@@ -466,7 +470,8 @@ public enum DragFolder {
         temporaryDirectory.appendingPathComponent("Bugeye-Drag", isDirectory: true)
     }
 
-    /// Creates the folder and deletes files in it older than 24 h (by modification date).
+    /// Creates the folder and deletes what's in it (files, or a drag's subfolder) older than 24 h, by modification
+    /// date.
     public static func prepare(_ folder: URL, now: Date, fileManager: FileManager = .default) throws {
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
         for name in try fileManager.contentsOfDirectory(atPath: folder.path) {
