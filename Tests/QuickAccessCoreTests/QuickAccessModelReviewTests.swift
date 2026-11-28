@@ -234,4 +234,18 @@ import Testing
         expected.fileURL = moved.fileURL
         #expect(done.published.first?.item == expected)
     }
+
+    @Test func aSaveFinishingAfterItsCaptureWasDeletedPublishesNothing() {
+        let h = ModelHarness()
+        let item = h.item()
+        h.show(item)
+        h.handle(.stripTapped(item.id, .save))
+        h.publish(.deleted, item, origin: "duplicates")
+        var moved = item
+        moved.isSaved = true
+        moved.fileURL = URL(fileURLWithPath: "/Users/me/Pictures/Bugeye/a.png")
+        let done = h.handle(.fileActionFinished(item.id, .saved(moved, previousURL: item.fileURL)))
+        #expect(done.published.isEmpty)
+        #expect(h.model.busy.isEmpty)
+    }
 }
