@@ -9,10 +9,16 @@ import RecordingCore
 ///
 /// Confined to one serial queue (the stream's sample queue); tests call it from one task.
 final class MovieWriter: @unchecked Sendable {
-    enum Failure: Error, Equatable {
+    enum Failure: Error, LocalizedError, Equatable {
         case cannotStart(String)
         /// The writer failed earlier; what was written up to its last fragment stays on disk.
         case notWriting(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .cannotStart(let text), .notWriting(let text): text
+            }
+        }
     }
 
     enum Result: Equatable {
@@ -33,6 +39,10 @@ final class MovieWriter: @unchecked Sendable {
     var waitsForEncoder = false
     /// Called once, on the writer's queue, with the first frame's host time.
     var onFirstFrame: ((Double) -> Void)?
+    /// Called once, on the writer's queue, when the writer fails mid-take (disk full, encoder error): the
+    /// recorder reports it so the take ends with "Recording stopped" (`design/04` §2.6, PR #22 review I1).
+    var onFailure: ((String) -> Void)?
+    private var failureReported = false
     private(set) var droppedSamples = 0
     /// A pause asked for before the first frame: the take starts paused at that frame (PR #13 review C1).
     private var pausedBeforeStart = false
@@ -90,8 +100,14 @@ final class MovieWriter: @unchecked Sendable {
     func arm() { isArmed = true }
 
     func appendVideo(_ sample: CMSampleBuffer, host: Double) {
-        guard isArmed, writer.status == .writing else { return }
+        guard isArmed, isWriting else { return }
         if !hasStarted {
+            // The session starts only with a frame the input can take, so the movie never opens on a gap
+            // (review M11).
+            guard waitsForEncoder || video.isReadyForMoreMediaData else {
+                droppedSamples += 1
+                return
+            }
             clock.begin(at: host)
             writer.startSession(atSourceTime: .zero)
             hasStarted = true
@@ -115,7 +131,7 @@ final class MovieWriter: @unchecked Sendable {
 
     /// Audio before the first frame, or captured in a pause, is dropped.
     func appendAudio(_ sample: CMSampleBuffer, source: Int, host: Double) {
-        guard hasStarted, source < audio.count, writer.status == .writing,
+        guard hasStarted, source < audio.count, isWriting,
             let time = clock.outputTime(for: host), let copy = retimed(sample, to: time)
         else { return }
         _ = append(copy, to: audio[source])
@@ -156,6 +172,24 @@ final class MovieWriter: @unchecked Sendable {
         try? FileManager.default.removeItem(at: url)
     }
 
+    /// Writing; a writer that has failed reports it once.
+    private var isWriting: Bool {
+        switch writer.status {
+        case .writing: return true
+        case .failed:
+            reportFailure(writer.error?.localizedDescription ?? "the writer stopped")
+            return false
+        default: return false
+        }
+    }
+
+    /// Reports a failure once (`onFailure`). Internal so tests can stand in for a full disk.
+    func reportFailure(_ text: String) {
+        guard !failureReported else { return }
+        failureReported = true
+        onFailure?(text)
+    }
+
     private func append(_ sample: CMSampleBuffer, to input: AVAssetWriterInput) -> Bool {
         if waitsForEncoder {
             while !input.isReadyForMoreMediaData, writer.status == .writing { usleep(1000) }
@@ -164,18 +198,37 @@ final class MovieWriter: @unchecked Sendable {
             droppedSamples += 1
             return false
         }
-        return input.append(sample)
+        if input.append(sample) { return true }
+        _ = isWriting
+        return false
     }
 
+    /// A copy whose first sample is at `seconds`. Every timing entry shifts by the same amount and keeps its own
+    /// duration: one LPCM buffer holds 1024 samples of 1/48000 s each, not 1024 samples of the buffer's length
+    /// (review I3).
     private func retimed(_ sample: CMSampleBuffer, to seconds: Double) -> CMSampleBuffer? {
-        var timing = CMSampleTimingInfo(
-            duration: CMSampleBufferGetDuration(sample),
-            presentationTimeStamp: CMTime(seconds: seconds, preferredTimescale: 1_000_000_000),
-            decodeTimeStamp: .invalid)
+        var count: CMItemCount = 0
+        CMSampleBufferGetSampleTimingInfoArray(sample, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
+        var timings = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(), count: max(count, 1))
+        if count > 0 {
+            CMSampleBufferGetSampleTimingInfoArray(
+                sample, entryCount: count, arrayToFill: &timings, entriesNeededOut: &count)
+        } else {
+            timings[0] = CMSampleTimingInfo(
+                duration: CMSampleBufferGetDuration(sample),
+                presentationTimeStamp: CMSampleBufferGetPresentationTimeStamp(sample), decodeTimeStamp: .invalid)
+        }
+        let target = CMTime(seconds: seconds, preferredTimescale: 1_000_000_000)
+        let first = timings[0].presentationTimeStamp
+        for index in timings.indices {
+            let pts = timings[index].presentationTimeStamp
+            timings[index].presentationTimeStamp = first.isValid && pts.isValid ? target + (pts - first) : target
+            timings[index].decodeTimeStamp = .invalid
+        }
         var copy: CMSampleBuffer?
         let status = CMSampleBufferCreateCopyWithNewTiming(
-            allocator: kCFAllocatorDefault, sampleBuffer: sample, sampleTimingEntryCount: 1,
-            sampleTimingArray: &timing, sampleBufferOut: &copy)
+            allocator: kCFAllocatorDefault, sampleBuffer: sample, sampleTimingEntryCount: timings.count,
+            sampleTimingArray: &timings, sampleBufferOut: &copy)
         return status == noErr ? copy : nil
     }
 }

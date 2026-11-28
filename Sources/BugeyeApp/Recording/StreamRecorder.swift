@@ -5,13 +5,17 @@ import Foundation
 import RecordingCore
 import ScreenCaptureKit
 
+/// The host clock (seconds): what ScreenCaptureKit stamps samples with, and what `NSEvent.timestamp` counts
+/// (both mach-based). Every recording component reads it through here (PR #22 review M9).
+enum HostClock {
+    static func now() -> Double { CMClockGetTime(CMClockGetHostTimeClock()).seconds }
+}
+
 /// What one take records.
 struct StreamRequest: Sendable {
     var display: CGDirectDisplayID
     /// Display-local points, top-left; already clamped (`RecordingGeometry.clampedSourceRect`).
     var sourceRect: CGRect
-    /// The display's size in points.
-    var displaySize: CGSize
     /// Effective options.
     var options: RecordingOptions
     /// Window recordings: the window followed (V10).
@@ -22,17 +26,22 @@ struct StreamRequest: Sendable {
 }
 
 /// The ScreenCaptureKit stream and the movie writer of one take (`design/04` §2.6). Everything touching the
-/// stream's samples, the writer and the follow timer runs on `queue`; callbacks go to the main actor.
+/// stream's samples, the writer and the follow timer runs on `queue`; callbacks go to the main queue in order.
 final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, RecorderDriving, @unchecked Sendable {
     enum Failure: Error, LocalizedError, Equatable {
         case userDeclined
         case noDisplay
+        case noWindow
+        /// `cancel()` ran while `prepare` was still starting the stream.
+        case cancelled
         case other(String)
 
         var errorDescription: String? {
             switch self {
             case .userDeclined: "Screen Recording was declined."
             case .noDisplay: "The display to record isn't available."
+            case .noWindow: "The window to record isn't available."
+            case .cancelled: "The recording was cancelled."
             case .other(let text): text
             }
         }
@@ -47,8 +56,8 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
     }
 
     let queue = DispatchQueue(label: "dev.msenechal.bugeye.recording.samples", qos: .userInteractive)
-    /// Host-clock seconds, the clock SCK stamps samples with. Injectable for tests.
-    var now: @Sendable () -> Double = { CMClockGetTime(CMClockGetHostTimeClock()).seconds }
+    /// Host-clock seconds (`HostClock`). Injected by tests.
+    let now: @Sendable () -> Double
     private let callbacks: Callbacks
 
     // Confined to `queue`.
@@ -65,13 +74,22 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
     private var failure: Failure?
     private var micSource: Int?
     private var systemSource: Int?
+    /// Set by `stop` and `cancel`; `prepare` checks it before installing and after starting (PR #22 review C1).
+    private var isCancelled = false
+    /// The latest complete frame before the take starts: a still screen sends `.idle` frames only, and the take
+    /// must start when the countdown ends (V11, review I2).
+    private var lastComplete: CMSampleBuffer?
+    /// Filter updates apply in order; a superseded one is skipped (review I5).
+    private var filterGeneration = 0
+    private var filterTask: Task<Void, Never>?
 
-    init(callbacks: Callbacks) {
+    init(callbacks: Callbacks, now: @escaping @Sendable () -> Double = { HostClock.now() }) {
         self.callbacks = callbacks
+        self.now = now
     }
 
     /// Starts the stream (frames are discarded until `beginTake`, V11). Throws `.userDeclined` when Screen
-    /// Recording is refused.
+    /// Recording is refused, `.noWindow` when the window to follow is gone, `.cancelled` when `cancel()` ran first.
     func prepare(_ request: StreamRequest) async throws {
         let content: SCShareableContent
         do {
@@ -89,12 +107,19 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
             let missing = request.overlayWindowIDs.count - overlays.count
             await callbacks.log("exception window \(missing) missing from the stream")
         }
+        let displayFrame = CGDisplayBounds(request.display)
         let filter: SCContentFilter
-        if let windowID = request.window, let window = content.windows.first(where: { $0.windowID == windowID }) {
-            let childIDs = Self.childWindows(of: windowID)
+        var childIDs: [CGWindowID] = []
+        if let windowID = request.window {
+            // Never fall back to the display: that records whatever is in front (§5.5, review I4).
+            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+                throw Failure.noWindow
+            }
+            let followed = WindowFollow.global(
+                Self.rect2D(request.sourceRect), displayBounds: Self.rect2D(displayFrame))
+            childIDs = Self.childWindows(of: windowID, followedGlobal: followed, in: Self.windowList())
             let kids = content.windows.filter { childIDs.contains($0.windowID) }
             filter = SCContentFilter(display: display, including: [window] + kids + overlays)
-            queue.sync { children = childIDs }
         } else if let app = content.applications.first(where: {
             $0.processID == ProcessInfo.processInfo.processIdentifier
         }) {
@@ -133,14 +158,20 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
         }
         let system = request.options.systemAudio ? 0 : nil
         let mic = request.options.mic ? (system == nil ? 0 : 1) : nil
-        let writer = try MovieWriter(
-            url: request.output, size: size, fps: request.options.fps, codec: request.options.codec,
-            quality: request.options.quality, audioSources: (system == nil ? 0 : 1) + (mic == nil ? 0 : 1))
+        let writer: MovieWriter
+        do {
+            writer = try MovieWriter(
+                url: request.output, size: size, fps: request.options.fps, codec: request.options.codec,
+                quality: request.options.quality, audioSources: (system == nil ? 0 : 1) + (mic == nil ? 0 : 1))
+        } catch {
+            throw Failure.other(error.localizedDescription)
+        }
         let callbacks = callbacks
         writer.onFirstFrame = { host in
             let date = Date()
-            Task { @MainActor in callbacks.firstFrame(host, date) }
+            Self.onMain { callbacks.firstFrame(host, date) }
         }
+        writer.onFailure = { [weak self] text in self?.report(.other(text)) }
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         do {
             try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
@@ -150,7 +181,7 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
             writer.cancel()
             throw Failure.other(error.localizedDescription)
         }
-        queue.sync {
+        let installed = installIfLive {
             self.stream = stream
             self.writer = writer
             self.configuration = configuration
@@ -158,7 +189,12 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
             self.systemSource = system
             self.micSource = mic
             self.followedSize = request.sourceRect.size
-            self.displayFrame = CGDisplayBounds(request.display)
+            self.displayFrame = displayFrame
+            self.children = childIDs
+        }
+        guard installed else {
+            writer.cancel()
+            throw Failure.cancelled
         }
         do {
             try await stream.startCapture()
@@ -169,13 +205,19 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
             cancelWriter()
             throw Failure.other(error.localizedDescription)
         }
+        // A cancel during `startCapture` raced it: stop what it started (the cancel already took the writer).
+        if queue.sync(execute: { isCancelled }) {
+            try? await stream.stopCapture()
+            writer.cancel()
+            throw Failure.cancelled
+        }
         if request.window != nil { queue.async { self.startFollowing() } }
         await callbacks.log(
             "stream \(size.width)x\(size.height) \(request.options.fps) fps \(request.options.codec.rawValue) mic=\(mic != nil) system=\(system != nil)"
         )
     }
 
-    /// The take begins at the next complete frame.
+    /// The take begins at the next complete frame (or at once on a still screen, with the last complete one).
     func beginTake() { queue.async { self.writer?.arm() } }
 
     /// Stamped on the sample queue, so every frame already handled was captured before it (`design/04` §3).
@@ -195,17 +237,19 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
         }
     }
 
-    /// Stops the stream, then finishes the movie. A late sample finds no writer and is dropped.
+    /// Stops the stream, then finishes the movie at the moment Stop was handled (not after the stream's stop,
+    /// review M1). A late sample finds no writer and is dropped.
     func stop() async throws -> MovieWriter.Result {
-        let (stream, writer) = detach()
+        let (stream, writer, host) = detach()
         try? await stream?.stopCapture()
         guard let writer else { return .noFrames }
-        return try await writer.finish(at: now())
+        return try await writer.finish(at: host)
     }
 
-    /// Stops and deletes the movie. Safe to call more than once, and before `prepare` returns.
+    /// Stops and deletes the movie. Safe to call more than once, and while `prepare` is running: `prepare` then
+    /// stops what it started and throws `.cancelled`.
     func cancel() async {
-        let (stream, writer) = detach()
+        let (stream, writer, _) = detach()
         try? await stream?.stopCapture()
         writer?.cancel()
     }
@@ -216,30 +260,7 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
     // MARK: SCStreamOutput, SCStreamDelegate (on `queue`)
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard let writer, sample.isValid else { return }
-        let host = CMSampleBufferGetPresentationTimeStamp(sample).seconds
-        switch type {
-        case .screen:
-            switch Self.frameStatus(sample) {
-            case .complete:
-                fallback.frameDelivered()
-                writer.appendVideo(sample, host: host)
-            case .idle:
-                // Nothing changed on screen: not a dropped frame (V23).
-                fallback.frameDelivered()
-            case nil:
-                break
-            default:
-                fallback.frameDropped()
-                if fallback.useWindowAlone, !children.isEmpty { dropChildren() }
-            }
-        case .audio:
-            if let source = systemSource { writer.appendAudio(sample, source: source, host: host) }
-        case .microphone:
-            if let source = micSource { writer.appendAudio(sample, source: source, host: host) }
-        @unknown default:
-            break
-        }
+        process(sample, of: type)
     }
 
     func stream(_ stream: SCStream, didStopWithError error: any Error) {
@@ -250,23 +271,80 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
 
     // MARK: Private (on `queue` unless noted)
 
+    /// One sample, as the stream delivers it; the delegate and the tests both come through here.
+    private func process(_ sample: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard let writer, sample.isValid else { return }
+        let host = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+        switch type {
+        case .screen:
+            guard let status = Self.frameStatus(sample) else { return }
+            switch status {
+            case .complete:
+                fallback.frameDelivered()
+                writer.appendVideo(sample, host: host)
+                lastComplete = writer.hasStarted ? nil : sample
+            case .idle:
+                // Nothing changed on screen: not a dropped frame (V23). On a still screen the take starts here,
+                // with the last complete frame (V11, review I2).
+                fallback.frameDelivered()
+                if writer.isArmed, !writer.hasStarted, let cached = lastComplete {
+                    writer.appendVideo(cached, host: host)
+                    if writer.hasStarted { lastComplete = nil }
+                }
+            case .started, .stopped:
+                break
+            case .blank, .suspended:
+                fallback.frameDropped()
+                if fallback.useWindowAlone, !children.isEmpty { dropChildren() }
+            @unknown default:
+                break
+            }
+        case .audio:
+            if let source = systemSource { writer.appendAudio(sample, source: source, host: host) }
+        case .microphone:
+            if let source = micSource { writer.appendAudio(sample, source: source, host: host) }
+        @unknown default:
+            break
+        }
+    }
+
     private func report(_ failure: Failure) {
         guard self.failure == nil else { return }
         self.failure = failure
         let callbacks = callbacks
-        Task { @MainActor in callbacks.failed(failure) }
+        Self.onMain { callbacks.failed(failure) }
     }
 
-    /// Takes the stream and writer off the queue in one step and cancels the follow timer.
-    private func detach() -> (SCStream?, MovieWriter?) {
+    /// Callbacks reach the main actor in the order they were sent (review M2).
+    private static func onMain(_ body: @escaping @MainActor @Sendable () -> Void) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { body() } }
+    }
+
+    /// Runs `install` on the queue unless `cancel()` or `stop()` already ran; false then.
+    func installIfLive(_ install: () -> Void) -> Bool {
         queue.sync {
+            guard !isCancelled else { return false }
+            install()
+            return true
+        }
+    }
+
+    /// Takes the stream and writer off the queue in one step, marks the recorder cancelled, cancels the follow
+    /// timer and any filter update, and stamps the host time.
+    private func detach() -> (SCStream?, MovieWriter?, Double) {
+        queue.sync {
+            isCancelled = true
             followTimer?.cancel()
             followTimer = nil
+            filterGeneration += 1
+            filterTask?.cancel()
+            filterTask = nil
+            lastComplete = nil
             defer {
                 stream = nil
                 writer = nil
             }
-            return (stream, writer)
+            return (stream, writer, now())
         }
     }
 
@@ -279,6 +357,7 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
     }
 
     private func startFollowing() {
+        guard !isCancelled else { return }
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + 0.1, repeating: 0.1)
         timer.setEventHandler { [weak self] in self?.follow() }
@@ -286,26 +365,27 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
         timer.resume()
     }
 
-    /// 10 times a second: the window's frame, its child windows, and the source rect (§5.5, V10).
+    /// 10 times a second: the window's frame, its child windows, and the source rect (§5.5, V10). One window
+    /// list per tick (review M4).
     private func follow() {
-        guard let request, let windowID = request.window, let stream, let configuration,
-            let bounds = Self.windowBounds(windowID)
-        else { return }
+        guard let request, let windowID = request.window, let stream, let configuration else { return }
+        let list = Self.windowList()
+        guard let bounds = Self.bounds(of: windowID, in: list) else { return }
+        let display = Self.rect2D(displayFrame)
         let followed = WindowFollow.followedRect(
-            windowBounds: Rect2D(x: bounds.minX, y: bounds.minY, width: bounds.width, height: bounds.height),
-            size: Size2D(width: followedSize.width, height: followedSize.height),
-            displayBounds: Rect2D(
-                x: displayFrame.minX, y: displayFrame.minY, width: displayFrame.width, height: displayFrame.height))
+            windowBounds: Self.rect2D(bounds), size: Size2D(width: followedSize.width, height: followedSize.height),
+            displayBounds: display)
         let rect = CGRect(x: followed.origin.x, y: followed.origin.y, width: followed.width, height: followed.height)
         if rect != lastFollowed {
             lastFollowed = rect
             configuration.sourceRect = rect
             stream.updateConfiguration(configuration) { _ in }
             let callbacks = callbacks
-            Task { @MainActor in callbacks.areaMoved(rect) }
+            Self.onMain { callbacks.areaMoved(rect) }
         }
         guard !fallback.useWindowAlone else { return }
-        let kids = Self.childWindows(of: windowID)
+        let kids = Self.childWindows(
+            of: windowID, followedGlobal: WindowFollow.global(followed, displayBounds: display), in: list)
         if kids != children {
             children = kids
             updateFilter(windowID: windowID, children: kids)
@@ -317,23 +397,42 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
         children = []
         updateFilter(windowID: windowID, children: [])
         let callbacks = callbacks
-        Task { @MainActor in callbacks.log("child windows dropped: frames lost after a filter update") }
+        Self.onMain { callbacks.log("child windows dropped: frames lost after a filter update") }
     }
 
+    /// Each update waits for the one before it and is skipped once a newer one exists, so filters apply in order
+    /// and the window-alone filter isn't undone by a late child update. The fallback starts counting dropped
+    /// frames only once the filter has applied (review I5).
     private func updateFilter(windowID: CGWindowID, children: [CGWindowID]) {
         guard let request, let stream else { return }
+        filterGeneration += 1
+        let generation = filterGeneration
         let ids = [windowID] + children + request.overlayWindowIDs
         let display = request.display
-        fallback.filterUpdated()
         let box = UncheckedBox(stream)
-        Task {
-            let stream = box.value
-            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
-                let scDisplay = content.displays.first(where: { $0.displayID == display })
+        let previous = filterTask
+        filterTask = Task { [weak self] in
+            await previous?.value
+            guard let self, self.isLatest(generation),
+                let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+                let scDisplay = content.displays.first(where: { $0.displayID == display }),
+                self.isLatest(generation)
             else { return }
             let windows = content.windows.filter { ids.contains($0.windowID) }
-            try? await stream.updateContentFilter(SCContentFilter(display: scDisplay, including: windows))
+            do {
+                try await box.value.updateContentFilter(SCContentFilter(display: scDisplay, including: windows))
+            } catch {
+                return
+            }
+            self.queue.async {
+                if generation == self.filterGeneration { self.fallback.filterUpdated() }
+            }
         }
+    }
+
+    /// Off the queue.
+    private func isLatest(_ generation: Int) -> Bool {
+        queue.sync { generation == filterGeneration && !isCancelled }
     }
 
     static func frameStatus(_ sample: CMSampleBuffer) -> SCFrameStatus? {
@@ -345,52 +444,49 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, Recorder
         return SCFrameStatus(rawValue: raw)
     }
 
-    /// Quartz global bounds of a window; nil when it is gone.
-    static func windowBounds(_ id: CGWindowID) -> CGRect? {
-        guard let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]],
-            let entry = info.first, let dict = entry[kCGWindowBounds as String] as? NSDictionary
+    static func rect2D(_ rect: CGRect) -> Rect2D {
+        Rect2D(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height)
+    }
+
+    /// The on-screen windows, front to back.
+    static func windowList() -> [[String: Any]] {
+        CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+    }
+
+    /// Quartz global bounds of a window in `list`; nil when it is gone.
+    static func bounds(of id: CGWindowID, in list: [[String: Any]]) -> CGRect? {
+        guard
+            let entry = list.first(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id }),
+            let dict = entry[kCGWindowBounds as String] as? NSDictionary
         else { return nil }
         return CGRect(dictionaryRepresentation: dict as CFDictionary)
     }
 
-    /// The window's child windows (V10) among the on-screen windows.
-    static func childWindows(of id: CGWindowID) -> [CGWindowID] {
-        guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]],
-            let bounds = windowBounds(id)
-        else { return [] }
-        let snapshots = info.compactMap { entry -> WindowSnapshot? in
+    /// The window's child windows (V10) in `list`. `followedGlobal` is the recorded rect in global points.
+    static func childWindows(of id: CGWindowID, followedGlobal: Rect2D, in list: [[String: Any]]) -> [CGWindowID] {
+        let snapshots = list.compactMap { entry -> WindowSnapshot? in
             guard let number = (entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
                 let pid = (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
                 let layer = (entry[kCGWindowLayer as String] as? NSNumber)?.intValue,
                 let dict = entry[kCGWindowBounds as String] as? NSDictionary,
                 let frame = CGRect(dictionaryRepresentation: dict as CFDictionary)
             else { return nil }
-            return WindowSnapshot(
-                id: WindowID(number), processID: pid, layer: layer,
-                frame: Rect2D(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height))
+            return WindowSnapshot(id: WindowID(number), processID: pid, layer: layer, frame: rect2D(frame))
         }
-        let followed = Rect2D(x: bounds.minX, y: bounds.minY, width: bounds.width, height: bounds.height)
-        return ChildWindowFilter.children(of: WindowID(id), in: snapshots, followedGlobal: followed).map(\.rawValue)
+        return ChildWindowFilter.children(of: WindowID(id), in: snapshots, followedGlobal: followedGlobal)
+            .map(\.rawValue)
     }
 }
 
 extension StreamRecorder {
     /// Test entry: feeds a sample as the stream would, on the queue.
-    func handle(_ sample: CMSampleBuffer, of type: SCStreamOutputType) {
-        queue.sync {
-            guard let writer else { return }
-            let host = CMSampleBufferGetPresentationTimeStamp(sample).seconds
-            switch type {
-            case .screen: writer.appendVideo(sample, host: host)
-            case .audio: if let source = systemSource { writer.appendAudio(sample, source: source, host: host) }
-            case .microphone: if let source = micSource { writer.appendAudio(sample, source: source, host: host) }
-            @unknown default: break
-            }
-        }
+    func feed(_ sample: CMSampleBuffer, of type: SCStreamOutputType) {
+        queue.sync { process(sample, of: type) }
     }
 
     /// Test entry: attaches a writer without a stream.
     func attach(_ writer: MovieWriter, systemAudio: Bool = false, mic: Bool = false) {
+        writer.onFailure = { [weak self] text in self?.report(.other(text)) }
         queue.sync {
             self.writer = writer
             self.systemSource = systemAudio ? 0 : nil

@@ -66,6 +66,12 @@ final class RecordingWindows: RecordingSurfaces {
         guard let panel = bar, let host = barHost else { return }
         host.rootView = OptionsBarView(state: state, action: { [weak self] in self?.handlers.bar($0) })
         place(panel, host: host)
+        // SwiftUI lays the new content out after this pass: place again once it has (`design/04` §2.5, PR #23
+        // review I5).
+        Task { @MainActor [weak self, weak panel, weak host] in
+            guard let self, let panel, let host, self.bar === panel else { return }
+            self.place(panel, host: host)
+        }
     }
 
     func closeBar() {
@@ -76,6 +82,7 @@ final class RecordingWindows: RecordingSurfaces {
 
     /// Re-placed whenever its width changes (`OptionsBarPlacement`).
     private func place(_ panel: NSPanel, host: NSView) {
+        host.layoutSubtreeIfNeeded()
         let size = host.fittingSize
         guard let screen = screen(containing: barSelection) else { return }
         let full = screen.frame
