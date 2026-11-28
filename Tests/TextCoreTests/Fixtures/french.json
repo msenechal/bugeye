@@ -1,0 +1,217 @@
+{
+ "pixelsPerPoint": 1,
+ "width": 600,
+ "height": 100,
+ "strips": [
+  [
+   {
+    "text": "Déjà vu, garçon. Où est la bibliothèque ?",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 40
+     },
+     "size": {
+      "width": 820,
+      "height": 40
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       4
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 40
+       },
+       "size": {
+        "width": 80,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       9,
+       16
+      ],
+      "bounds": {
+       "origin": {
+        "x": 220,
+        "y": 40
+       },
+       "size": {
+        "width": 140,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       17,
+       19
+      ],
+      "bounds": {
+       "origin": {
+        "x": 380,
+        "y": 40
+       },
+       "size": {
+        "width": 40,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       20,
+       23
+      ],
+      "bounds": {
+       "origin": {
+        "x": 440,
+        "y": 40
+       },
+       "size": {
+        "width": 60,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       24,
+       26
+      ],
+      "bounds": {
+       "origin": {
+        "x": 520,
+        "y": 40
+       },
+       "size": {
+        "width": 40,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       27,
+       39
+      ],
+      "bounds": {
+       "origin": {
+        "x": 580,
+        "y": 40
+       },
+       "size": {
+        "width": 240,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       40,
+       41
+      ],
+      "bounds": {
+       "origin": {
+        "x": 840,
+        "y": 40
+       },
+       "size": {
+        "width": 20,
+        "height": 40
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Ça coûte 12,50 €",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 120
+     },
+     "size": {
+      "width": 320,
+      "height": 40
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       2
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 120
+       },
+       "size": {
+        "width": 40,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       3,
+       8
+      ],
+      "bounds": {
+       "origin": {
+        "x": 100,
+        "y": 120
+       },
+       "size": {
+        "width": 100,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       9,
+       14
+      ],
+      "bounds": {
+       "origin": {
+        "x": 220,
+        "y": 120
+       },
+       "size": {
+        "width": 100,
+        "height": 40
+       }
+      }
+     },
+     {
+      "range": [
+       15,
+       16
+      ],
+      "bounds": {
+       "origin": {
+        "x": 340,
+        "y": 120
+       },
+       "size": {
+        "width": 20,
+        "height": 40
+       }
+      }
+     }
+    ]
+   }
+  ]
+ ]
+}

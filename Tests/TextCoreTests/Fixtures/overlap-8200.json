@@ -1,0 +1,493 @@
+{
+ "pixelsPerPoint": 2,
+ "width": 800,
+ "height": 8200,
+ "strips": [
+  [
+   {
+    "text": "Header",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 100
+     },
+     "size": {
+      "width": 120,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 100
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Inside the overlap",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 3900
+     },
+     "size": {
+      "width": 360,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 3900
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       10
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 3900
+       },
+       "size": {
+        "width": 60,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       11,
+       18
+      ],
+      "bounds": {
+       "origin": {
+        "x": 260,
+        "y": 3900
+       },
+       "size": {
+        "width": 140,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Cut by the edge",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 3985
+     },
+     "size": {
+      "width": 300,
+      "height": 15
+     }
+    },
+    "confidence": 0.4,
+    "words": [
+     {
+      "range": [
+       0,
+       3
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 3985
+       },
+       "size": {
+        "width": 60,
+        "height": 15
+       }
+      }
+     },
+     {
+      "range": [
+       4,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 120,
+        "y": 3985
+       },
+       "size": {
+        "width": 40,
+        "height": 15
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       10
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 3985
+       },
+       "size": {
+        "width": 60,
+        "height": 15
+       }
+      }
+     },
+     {
+      "range": [
+       11,
+       15
+      ],
+      "bounds": {
+       "origin": {
+        "x": 260,
+        "y": 3985
+       },
+       "size": {
+        "width": 80,
+        "height": 15
+       }
+      }
+     }
+    ]
+   }
+  ],
+  [
+   {
+    "text": "Inside the overlap",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 100
+     },
+     "size": {
+      "width": 360,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 100
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       10
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 100
+       },
+       "size": {
+        "width": 60,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       11,
+       18
+      ],
+      "bounds": {
+       "origin": {
+        "x": 260,
+        "y": 100
+       },
+       "size": {
+        "width": 140,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Cut by the edge",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 185
+     },
+     "size": {
+      "width": 300,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       3
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 185
+       },
+       "size": {
+        "width": 60,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       4,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 120,
+        "y": 185
+       },
+       "size": {
+        "width": 40,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       10
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 185
+       },
+       "size": {
+        "width": 60,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       11,
+       15
+      ],
+      "bounds": {
+       "origin": {
+        "x": 260,
+        "y": 185
+       },
+       "size": {
+        "width": 80,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Middle",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 2000
+     },
+     "size": {
+      "width": 120,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 2000
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Second overlap",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 3850
+     },
+     "size": {
+      "width": 280,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 3850
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       14
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 3850
+       },
+       "size": {
+        "width": 140,
+        "height": 30
+       }
+      }
+     }
+    ]
+   }
+  ],
+  [
+   {
+    "text": "Second overlap",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 50
+     },
+     "size": {
+      "width": 280,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 50
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       14
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 50
+       },
+       "size": {
+        "width": 140,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Footer",
+    "bounds": {
+     "origin": {
+      "x": 40,
+      "y": 500
+     },
+     "size": {
+      "width": 120,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 40,
+        "y": 500
+       },
+       "size": {
+        "width": 120,
+        "height": 30
+       }
+      }
+     }
+    ]
+   }
+  ]
+ ]
+}
