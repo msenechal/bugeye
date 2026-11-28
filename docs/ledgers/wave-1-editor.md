@@ -26,7 +26,8 @@ Trust this file and `git log` over memory.
 | 9 | done | 621cbe2 | one test expectation was wrong (σ = 10 boxes); see ruling |
 | 10 | done | 2113672 | code written before its tests (see ruling); goldens recorded on Linux and checked by eye |
 | 11–13 | done | 560aaa6 | tests first, seen failing to compile |
-| 14–16 | done | (next commit) | tests written after the code (see ruling) |
+| 14–16 | done | 3dc5e8b | tests written after the code (see ruling) |
+| 17–21 | in progress | | not compiled here; first macOS run pending |
 
 ## Rulings
 
@@ -46,6 +47,10 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (slice B): `EditorSessions` checks `fileExists` before a save. A file deleted in Finder, or a session marked gone by a `deleted` event, goes straight to the gone alert with no render; the writer's `TargetMissing` covers the race after the check (E19). (cost if wrong: none.)
 - Ruling (slice B): a gone-file Save As writes with `attributesFrom:` the old URL (which no longer exists, so it contributes nothing) and `identity: .new(item.id)`. Provenance on the lost file can't be recovered. (cost if wrong: low; Wave 2's provenance would be missing on such a file.)
 - Ruling (slice B): the text view's commit runs through `EditorHost.commitPendingEdits` at the start of save, Save As, copy, the drag file, close and quit, so the document holds the typed text before any of them reads it (§5.4). (cost if wrong: none.)
+
+- Ruling (slice C): the canvas's blur provider returns a cached result or nil, and computes a miss off the main actor before redrawing (`BlurCache.imageOrSchedule`). A blur being drawn or resized shows the plain image for a moment until its result is ready. Exports compute synchronously, off the main actor. (cost if wrong: low; a brief flash of the unblurred region on the canvas only, never in an export.)
+- Ruling (slice C): the prompts (`EditorPrompts`) are sheets on the editor's window, falling back to app-modal without one. Tests inject scripted answers. (cost if wrong: none.)
+- Ruling (slice C): the text view is an `NSTextView` with zero inset and zero line-fragment padding, a private `UndoManager` per entry (⌘Z undoes typing only), and no smart quotes or dashes. ⌥Return arrives as `insertNewlineIgnoringFieldEditor:` and inserts a newline. (cost if wrong: low; E6's model-rendered text is the next step if the field and the render differ visibly.)
 
 ## Waiting on
 
