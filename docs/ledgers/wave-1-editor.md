@@ -46,6 +46,7 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 - Ruling (slice B): `EditorSessions` checks `fileExists` before a save. A file deleted in Finder, or a session marked gone by a `deleted` event, goes straight to the gone alert with no render; the writer's `TargetMissing` covers the race after the check (E19). (cost if wrong: none.)
 - Ruling (slice B): a gone-file Save As writes with `attributesFrom:` the old URL (which no longer exists, so it contributes nothing) and `identity: .new(item.id)`. Provenance on the lost file can't be recovered. (cost if wrong: low; Wave 2's provenance would be missing on such a file.)
 - Ruling (slice B): the text view's commit runs through `EditorHost.commitPendingEdits` at the start of save, Save As, copy, the drag file, close and quit, so the document holds the typed text before any of them reads it (§5.4). (cost if wrong: none.)
+- Ruling (claude-review A, Important): nested group opacities now multiply. The executor keeps a stack of effective alphas, and an isolated group's children start again from 1 inside its layer, as Core Graphics resets alpha in a transparency layer. A nested group's shadow replaces its parent's for the drawing inside it (documented). Probe tests cover 0.5 inside 0.5 (non-isolated and isolated inner group) and an isolated parent. They can't be seen failing on Linux; the macOS job is the check. (cost if wrong: none.)
 
 ## Waiting on
 
