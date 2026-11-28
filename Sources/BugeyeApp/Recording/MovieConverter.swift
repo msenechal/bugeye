@@ -178,7 +178,8 @@ enum MovieConverter {
             let progress = progress
             // Whole percents only: a fast conversion has thousands of samples a second (review M5).
             let onTime: @Sendable (Double) -> Void = { time in
-                guard duration > 0 else { return }
+                // A sample without a valid time (NaN) would trap in `Int(_:)` (macos run 46126649599).
+                guard duration > 0, duration.isFinite, time.isFinite else { return }
                 let value = Int((min(time / duration, 1) * 100).rounded(.down))
                 let changed = percent.withLock { last -> Bool in
                     guard value > last else { return false }
