@@ -72,6 +72,13 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 
   (cost if wrong: none; at most one extra `edited` event.)
 
+- Ruling (final review C, core part):
+  - I3: an editor has at most one unsaved-changes prompt at a time. A second close, or a quit, awaits the one already up instead of queueing another sheet.
+  - I5: the render-failure message `The image couldn't be rendered.` is settled in `EditorStrings.renderFailed` and tested; the spec gave no text for it.
+  - Edited dot: `EditorHost.documentSaved` tells the shell after every `markSaved`, so a save from the close or quit prompt, or a gone-file Save As, clears the dot.
+
+  Tests failed first, at compile time for the new names. (cost if wrong: none.)
+
 ## Waiting on
 
 - Capture's and Quick Access's wiring PRs, before slice D merges and before the manual pass (contracts §9).

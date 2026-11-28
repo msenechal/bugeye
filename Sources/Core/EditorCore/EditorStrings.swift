@@ -64,6 +64,8 @@ public enum EditorStrings {
     public static let okButton = "OK"
     public static let copyFailedTitle = "Couldn't copy"
     public static let copyFailedBody = "The image couldn't be put on the clipboard."
+    /// The save alert's message when the render itself fails (final review C, I5).
+    public static let renderFailed = "The image couldn't be rendered."
 
     // Unsaved changes (§5.9)
     public static func unsavedTitle(name: String) -> String { "Save changes to \u{201C}\(name)\u{201D}?" }

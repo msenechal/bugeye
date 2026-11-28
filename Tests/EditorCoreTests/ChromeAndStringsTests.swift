@@ -111,6 +111,7 @@ import Testing
         #expect(EditorStrings.saveFailedTitle(name: "a.png") == "Couldn't save \u{201C}a.png\u{201D}")
         #expect(EditorStrings.okButton == "OK")
         #expect(EditorStrings.copyFailedTitle == "Couldn't copy")
+        #expect(EditorStrings.renderFailed == "The image couldn't be rendered.")
         #expect(EditorStrings.copyFailedBody == "The image couldn't be put on the clipboard.")
         #expect(EditorStrings.unsavedTitle(name: "a.png") == "Save changes to \u{201C}a.png\u{201D}?")
         #expect(EditorStrings.unsavedBody == "Your annotations will be lost if you don't save them.")

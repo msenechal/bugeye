@@ -41,6 +41,14 @@ final class FakeEditorHost: EditorHost {
     func bringForward(_ id: CaptureID) { log.append("forward") }
     func retitle(_ session: EditorSession) { log.append("retitle \(session.name)") }
     func commitPendingEdits(_ session: EditorSession) { log.append("commit") }
+    func documentSaved(_ session: EditorSession) { log.append("saved \(session.name)") }
+    var blockAsks = false
+    private var askGate: CheckedContinuation<Void, Never>?
+    var askPending: Bool { askGate != nil }
+    func releaseAsk() {
+        askGate?.resume()
+        askGate = nil
+    }
     func export(_ session: EditorSession, state: EditorState) async throws -> ExportedImage {
         exportCount += 1
         let n = exportCount
@@ -54,6 +62,7 @@ final class FakeEditorHost: EditorHost {
     func askToSave(_ session: EditorSession) async -> SaveAnswer {
         log.append("ask \(session.name)")
         onAsk?(session.name)
+        if blockAsks { await withCheckedContinuation { askGate = $0 } }
         return saveAnswers.isEmpty ? .cancel : saveAnswers.removeFirst()
     }
     func showGoneAlert(_ session: EditorSession) async -> Bool {
@@ -286,7 +295,7 @@ final class SessionFixture {
         #expect(created.item.fileURL == chosen && created.item.isSaved && created.item.id == f.id)
         #expect(session.item.fileURL == chosen && !session.isGone)
         #expect(session.document?.isDirty == false)
-        #expect(f.host.log.last == "retitle Again.png")
+        #expect(f.host.log.suffix(2) == ["retitle Again.png", "saved Again.png"])
     }
 
     @Test func goneSaveAsWhileTheBusStillKnowsItPublishesMovedThenEdited() async throws {
@@ -637,5 +646,29 @@ extension SessionFixture {
         #expect(f.contents(f.item.fileURL) == "png-1-1")
         #expect(f.recorder.changes.filter { $0 == .edited }.count == edited + 1)
         #expect(session.document?.isDirty == true)
+    }
+
+    @Test func aCloseAndAQuitAskingTheSameEditorShareOnePrompt() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        f.host.blockAsks = true
+        f.host.saveAnswers = [.dontSave]
+        let close = Task { await f.sessions.shouldClose(f.id) }
+        while !f.host.askPending { await Task.yield() }
+        let secondClose = Task { await f.sessions.shouldClose(f.id) }
+        let quit = Task { await f.sessions.shouldTerminate() }
+        for _ in 0..<50 { await Task.yield() }
+        f.host.releaseAsk()
+        #expect(await close.value)
+        #expect(await secondClose.value)
+        #expect(await quit.value)
+        #expect(f.host.log.filter { $0.hasPrefix("ask") } == ["ask Shot.png"])
+    }
+
+    @Test func theHostHearsOfEverySaveThatMarksTheDocument() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        #expect(await f.sessions.save(f.id) == .saved)
+        #expect(f.host.log.last == "saved Shot.png")
     }
 }

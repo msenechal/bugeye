@@ -42,6 +42,8 @@ public protocol EditorHost: AnyObject {
     func retitle(_ session: EditorSession)
     /// Commits typed text, so the document holds every edit (§5.4).
     func commitPendingEdits(_ session: EditorSession)
+    /// The document was marked saved: the window's edited dot follows it.
+    func documentSaved(_ session: EditorSession)
     /// Renders `state` and encodes PNG and preview, off the main actor.
     func export(_ session: EditorSession, state: EditorState) async throws -> ExportedImage
     /// `Save changes to “<name>”?`
@@ -103,6 +105,8 @@ public final class EditorSession {
     /// Increments when a save is requested (S6, plan P9).
     var saveGeneration = 0
     var saveTask: Task<SaveOutcome, Never>?
+    /// The unsaved-changes prompt in flight: a close and a quit share it (final review C, I3).
+    var askTask: Task<Bool, Never>?
 
     init(item: CaptureItem) {
         id = item.id
@@ -256,7 +260,10 @@ public final class EditorSessions {
         // Every successful write publishes `edited`, even after the window closed or when a newer save is queued:
         // the file changed, and the newer save may write nothing (final review B, I2; claude-review on #14).
         // Only the latest requested save marks the document saved (S6).
-        if generation == session.saveGeneration && !session.isClosed { document.markSaved(snapshot) }
+        if generation == session.saveGeneration && !session.isClosed {
+            document.markSaved(snapshot)
+            host.documentSaved(session)
+        }
         publish(.edited, session, preview: exported.preview)
         return .saved
     }
@@ -285,7 +292,10 @@ public final class EditorSessions {
         session.item = moved
         session.isGone = false
         document.markSaved(snapshot)
-        if session.isOpen { host.retitle(session) }
+        if session.isOpen {
+            host.retitle(session)
+            host.documentSaved(session)
+        }
         if environment.bus.item(session.id) != nil {
             environment.bus.publish(
                 CaptureEvent(change: .moved, item: moved, previousURL: old.fileURL, origin: EditorModule.id))
@@ -410,7 +420,20 @@ public final class EditorSessions {
         return true
     }
 
+    /// One prompt per editor at a time: a second close, or a quit, waits for the one already up.
     private func ask(_ session: EditorSession) async -> Bool {
+        if let running = session.askTask { return await running.value }
+        let task = Task { @MainActor [weak self] () -> Bool in
+            guard let self else { return true }
+            return await self.askOnce(session)
+        }
+        session.askTask = task
+        let answer = await task.value
+        session.askTask = nil
+        return answer
+    }
+
+    private func askOnce(_ session: EditorSession) async -> Bool {
         guard let host else { return true }
         switch await host.askToSave(session) {
         case .dontSave: return true
