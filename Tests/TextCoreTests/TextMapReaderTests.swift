@@ -293,6 +293,13 @@ final class Completion: Sendable {
         }
     }
 
+    init<T: Sendable>(_ task: Task<T, Never>) {
+        Task { [state = self] in
+            _ = await task.value
+            state.finish()
+        }
+    }
+
     private func finish() { state.withLock { $0 = true } }
 }
 

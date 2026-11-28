@@ -282,7 +282,7 @@ final class StoreHarness: Sendable {
         let h = StoreHarness()
         let a = try h.capture(width: 1)
         await h.send(.created, a)
-        await #expect(throws: (any Error).self) {
+        await #expect(throws: CaptureTextMaps.Moved.self) {
             try await h.store.checkURL(a.id, URL(fileURLWithPath: "/elsewhere.png"))
         }
         try await h.store.checkURL(a.id, a.fileURL)
@@ -439,5 +439,151 @@ final class StoreHarness: Sendable {
         gate.open()
         try await Task.sleep(for: .milliseconds(20))
         #expect(h.reads == [1])
+    }
+
+    // MARK: Slice 3 review
+
+    @Test func aCancelledReadKeepsTheSlotUntilItsRecogniserReturns() async throws {
+        // I2: three edits during a read whose recogniser ignores cancellation must not stack recogniser calls.
+        let recogniser = OverlapCountingReader()
+        let files = FakeImageFileReader()
+        let store = CaptureTextMaps(
+            reader: TextMapReader(reader: recogniser, files: files, clock: ManualClock()), files: files, log: { _ in })
+        let h = StoreHarness()
+        let a = try h.capture(width: 1)
+        try files.set(
+            a.fileURL, image: PixelBuffer(width: 1, height: 10, fill: RGBA8(red: 0, green: 0, blue: 0)),
+            fingerprint: h.fingerprint())
+        await store.handle(CaptureEvent(change: .created, item: a, origin: "test"))
+        #expect(await eventually { recogniser.calls == 1 })
+        for _ in 0..<3 {
+            try files.set(
+                a.fileURL, image: PixelBuffer(width: 1, height: 10, fill: RGBA8(red: 0, green: 0, blue: 0)),
+                fingerprint: h.fingerprint())
+            await store.handle(CaptureEvent(change: .edited, item: a, origin: "editor"))
+        }
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(recogniser.peak == 1)
+        recogniser.release()
+        #expect(await eventually { await store.cached(a.id) != nil })
+        #expect(recogniser.peak == 1)
+    }
+
+    @Test func aMoveOfAnUnreadCaptureQueuesABackgroundRead() async throws {
+        // M1: the read failed because the file was renamed before its event arrived; the event reads it again.
+        let h = StoreHarness()
+        var a = try h.capture(width: 1)
+        let realURL = a.fileURL
+        a.fileURL = URL(fileURLWithPath: "/captures/not-yet-there.png")
+        await h.send(.created, a)
+        let failed = TextLogLine.failed(id: a.id, error: .unreadable(a.fileURL))
+        #expect(await eventually { h.logs.contains(failed) })
+        a.fileURL = realURL
+        await h.send(.moved, a)
+        let id = a.id
+        #expect(await eventually { await h.store.cached(id) != nil })
+    }
+
+    @Test func aJobWithNoWaitersLeftIsReadAgainInTheBackground() async throws {
+        // M2: the waiter of a running demand read leaves, then an edit requeues it: nobody waits, so background.
+        let gate = FakeGate()
+        let h = StoreHarness(steps: [.gate(gate, [])])
+        let a = try h.capture(width: 1)
+        await h.send(.created, a)  // known to the mirror
+        #expect(await eventually { gate.waiting == 1 })
+        let waiter = h.mapTask(a)
+        #expect(await eventually { await h.store.waiters(a.id) == 1 })
+        waiter.cancel()
+        _ = try? await waiter.value
+        try h.put(a.fileURL, width: 1)
+        await h.send(.edited, a)
+        #expect(await eventually { await h.store.cached(a.id) != nil })
+        #expect(h.logs.contains { if case .read(a.id, _, _, _, _, _, _, .background) = $0 { true } else { false } })
+    }
+
+    @Test func anEditedQueuedBackgroundReadBecomesTheNewest() async throws {
+        // M3: requeue makes an edited background job the newest, so it is read before an older-created one.
+        let gate = FakeGate()
+        let h = StoreHarness(steps: [.gate(gate, [])])
+        let first = try h.capture(width: 1)
+        let b = try h.capture(width: 2)
+        let c = try h.capture(width: 3)
+        await h.send(.created, first)
+        #expect(await eventually { gate.waiting == 1 })
+        await h.send(.created, b)
+        await h.send(.created, c)
+        try h.put(b.fileURL, width: 2)
+        await h.send(.edited, b)
+        gate.open()
+        #expect(await eventually { h.reads.count == 3 })
+        #expect(h.reads == [1, 2, 3])
+    }
+
+    @Test func anEditResetsTheChangedFileRerun() async throws {
+        // M3: after a Q6 mismatch, an edit starts afresh, so the next mismatch is read once more instead of failing.
+        let gate = FakeGate()
+        let h = StoreHarness(steps: [.lines([]), .gate(gate, [])])
+        let a = try h.capture(width: 1)
+        let changes = Mutex(0)
+        h.files.beforePixels = { files, url, _ in
+            guard
+                changes.withLock({
+                    $0 += 1; return $0
+                }) <= 3
+            else { return }
+            files.set(
+                url, image: try! PixelBuffer(width: 1, height: 10, fill: RGBA8(red: 0, green: 0, blue: 0)),
+                fingerprint: FileFingerprint(size: Int64(100 + changes.withLock { $0 }), modified: Date()))
+        }
+        let waiter = h.mapTask(a)
+        #expect(await eventually { gate.waiting == 1 })  // the Q6 rerun, held
+        await h.send(.edited, a)  // cancels it; the edited read changes the file once more, then once again clean
+        let result = try await waiter.value
+        #expect(result.key.id == a.id)
+        #expect(h.reads.count == 4)
+    }
+
+    @Test func aWaiterThatLeavesAPromotedReadReturnsItToTheBackground() async throws {
+        // M3, P12: a background read promoted by a waiter goes back to the background when the waiter leaves.
+        let gate = FakeGate()
+        let h = StoreHarness(steps: [.gate(gate, [])])
+        let first = try h.capture(width: 1)
+        let b = try h.capture(width: 2)
+        await h.send(.created, first)
+        #expect(await eventually { gate.waiting == 1 })
+        await h.send(.created, b)
+        let waiter = h.mapTask(b)
+        #expect(await eventually { await h.store.waiters(b.id) == 1 })
+        waiter.cancel()
+        _ = try? await waiter.value
+        gate.open()
+        #expect(await eventually { await h.store.cached(b.id) != nil })
+        #expect(h.logs.contains { if case .read(b.id, _, _, _, _, _, _, .background) = $0 { true } else { false } })
+    }
+}
+
+/// Ignores cancellation until released, and counts how many calls ran at once.
+final class OverlapCountingReader: TextReader, Sendable {
+    private struct State {
+        var released = false
+        var running = 0
+        var peak = 0
+        var calls = 0
+    }
+
+    private let state = Mutex(State())
+    var peak: Int { state.withLock { $0.peak } }
+    var calls: Int { state.withLock { $0.calls } }
+    func release() { state.withLock { $0.released = true } }
+
+    func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] {
+        state.withLock {
+            $0.calls += 1
+            $0.running += 1
+            $0.peak = max($0.peak, $0.running)
+        }
+        defer { state.withLock { $0.running -= 1 } }
+        while !state.withLock({ $0.released }) { try? await Task.sleep(for: .milliseconds(1)) }
+        return []
     }
 }
