@@ -464,7 +464,7 @@ public final class QuickAccessModel {
             saving[id] = nil
             fail(
                 "save", id, QuickAccessStrings.saveFailedTitle, QuickAccessStrings.folderUnavailableBody(path: path),
-                &out)
+                logged: "the save folder is unavailable", &out)
         case .saveFailed(let text):
             busy.remove(id)
             saving[id] = nil
@@ -495,10 +495,12 @@ public final class QuickAccessModel {
         }
     }
 
+    /// `logged` replaces `body` in the log when the body names a folder: spec §7 logs file names only.
     private func fail(
-        _ action: String, _ id: CaptureID, _ title: String, _ body: String, _ out: inout [QuickAccessEffect]
+        _ action: String, _ id: CaptureID, _ title: String, _ body: String, logged: String? = nil,
+        _ out: inout [QuickAccessEffect]
     ) {
-        out.append(.log("failed \(action) \(id): \(body)"))
+        out.append(.log("failed \(action) \(id): \(logged ?? body)"))
         out.append(.notify(title: title, body: body))
     }
 
