@@ -43,6 +43,18 @@ import Testing
         #expect(TextLayout.lines(m) == "a\n  b")
     }
 
+    @Test func twoAndAHalfRoundsAwayFromZeroNotToEven() {
+        // 25 px in at 10 px per character is 2.5 → 3 spaces (banker's rounding would give 2).
+        let m = map([boxedLine("a", x: 0, y: 0), boxedLine("b", x: 25, y: 40)])
+        #expect(TextLayout.lines(m) == "a\n   b")
+    }
+
+    @Test func indentationIsMeasuredFromTheLeftmostRowNotTheFirst() {
+        // A heading indented above body text.
+        let m = map([boxedLine("head", x: 20, y: 0), boxedLine("body", x: 0, y: 40)])
+        #expect(TextLayout.lines(m) == "  head\nbody")
+    }
+
     @Test func noCharacterWidthMeansNoIndent() {
         let line = TextLine(text: "x", box: rect(50, 40, 0, 10), words: [], confidence: 1, row: 1)
         let first = TextLine(text: "y", box: rect(0, 0, 0, 10), words: [], confidence: 1, row: 0)
