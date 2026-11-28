@@ -201,12 +201,16 @@ final class RecordingController {
     /// V15: delivers what a crash left in the in-progress folder, each with the "Recovered a recording" notice.
     func recoverTakes() async {
         let folder = CaptureFolders.recordingsInProgress(home: context.home)
-        // Runs at launch, before any take: nothing in the folder is live (a debug build beside the installed
-        // app is covered by the plan's quiet period).
-        let live: Set<UUID> = []
+        // This instance's own takes are live; another instance's (a debug build beside the installed app) are
+        // covered by the plan's quiet period (PR #25 review).
+        let live = Set(
+            requests.values.compactMap {
+                UUID(uuidString: String($0.output.deletingPathExtension().lastPathComponent.dropFirst(5)))
+            })
         let files = await Task.detached { Self.listing(folder) }.value
         let plan = TakeRecovery.plan(files: files, liveTakes: live, now: Date())
-        for name in plan.delete { try? FileManager.default.removeItem(at: folder.appendingPathComponent(name)) }
+        let doomed = plan.delete.map { folder.appendingPathComponent($0) }
+        await Task.detached { for url in doomed { try? FileManager.default.removeItem(at: url) } }.value
         for recovery in plan.recover {
             let movie = folder.appendingPathComponent(recovery.movie)
             let duration = (try? await AVURLAsset(url: movie).load(.duration).seconds) ?? 0

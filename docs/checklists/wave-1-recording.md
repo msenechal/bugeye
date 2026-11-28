@@ -6,7 +6,7 @@ This pass checks the screen recorder on your Mac: ⇧⌘5, the options bar, the 
 
 1. Quit the first build's Bugeye (`/Applications/Bugeye.app`), so ⇧⌘5 reaches the new one.
 2. Turn off macOS's own ⇧⌘5: System Settings → Keyboard → Keyboard Shortcuts… → Screenshots → untick "Screenshot and recording options".
-3. Build and install the wiring branch (it holds Capture's and Quick Access's features too, from `main`):
+3. Build and install the wiring branch once Capture's and Quick Access's wiring PRs have landed on `main` and been merged into it (until then ⇧⌘5 can't open a selection):
    ```sh
    cd ~/path/to/bugeye
    git fetch origin && git checkout feat/wave1-recording-wiring && git pull
@@ -66,7 +66,7 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"' --info   #
 2. Turn on Cam.
    **Expected:** macOS asks for camera access. Allow it: a round, mirrored bubble with a white border appears at the bottom-right of the area, 24 pt in.
 3. Turn on Keys.
-   **Expected:** macOS shows the Accessibility prompt. Hovering Keys shows "Needs Accessibility: allow Bugeye in System Settings → Privacy & Security → Accessibility, then try again." until you allow it.
+   **Expected:** macOS shows the Accessibility prompt. Hovering Keys shows "Needs Accessibility: allow Bugeye in System Settings → Privacy & Security → Accessibility, then try again." The bar reads permissions when it opens: after allowing, press Esc and start a new selection to see Keys enabled.
 4. Hover each control.
    **Expected:** "Start recording (Return)", "Record your voice", "Record the sound your Mac plays", "Show your camera in a bubble", "Show the shortcuts you press", "Highlight mouse clicks", "Recording options", "Cancel (Esc)".
 5. Open ⚙ and Cam's ⌄.
@@ -94,10 +94,10 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"' --info   #
    **Expected:** "Pause", "Stop ⇧⌘5", a separator, "Restart", "Discard"; the timer keeps counting while the menu is open.
 3. Choose Pause, wait 5 s, choose Resume.
    **Expected:** "❙❙ mm:ss" with the time frozen while paused; the five seconds are missing from the result.
-4. Press ⇧⌘5.
+4. Open the ● menu and choose Stop.
    **Expected:** the border, rings, badge and bubble disappear at once; an hourglass shows in the menu bar, its menu reads "Finishing…" then "Finishing… <n> %"; then a Quick Access thumbnail appears with "▶ 00:10" (or the length you recorded).
-5. Record again with Mic and System audio on, speak and play music, then Stop.
-   **Expected:** the file plays in QuickTime with your voice and the music on one track, in sync.
+5. Record again with Mic and System audio on, speak and play music, then press ⇧⌘5 to stop.
+   **Expected:** recording stops the same way; the file plays in QuickTime with your voice and the music on one track.
 6. Record, then press ⌘Q while it is finishing.
    **Expected:** Bugeye waits, delivers the recording (it is in `~/Pictures/Bugeye`), then quits.
 
@@ -118,8 +118,8 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"' --info   #
    **Expected:** in the video, a dark badge 40 pt above the bottom of the area shows "⌘ S", "⇧ ⌘ 3" and "⌘ Z ×3"; the typed word never appears.
 3. Turn "Show all keystrokes (not just shortcuts)" on and type a word while recording.
    **Expected:** each letter shows in the badge.
-4. With Cam on: drag the bubble to the top-left, release it, double-click it twice, switch camera in ⌄ (if you have two).
-   **Expected:** it snaps to the nearest corner; double-click cycles Small → Medium → Large and the next recording starts at the size you left; switching camera keeps the corner; the bubble is in the video.
+4. With Cam on: drag the bubble to the top-left, release it, double-click it three times, switch camera in ⌄ (if you have two).
+   **Expected:** it snaps to the nearest corner; double-click cycles Medium → Large → Small → Medium (it starts at Medium) and the next recording starts at the size you left; switching camera keeps the corner; the bubble is in the video.
 5. Open the ● menu and a Quick Access thumbnail while recording.
    **Expected:** neither is in the video; the border, bar and countdown never are.
 
@@ -133,7 +133,7 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"' --info   #
 ### H. The result
 
 1. Look in `~/Pictures/Bugeye`.
-   **Expected:** files named "Recording 2026-11-28 at 14.03.12.mp4" (your date and time); a second recording in the same second gets " (2)".
+   **Expected:** files named like "Recording 2026-11-28 at 14.03.12.mp4" (your date and time).
 2. Turn off Settings → Capture → "Save to folder", record, then look in the temp folder.
    **Expected:** the recording is in `~/Library/Caches/dev.msenechal.bugeye/Captures`, and Quick Access's Save moves it.
 3. With "Copy to clipboard" on, record, then paste into a Finder window and into Slack.
@@ -144,7 +144,7 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"' --info   #
 ### I. Gating
 
 1. Press ⇧⌘5 and, while the overlay or the bar is up, press ⇧⌘4.
-   **Expected:** nothing happens (the log shows the request dropped).
+   **Expected:** nothing happens: no crosshair, no screenshot, and the recording overlay or bar stays as it was.
 2. While recording, press ⇧⌘4 and take a screenshot.
    **Expected:** the screenshot works, and its overlay isn't in the recording.
 
