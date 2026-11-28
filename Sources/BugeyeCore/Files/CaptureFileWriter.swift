@@ -41,6 +41,13 @@ public struct CaptureFileWriter: Sendable {
         public var errorDescription: String? { "\u{201C}\(url.lastPathComponent)\u{201D} was moved or deleted." }
     }
 
+    /// `copy` was asked to copy a file onto itself (the same path in another spelling, or a hard link to it).
+    /// Nothing was changed. Callers treat it as "nothing to do"; it has no user-visible text (final review I3).
+    public struct SameFile: Error, Equatable {
+        public let url: URL
+        public init(url: URL) { self.url = url }
+    }
+
     /// How many names `create` and `move` try: `name`, then its candidates (2) … (999).
     public static let maxNameAttempts = 999
 
@@ -100,9 +107,10 @@ public struct CaptureFileWriter: Sendable {
 
     /// Copies `source` to `destination` without reading it into memory (K28): a copy to a temp name beside
     /// `destination`, the preserved attributes (P11) and `identity` set on it, then a rename over `destination`.
-    /// Replacing is allowed (the save panel already asked). The source is never changed; on failure no temp file
-    /// remains.
+    /// Replacing is allowed (the save panel already asked), except the source itself: that throws `SameFile`. The
+    /// source is never changed; on failure no temp file remains.
     public func copy(_ source: URL, to destination: URL, identity: CaptureIdentity) throws {
+        if Self.isSameFile(source, destination) { throw SameFile(url: destination) }
         var kept = try preservedAttributes(of: source)
         if case .new(let id) = identity {
             kept[Self.identityAttribute] = Data(id.description.utf8)
@@ -173,6 +181,21 @@ public struct CaptureFileWriter: Sendable {
     /// The attributes that survive a rewrite. Other attributes (quarantine, Finder tags) are not copied.
     public static func isPreserved(_ name: String) -> Bool {
         name.hasPrefix(attributePrefix) || name == whereFromsAttribute
+    }
+
+    /// The same path once standardized and symlinks resolved, or the same device and inode.
+    static func isSameFile(_ a: URL, _ b: URL) -> Bool {
+        if a.standardizedFileURL.resolvingSymlinksInPath().path == b.standardizedFileURL.resolvingSymlinksInPath().path
+        {
+            return true
+        }
+        let manager = FileManager.default
+        guard let x = try? manager.attributesOfItem(atPath: a.path),
+            let y = try? manager.attributesOfItem(atPath: b.path),
+            let xDevice = x[.systemNumber] as? NSNumber, let yDevice = y[.systemNumber] as? NSNumber,
+            let xInode = x[.systemFileNumber] as? NSNumber, let yInode = y[.systemFileNumber] as? NSNumber
+        else { return false }
+        return xDevice == yDevice && xInode == yInode
     }
 
     /// A hidden temp name in `folder`, short so long capture names still fit (backlog M3).

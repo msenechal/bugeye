@@ -289,3 +289,37 @@ import Testing
         #expect(try dir.contents() == [])
     }
 }
+
+/// Save As… onto the capture's own file (final review I3): the source is never changed.
+@Suite struct CaptureFileWriterSameFileTests {
+    let dir: TempDirectory
+    let store = FakeFileMetadataStore()
+    init() throws { dir = try TempDirectory("writer-same") }
+
+    @Test func copyOntoItsOwnSourceThrowsAndChangesNothing() throws {
+        defer { dir.remove() }
+        let source = dir.file("shot.png")
+        try Data("old".utf8).write(to: source)
+        try store.setValue(Data("old-id".utf8), "dev.msenechal.bugeye.id", at: source)
+        let writer = CaptureFileWriter(metadata: store)
+        let spellings = [
+            source, URL(fileURLWithPath: dir.url.path + "/./shot.png"),
+            dir.url.appendingPathComponent("sub/../shot.png"),
+        ]
+        try FileManager.default.createDirectory(
+            at: dir.url.appendingPathComponent("sub"), withIntermediateDirectories: true)
+        for destination in spellings {
+            #expect(throws: CaptureFileWriter.SameFile(url: destination)) {
+                try writer.copy(source, to: destination, identity: .new(CaptureID()))
+            }
+        }
+        let link = dir.file("link.png")
+        try FileManager.default.linkItem(at: source, to: link)
+        #expect(throws: CaptureFileWriter.SameFile(url: link)) {
+            try writer.copy(source, to: link, identity: .new(CaptureID()))
+        }
+        #expect(try store.value("dev.msenechal.bugeye.id", at: source) == Data("old-id".utf8))
+        #expect(try Data(contentsOf: source) == Data("old".utf8))
+        #expect(try dir.contents() == ["link.png", "shot.png", "sub"])
+    }
+}
