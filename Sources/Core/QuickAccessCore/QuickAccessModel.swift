@@ -511,12 +511,12 @@ public final class QuickAccessModel {
         }
     }
 
-    /// `logged` replaces `body` in the log when the body names a folder: spec §7 logs file names only.
     /// A `deleted` cancels a Save As… whose panel is open, not one whose copy is running (claude-review on #10).
     private func cancelSaveAsUnlessCopying(_ id: CaptureID) {
         if pendingSaveAs[id]?.isCopying != true { pendingSaveAs[id] = nil }
     }
 
+    /// `logged` replaces `body` in the log when the body names a folder: spec §7 logs file names only.
     private func fail(
         _ action: String, _ id: CaptureID, _ title: String, _ body: String, logged: String? = nil,
         _ out: inout [QuickAccessEffect]
