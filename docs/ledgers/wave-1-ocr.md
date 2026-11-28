@@ -66,6 +66,7 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 
   Tests for M1, M2 and M4 failed first. The others pinned behaviour that was already correct, and each was seen failing against its mutant. (cost if wrong: none.)
 - Ruling (PR #9 claude-review, Important): when the strip timer fires it records `timedOut` **before** cancelling the recogniser; the other order let the recogniser's own `CancellationError` win `ResumeOnce` and be reported as `recognitionFailed`. The race window is two adjacent statements, so the new regression test (200 timed-out reads, every outcome `timed out on strip 0`) could not be made to fail first; the fix is the reviewer's exact swap. (cost if wrong: low; at worst a timeout is logged as a recognition failure.)
+- Ruling (macos run 46124112621 hung for 30 minutes on PR #12): the test fakes that ignore cancellation (`StubbornReader`, and `OverlapCountingReader` on the store branch) waited in `while !released { try? await Task.sleep(…) }`. Once their task was cancelled, `Task.sleep` threw at once, `try?` swallowed it, and the loop spun without suspending. On the runner's few cores the spinning fakes held every cooperative thread, so no async test could finish. They now suspend on `ReleaseLatch` (a continuation the test resumes) and never poll. Reproduced on Linux by running `TextCoreTests` pinned to one CPU (`taskset -c 0`): it hung until killed before the fix, and passes in about 5 s after. That was the failing-first check. The production code was not at fault. (cost if wrong: none.)
 
 ## Waiting on
 
