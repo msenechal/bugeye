@@ -49,6 +49,7 @@ Plan rulings P1–P18 are in the plan. Every later deviation is recorded here as
 - Ruling (final review of #10, M2, treated as Important): a finished Save takes only `fileURL` and `isSaved` from the result and publishes the entry's current item, so an `edited` that arrived while the move ran isn't lost (contracts §4.1.1: never publish a stale copy). Test failed first. (cost if wrong: none.)
 - Ruling (final review of #10, M1 and M3): a Save As… cancelled by `deleted` releases `busy` when the panel answers; an `edited` preview arriving while the panel is open becomes the copy's preview. Tests failed first. M5's test gaps are filled (the same-file test now taps Save As… again; leaving a thumbnail that isn't key; Delete of the key thumbnail returns focus once). (cost if wrong: none.)
 - Ruling (claude-review on #10, Minor): a Copy whose read failed because the file moved meanwhile (a Save in flight, or a `moved`) is retried once at the item's current URL instead of posting `Couldn't copy`; a second failure there posts it. Copy isn't blocked during Save, so the tap is never silently ignored. Test failed first. (cost if wrong: none.)
+- Ruling (claude-review on #10, Minor): the item of each Save in flight is kept and follows `edited`, `moved` and `saved` events, so a Save finishing after its thumbnail went away publishes the current item, not the snapshot from the tap (like Delete's P7 item). Test failed first. (cost if wrong: none.)
 
 ## Waiting on
 

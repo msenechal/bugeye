@@ -215,4 +215,23 @@ import Testing
         let again = h.handle(.fileActionFinished(item.id, .copyFailed(name: item.fileURL.lastPathComponent)))
         #expect(again.notices.count == 1)
     }
+
+    @Test func aSaveFinishingAfterDismissalPublishesTheItemAsEditedMeanwhile() {
+        let h = ModelHarness()
+        let item = h.item(.recording)
+        h.show(item)
+        h.handle(.stripTapped(item.id, .save))
+        h.handle(.closeTapped(item.id))
+        var edited = item
+        edited.duration = 3
+        h.publish(.edited, edited)
+        var moved = item
+        moved.isSaved = true
+        moved.fileURL = URL(fileURLWithPath: "/Users/me/Pictures/Bugeye/r.mp4")
+        let done = h.handle(.fileActionFinished(item.id, .saved(moved, previousURL: item.fileURL)))
+        var expected = edited
+        expected.isSaved = true
+        expected.fileURL = moved.fileURL
+        #expect(done.published.first?.item == expected)
+    }
 }
