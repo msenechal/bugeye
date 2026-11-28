@@ -78,6 +78,10 @@
         private func serve(_ client: Int32) {
             var timeout = timeval(tv_sec: 5, tv_usec: 0)
             setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+            // A client that hangs up before reading its reply must not kill the app: without this, the write
+            // below raises SIGPIPE, whose default action ends the process. The write then fails with EPIPE.
+            var noSigPipe: Int32 = 1
+            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
             var pending: [UInt8] = []
             var buffer = [UInt8](repeating: 0, count: 1024)
             while true {

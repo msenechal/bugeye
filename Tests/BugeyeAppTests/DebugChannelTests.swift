@@ -46,6 +46,28 @@
             #expect(try ask(["ping", "modules"]) == ["pong", "general"])
         }
 
+        @Test func aClientThatHangsUpBeforeTheReplyDoesNotKillTheApp() throws {
+            let channel = DebugChannel(path: path, handler: DebugCommandHandler(moduleIDs: []))
+            try channel.start()
+            defer { channel.stop() }
+            // Send a command and close at once: the reply is written to a closed socket (SIGPIPE by default).
+            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: Array(path.utf8)) }
+            let connected = withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+                }
+            }
+            try #require(connected == 0)
+            let request = Array("ping\nping\nping\n".utf8)
+            _ = request.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+            close(fd)
+            // Still alive and still serving.
+            #expect(try ask(["ping"]) == ["pong"])
+        }
+
         @Test func theSocketIsPrivateAndRemovedOnStop() throws {
             let channel = DebugChannel(path: path, handler: DebugCommandHandler(moduleIDs: []))
             try channel.start()
