@@ -32,7 +32,7 @@ import Vision
         legacy.recognitionLevel = .accurate
         legacy.usesLanguageCorrection = false
         do {
-            print("PROBE legacy stage devices:", try legacy.supportedComputeStageDevices())
+            print("PROBE legacy stage devices:", try legacy.supportedComputeStageDevices)
         } catch { print("PROBE legacy stage devices FAILED:", String(reflecting: error)) }
         do {
             try VNImageRequestHandler(cgImage: image).perform([legacy])
