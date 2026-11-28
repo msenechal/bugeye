@@ -43,6 +43,9 @@ public final class QuickAccessModel {
     public private(set) var busy: Set<CaptureID> = []
     /// The item of each Delete in progress, so its `deleted` is published even if the thumbnail went away (plan P7).
     private var deleting: [CaptureID: CaptureItem] = [:]
+    /// The file each Copy in flight reads, so a Copy that failed because the file moved meanwhile (a Save, a `moved`)
+    /// is retried once at the new place (claude-review on #10).
+    private var copying: [CaptureID: URL] = [:]
     private var fading: Set<CaptureID> = []
     private var loggedDecorations: Set<String> = []
 
@@ -329,6 +332,7 @@ public final class QuickAccessModel {
         switch actionID {
         case QuickAccessActionID.copy:
             record(actionID, item, trigger, &out)
+            copying[item.id] = item.fileURL
             out.append(.runFileAction(item.id, .readForCopy(item)))
         case QuickAccessActionID.save where !item.isSaved:
             guard !busy.contains(item.id) else { return }
@@ -420,9 +424,15 @@ public final class QuickAccessModel {
     ) {
         switch result {
         case .copied(let payload):
+            copying[id] = nil
             if isShown(id) { out.append(.copy(payload)) }
         case .copyFailed(let name):
-            guard isShown(id) else { return }
+            let requested = copying.removeValue(forKey: id)
+            guard let current = entry(id)?.item else { return }
+            if let requested, requested != current.fileURL {
+                out.append(.runFileAction(id, .readForCopy(current)))  // retried once: `copying` is now empty
+                return
+            }
             fail("copy", id, QuickAccessStrings.copyFailedTitle, QuickAccessStrings.copyFailedBody(name: name), &out)
         case .saved(let moved, let previousURL):
             busy.remove(id)

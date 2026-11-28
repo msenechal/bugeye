@@ -195,4 +195,24 @@ import Testing
         #expect(done.filter { $0 == .activateFrontmostApp }.count == 1)
         #expect(h.handle(.hoverEnded(item.id, bugeyeIsActive: false)).isEmpty)
     }
+
+    // MARK: claude-review on #10: Copy during a Save
+
+    @Test func aCopyThatFailedBecauseASaveMovedTheFileIsRetriedAtTheNewPlace() {
+        let h = ModelHarness()
+        let item = h.item()
+        h.show(item)
+        h.handle(.stripTapped(item.id, .save))
+        h.handle(.stripTapped(item.id, .copy))
+        var saved = item
+        saved.isSaved = true
+        saved.fileURL = URL(fileURLWithPath: "/Users/me/Pictures/Bugeye/\(item.fileURL.lastPathComponent)")
+        h.handle(.fileActionFinished(item.id, .saved(saved, previousURL: item.fileURL)))
+        let failed = h.handle(.fileActionFinished(item.id, .copyFailed(name: item.fileURL.lastPathComponent)))
+        #expect(failed.notices.isEmpty)
+        #expect(failed.fileActions == [.readForCopy(saved)])
+        // A second failure at the current place is real.
+        let again = h.handle(.fileActionFinished(item.id, .copyFailed(name: item.fileURL.lastPathComponent)))
+        #expect(again.notices.count == 1)
+    }
 }
