@@ -100,6 +100,30 @@ import Testing
             ])
     }
 
+    /// With Show all keystrokes on, the badge labels every typed press while the timeline, fed the same presses,
+    /// writes none of them: the two paths differ (ledger ruling, slice 1).
+    @Test func theBadgeShowsWhatTheTimelineNeverWrites() async throws {
+        let dir = try TempDirectory()
+        defer { dir.remove() }
+        let (recorder, url) = try T.recorder(in: dir)
+        var labels: [String] = []
+        var t = 0
+        for character in "hunter2" {
+            let key = Self.keys[character]!
+            let press = KeyPress(keyCode: key.code, characters: key.base, modifiers: [])
+            if let label = KeystrokeFormatter.label(
+                keyCode: press.keyCode, characters: press.characters, modifiers: press.modifiers, showAllKeys: true)
+            {
+                labels.append(label)
+            }
+            await recorder.record(.key(press), at: T.at(t))
+            t += 50
+        }
+        _ = await recorder.finish(at: T.at(t))
+        #expect(labels == ["H", "U", "N", "T", "E", "R", "2"])
+        #expect(try T.lines(url).map(\.event) == [.end(events: 0)])
+    }
+
     /// Every written key line obeys §7.4, checked against an oracle written independently of `TimelineKey`.
     @Test func randomPressesOnlyWriteShortcutsAndNamedKeys() async throws {
         let dir = try TempDirectory()

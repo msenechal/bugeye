@@ -9,7 +9,8 @@ Trust this file and `git log` over memory.
 | Slice | Branch | PR | Status |
 |---|---|---|---|
 | 1 core | `feat/wave1-recording-core` | https://github.com/msenechal/bugeye/pull/4 | ready, CI running |
-| 2 flow | `feat/wave1-recording-flow` (stacked on core) | | in progress |
+| 2 flow | `feat/wave1-recording-flow` (stacked on core) | https://github.com/msenechal/bugeye/pull/13 (draft) | in progress |
+| 3 layout | `feat/wave1-recording-layout` (stacked on flow) | | in progress |
 
 ## Tasks
 
@@ -27,6 +28,8 @@ Trust this file and `git log` over memory.
 | 12–14 | done | 64636ab | options, settings, `effectiveOptions`, strings, disk guard; seen failing (compile) first |
 | 15 | done | dc5554d + next | `RecordingFlow`; table and regression tests seen failing (compile) first; the R1–R9 random-sequence test found one real bug (below) and fails on a planted one (dropping the countdown's `end(recordingSetup)`: 60 of 60 seeds) |
 | 16 | done | (next) | `RecordingModule`, seen failing (compile) first |
+| 17–20 | done | 5ad0136 | geometry, placement, follow, child windows, fallback, bubble; seen failing (compile) first |
+| 21–22 | done | (next) | label, badge, rings (goldens generated, checked by hand: badge 94 × 38 pt at (353, 522) for "⇧ ⌘ 3"; rings at half and full alpha), take recovery; seen failing (compile) first. The privacy test gained `theBadgeShowsWhatTheTimelineNeverWrites` |
 
 ## Final review of PR #4
 
@@ -59,6 +62,14 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
+- Ruling (slice 3): the codec limit applies to the long and short sides (H.264 4096 × 2304, HEVC 8192 × 4320), so a portrait display is limited to 2304 × 4096, not squeezed into a landscape box. (cost if wrong: low.)
+- Ruling (slice 3): the source rect grows to whole points (floor the origin, ceil the far edges), then is clamped into the display; at least 2 × 2 pt. (cost if wrong: none.)
+- Ruling (slice 3): bar placement: centred on the selection and kept on the screen horizontally; "inside the bottom edge" puts the bar 12 pt above the selection's (or screen's) bottom. (cost if wrong: low; the Mac batch shows it.)
+- Ruling (slice 3): the rings' "14 → 28 pt" are diameters; ease-out is quadratic; left is systemYellow (1, 0.8, 0), right systemPink (1, 0.176, 0.333), other buttons don't ring. (cost if wrong: low; a constant.)
+- Ruling (slice 3): the badge's padding is 14 × 8 pt; its text uses the semibold weight 0.3 (contracts' font mapping). (cost if wrong: low.)
+- Ruling (slice 3): the badge shows named keys only with ⌘ or ⌃ unless Show all keystrokes is on (↩ alone is typing a newline). (cost if wrong: low.)
+- Ruling (slice 3): take recovery also delivers an `.mp4` left without its `.mov` (a crash after a finished conversion) and deletes a partial `.mp4` beside its `.mov` and a timeline whose movie is gone. (cost if wrong: low.)
+- Ruling (slice 3): the child-window fallback (V23) counts dropped frames only right after a filter update; a delivered frame ends the watch. (cost if wrong: low.)
 - Ruling: `TimelineStore.observe` deletes on the main actor: one `unlink` of a small file, not slow I/O. (cost if wrong: low.)
 
 ## Waiting on
