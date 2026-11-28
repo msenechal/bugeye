@@ -201,14 +201,19 @@ struct QuickAccessFixture {
         #if DEBUG
             let f = QuickAccessFixture()
             let a = f.item(name: "A.png")
+            let b = f.item(name: "B.png")
             f.show(a)
+            f.show(b)
             let commands = DebugCommands()
             DebugQuickAccessCommands.register(f.controller, in: commands)
             let answer = try #require(commands.handler(for: "quickAccess.stack")?(""))
-            #expect(answer.contains("\"file\":\"A.png\""))
+            let first = try #require(answer.range(of: "\"file\":\"A.png\""))
+            let second = try #require(answer.range(of: "\"file\":\"B.png\""))
+            #expect(first.lowerBound < second.lowerBound)  // oldest first, newest last
             #expect(answer.hasPrefix("[") && answer.hasSuffix("]"))
             #expect(commands.duplicates.isEmpty)
             f.controller.handle(.closeTapped(a.id))
+            f.controller.handle(.closeTapped(b.id))
         #endif
     }
 }
@@ -259,6 +264,28 @@ struct QuickAccessFixture {
         }
         #expect(panel == nil)
         #expect(hosting == nil)
+    }
+}
+
+/// Rule 12 with panels still shown: nothing a panel, its view, the ticker or an observer holds keeps the controller
+/// alive (final review of #11, I1). A strong capture anywhere would make a cycle through the shown panels.
+@MainActor @Suite struct QuickAccessControllerLifetimeTests {
+    @Test func theControllerIsFreedWhilePanelsAreShown() throws {
+        weak var controller: QuickAccessController?
+        var panels: [QuickAccessPanel] = []
+        autoreleasepool {
+            let f = QuickAccessFixture()
+            let a = f.item()
+            let b = f.item()
+            f.show(a)
+            f.show(b)
+            f.controller.hover(a.id, inside: true)  // makeKey, and the ticker is running
+            controller = f.controller
+            panels = f.controller.hosts.values.map(\.panel)
+        }
+        #expect(controller == nil)
+        #expect(panels.count == 2)
+        for panel in panels { panel.close() }
     }
 }
 

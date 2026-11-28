@@ -46,9 +46,15 @@ struct QuickAccessSystem {
                 if !ext.isEmpty, let type = UTType(filenameExtension: ext) {
                     panel.allowedContentTypes = [type]
                 }
+                // The panel needs Bugeye active; the app the user was in gets the keyboard back after it
+                // (final review of #11, M6).
+                let previous = NSWorkspace.shared.frontmostApplication
                 NSApplication.shared.activate()
                 panel.begin { response in
-                    MainActor.assumeIsolated { completion(response == .OK ? panel.url : nil) }
+                    MainActor.assumeIsolated {
+                        completion(response == .OK ? panel.url : nil)
+                        if let previous, previous != NSRunningApplication.current { previous.activate() }
+                    }
                 }
             }
     /// The visible frame of the display under the pointer, in Cocoa global points.

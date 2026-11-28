@@ -180,6 +180,8 @@ import Testing
             unavailable.notices == [
                 "Couldn't save to folder | ~/Pictures/Bugeye/ is unavailable. The capture stays in the temporary folder."
             ])
+        // Spec §7: file paths other than names are never logged (final review of #11, M5).
+        #expect(unavailable.logs == ["failed save \(item.id): the save folder is unavailable"])
         h.handle(.stripTapped(item.id, .save))
         let other = h.handle(
             .fileActionFinished(item.id, .saveFailed("Too many files are already named like \u{201C}a.png\u{201D}.")))
