@@ -23,6 +23,10 @@
         }
 
         func start() throws {
+            // Debug builds only: a peer that hangs up must never kill the app. SO_NOSIGPIPE on each client
+            // socket isn't enough on its own (CI still saw signal 13), so ignore SIGPIPE process-wide; every
+            // write then fails with EPIPE, which the code already handles.
+            signal(SIGPIPE, SIG_IGN)
             unlink(path)
             let fd = socket(AF_UNIX, SOCK_STREAM, 0)
             guard fd >= 0 else { throw Self.posixError(errno) }
