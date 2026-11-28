@@ -59,3 +59,15 @@ import Testing
         #expect(timer.remaining == nil)
     }
 }
+
+@Suite struct DismissTimerPausedTests {
+    /// Final review M1: a timer that ran out between two ticks and was then paused (hover, editing, a selection)
+    /// isn't expired while paused, so the thumbnail never leaves under the pointer or in the editor.
+    @Test func aPausedTimerIsNeverExpired() {
+        var timer = DismissTimer(duration: 5, startedAt: 0)
+        timer.pause(at: 5.3)
+        #expect(!timer.isExpired(at: 100))
+        timer.resume(at: 100)
+        #expect(timer.isExpired(at: 100))
+    }
+}

@@ -33,9 +33,10 @@ public struct DismissTimer: Hashable, Sendable {
         runningSince = now
     }
 
+    /// Never while paused: a timer that ran out between two ticks and was then paused (hover, editing, a selection)
+    /// expires at the first tick after it resumes (final review M1).
     public func isExpired(at now: Double) -> Bool {
-        guard let left = remaining else { return false }
-        guard let since = runningSince else { return left <= 0 }
+        guard let left = remaining, let since = runningSince else { return false }
         return now - since >= left
     }
 }
