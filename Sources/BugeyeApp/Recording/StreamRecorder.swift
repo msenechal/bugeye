@@ -224,7 +224,10 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @uncheck
             case .complete:
                 fallback.frameDelivered()
                 writer.appendVideo(sample, host: host)
-            case .idle, nil:
+            case .idle:
+                // Nothing changed on screen: not a dropped frame (V23).
+                fallback.frameDelivered()
+            case nil:
                 break
             default:
                 fallback.frameDropped()
@@ -367,7 +370,7 @@ final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @uncheck
                 frame: Rect2D(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height))
         }
         let followed = Rect2D(x: bounds.minX, y: bounds.minY, width: bounds.width, height: bounds.height)
-        return ChildWindowFilter.children(of: WindowID(id), in: snapshots, followed: followed).map(\.rawValue)
+        return ChildWindowFilter.children(of: WindowID(id), in: snapshots, followedGlobal: followed).map(\.rawValue)
     }
 }
 

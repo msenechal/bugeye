@@ -34,6 +34,8 @@ final class MovieWriter: @unchecked Sendable {
     /// Called once, on the writer's queue, with the first frame's host time.
     var onFirstFrame: ((Double) -> Void)?
     private(set) var droppedSamples = 0
+    /// A pause asked for before the first frame: the take starts paused at that frame (PR #13 review C1).
+    private var pausedBeforeStart = false
 
     init(
         url: URL, size: PixelSize, fps: Int, codec: VideoCodec, quality: RecordingQuality, audioSources: Int
@@ -94,6 +96,13 @@ final class MovieWriter: @unchecked Sendable {
             writer.startSession(atSourceTime: .zero)
             hasStarted = true
             onFirstFrame?(host)
+            if pausedBeforeStart {
+                // The first frame is written at 0, then nothing until the resume.
+                pausedBeforeStart = false
+                if let copy = retimed(sample, to: 0), append(copy, to: video) { lastVideoTime = 0 }
+                clock.pause(at: host)
+                return
+            }
         }
         // Frames captured in a pause, or that don't advance time, are dropped.
         guard let time = clock.outputTime(for: host), time > lastVideoTime else {
@@ -112,9 +121,13 @@ final class MovieWriter: @unchecked Sendable {
         _ = append(copy, to: audio[source])
     }
 
-    func pause(at host: Double) { clock.pause(at: host) }
+    func pause(at host: Double) {
+        if hasStarted { clock.pause(at: host) } else { pausedBeforeStart = true }
+    }
 
-    func resume(at host: Double) { clock.resume(at: host) }
+    func resume(at host: Double) {
+        if hasStarted { clock.resume(at: host) } else { pausedBeforeStart = false }
+    }
 
     /// No frame: cancels and deletes, `.noFrames`. A failed writer throws (calling `endSession` on it would
     /// raise an Objective-C exception, `design/04` §3) and leaves its fragments on disk.

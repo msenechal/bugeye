@@ -217,8 +217,10 @@ enum CaptureDevices {
     }
 
     static func microphones() -> [Device] {
-        AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone, .external], mediaType: .audio, position: .unspecified)
-            .devices.map { Device(id: $0.uniqueID, name: $0.localizedName) }
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone, .external], mediaType: .audio, position: .unspecified
+        )
+        .devices.map { Device(id: $0.uniqueID, name: $0.localizedName) }
     }
 
     static func cameras() -> [Device] {
