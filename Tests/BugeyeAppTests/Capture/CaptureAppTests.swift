@@ -271,6 +271,13 @@ func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, flags: NSEvent.Mod
         #expect(ShortcutKeyInput.from(keyCode: 53, characters: "\u{1B}", flags: []) == .escape)
         #expect(ShortcutKeyInput.from(keyCode: 51, characters: "\u{7F}", flags: []) == .delete)
         #expect(ShortcutKeyInput.from(keyCode: 117, characters: nil, flags: []) == .delete)
+        // With a modifier they're combos (claude-review on #27), which the model refuses as invalid.
+        #expect(
+            ShortcutKeyInput.from(keyCode: 53, characters: "\u{1B}", flags: [.command])
+                == .combo(KeyCombo("\u{1B}", [.command])))
+        #expect(
+            ShortcutKeyInput.from(keyCode: 51, characters: "\u{7F}", flags: [.command])
+                == .combo(KeyCombo("\u{7F}", [.command])))
         // What AppKit really sends: ⇧⌘3 has "#" as charactersIgnoringModifiers, ⇧⌘4 "$".
         #expect(
             ShortcutKeyInput.from(keyCode: 20, characters: "#", flags: [.shift, .command])
