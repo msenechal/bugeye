@@ -11,7 +11,9 @@ Trust this file and `git log` over memory.
 | 1 core | `feat/wave1-recording-core` | https://github.com/msenechal/bugeye/pull/4 | ready, CI running |
 | 2 flow | `feat/wave1-recording-flow` (stacked on core) | https://github.com/msenechal/bugeye/pull/13 (draft) | in progress |
 | 3 layout | `feat/wave1-recording-layout` (stacked on flow) | https://github.com/msenechal/bugeye/pull/16 (draft) | in progress |
-| 4 adapters | `feat/wave1-recording-adapters` (stacked on core) | https://github.com/msenechal/bugeye/pull/17 (draft) | macos run queued |
+| 4 adapters | `feat/wave1-recording-adapters` (stacked on core) | https://github.com/msenechal/bugeye/pull/17 (draft) | manual macos run 46123514479 green |
+| 5 recorder | `feat/wave1-recording-recorder` (stacked on layout) | https://github.com/msenechal/bugeye/pull/22 (draft) | macos run 46124727052 failed to build (NSLock in async code), fixed |
+| 6 controller | `feat/wave1-recording-controller` (stacked on recorder) | (draft) | in progress |
 
 ## Tasks
 
@@ -90,6 +92,14 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
+- Ruling (slice 4): `AXPointReader` runs each query on a GCD queue with `AXUIElementSetMessagingTimeout(0.25)`, reads only AXRole, AXSubrole, AXTitle, AXDescription, AXPosition and AXSize, and treats text field, text area, combo box and search field as text entry. macOS has no "not determined" for Accessibility: untrusted reads as denied. (cost if wrong: low.)
+- Ruling (slice 5): the writer takes a pause asked before the first frame as "start paused": the first frame is written at 0 and nothing more until the resume (same rule as the flow's C1 fix). (cost if wrong: low; one frame.)
+- Ruling (slice 5): a line-based scroll wheel's deltas are multiplied by 10 to approximate points; precise (trackpad) deltas are points already. (cost if wrong: low; Wave 3 scales scrolls anyway.)
+- Ruling (slice 5): host time is the CoreMedia host clock (what ScreenCaptureKit stamps); input uses `NSEvent.timestamp` and `systemUptime`, the same mach-based clock. Checked in the Mac batch's item 5 (a click's `t` matches its ring's frame within 50 ms). (cost if wrong: medium; a constant offset in the timeline.)
+- Ruling (slice 6): `RecordingDelivery` is portable (writer, namer, bus, decorations, ports, `TimelineStore`) and tested on Linux; file moves run off the main actor. (cost if wrong: none.)
+- Ruling (slice 6): a writer that fails at stop leaves its 2 s fragments: the take is delivered as a `.mov` when at least 64 KiB is there (`TakeRecovery.minimumMovieBytes`), else "Nothing was recorded". (cost if wrong: low.)
+- Ruling (slice 6): the controller's countdown, ticker, sampler and focus timers run in `.common` modes; tests drive ticks as events and never wait on the run loop. (cost if wrong: none.)
+- Ruling (slice 6): the overlay window is a protocol (`OverlayPresenting`) the controller already calls; slice 7 implements it with the Editor's executor, and until then the controller runs with no overlay (so V2's exception windows are just the bubble). (cost if wrong: none.)
 - Ruling (slice 3): the codec limit applies to the long and short sides (H.264 4096 × 2304, HEVC 8192 × 4320), so a portrait display is limited to 2304 × 4096, not squeezed into a landscape box. (cost if wrong: low.)
 - Ruling (slice 3): the source rect grows to whole points (floor the origin, ceil the far edges), then is clamped into the display; at least 2 × 2 pt. (cost if wrong: none.)
 - Ruling (slice 3): bar placement: centred on the selection and kept on the screen horizontally; "inside the bottom edge" puts the bar 12 pt above the selection's (or screen's) bottom. (cost if wrong: low; the Mac batch shows it.)
