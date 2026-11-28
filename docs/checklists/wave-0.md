@@ -82,12 +82,14 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'
    **Expected:** an `Anthropic API key` field with a `Save` button beside it, a `Test key` button that is greyed out, the line `No key saved.`, and below them `Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it.`
 2. Click **Save** with the field empty.
    **Expected:** nothing changes: still `No key saved.`
-3. Optional, only if you have a key: paste it into the field and click **Save** (Return does the same).
-   **Expected:** `Key saved. Not tested yet.`, and `Test key` becomes clickable.
+3. Optional, only if you have a key: click into the field, press ⌘V to paste it, and click **Save** (Return does the same).
+   **Expected:** ⌘V pastes the key (shown as dots); then `Key saved. Not tested yet.`, and `Test key` becomes clickable.
 4. Click **Test key**.
    **Expected:** after a second or two, `Key works.` (If you see `Key works, but Anthropic refused the request. Check your plan and the model in Settings.`, the key is fine but the account can't use the model or the fallback beta: note it in your report.) The `security find-generic-password` command above finds the item; `defaults read dev.msenechal.bugeye` shows no key.
 5. Optional: turn Wi-Fi off, click **Test key**, then turn Wi-Fi back on.
    **Expected:** `Couldn't reach Anthropic. Check your connection.` (after a few seconds of retries).
+6. With the Settings window in front, press ⌘W.
+   **Expected:** the window closes; **Settings…** opens it again.
 
 ### 5. Side by side
 

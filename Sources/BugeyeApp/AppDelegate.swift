@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         self.services = services
+        // Never shown (menu-bar agent), but it makes ⌘V, ⌘C, ⌘A, ⌘Z and ⌘W work in the Settings window.
+        NSApp.mainMenu = MainMenu.make()
         services.general.ensureFolderExists()
         // Reads the Keychain off the main actor; the AI pane shows "No key saved." until it answers.
         Task { await services.aiKey.load() }
