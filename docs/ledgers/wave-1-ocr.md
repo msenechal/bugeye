@@ -28,6 +28,7 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 
 - Ruling (slice 1 final review I1, I2, Important): both findings were untested spec rules, not bugs, so their new tests (2.5 → 3 spaces; indentation from the leftmost row, not the first) pass on the correct code. Each was seen failing against the mutant the review named (`.toNearestOrEven`; `rowMinX.first`) before being committed. (cost if wrong: none.)
 - Ruling (slice 1 final review M1, M3, M6, Minor): fixed in the fix pass because each was a line or two: unboxed slices are tested with the line off x = 0 (seen failing on the mutant); `summary` splits on any newline (`\r\n` is one `Character`) and its tab trimming is tested (seen failing first); `union` became an internal `Rect2D` method. The other Minor findings are under `Backlog:`. (cost if wrong: none.)
+- Ruling (PR #5 claude-review, Minor): `TextLayout.lines` indents nothing when the median character width is under 1 px (`TextLayout.minimumCharacterWidth`), instead of §4.6's "none if `charWidth ≤ 0`": a bad recogniser result could otherwise make tens of thousands of spaces per row. No real text is narrower than 1 image pixel per character. Test failed first. (cost if wrong: none.)
 
 ## Waiting on
 
