@@ -26,7 +26,7 @@ Trust this file and `git log` over memory.
 | 9 | done | 621cbe2 | one test expectation was wrong (σ = 10 boxes); see ruling |
 | 10 | done | 2113672 | code written before its tests (see ruling); goldens recorded on Linux and checked by eye |
 | 11–13 | done | 560aaa6 | tests first, seen failing to compile |
-| 14–16 | done | 3dc5e8b | tests written after the code (see ruling) |
+| 14–16 | done | 69d98c5 | tests written after the code (see ruling) |
 | 17–21 | in progress | | not compiled here; first macOS run pending |
 
 ## Rulings
