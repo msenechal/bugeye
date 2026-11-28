@@ -201,6 +201,20 @@ final class ControllerHarness {
         #expect(h.recorder.events.isEmpty && h.controller.phase == .idle && h.activity.active.isEmpty)
     }
 
+    @Test func aRequestMadeWhileEffectsRunKeepsTheSettingsReadAtThatRequest() async throws {
+        let h = ControllerHarness()
+        h.controller.request(.area)
+        await h.controller.waitUntil(.selecting)
+        // The shell asks for a full-screen capture while the area selection is closing (claude-review, PR #20).
+        h.shell.duringClose = { h.controller.request(.fullscreen) }
+        h.controller.send(.key(h.controller.session!, .escape))
+        // Settings change after the request: the capture still uses those read at the request.
+        h.settings.setValue(.bool(true), forKey: "capture.downscaleToPoints")
+        await h.controller.settle()
+        #expect(h.recorder.events.count == 1)
+        #expect(h.pipeline.downscaleFactors.isEmpty)
+    }
+
     @Test func withoutPermissionTheAlertShowsAndNothingIsFrozen() async {
         let h = ControllerHarness()
         h.permission.granted = false

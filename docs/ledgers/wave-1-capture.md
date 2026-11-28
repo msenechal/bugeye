@@ -57,6 +57,8 @@ Final review of PR #20 (slice 2, fresh reviewer): 0 Critical, 2 Important, 7 Min
 - Ruling (review M1): with the folder unusable and the temp write failing too, only `Capture failed` is posted and nothing logs `kept in temp`. Test failed first. (cost if wrong: none.)
 - Ruling (review M2–M7): finished tasks leave `inFlight`; the frame crop runs off the main actor in `prepare`; a refused Esc logs `escape taken`; `HotkeyRegistrar` documents that callers record outcomes (C27); the area test asserts close before reactivate; `waitUntil` documents that it sees only the next entry into a phase. (cost if wrong: none.)
 
+- Ruling (claude-review on PR #20, Minor): each queued event carries the settings read at its request, so a request made while effects run (queued) keeps its own snapshot instead of reloading at delivery. Test failed first. PR #20's linux and macos were green before this commit. (cost if wrong: none.)
+
 ## Waiting on user
 
 ## Backlog:
