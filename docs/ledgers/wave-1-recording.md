@@ -38,6 +38,7 @@ Trust this file and `git log` over memory.
 - I6 tests added: late lookup after discard, write error (`/dev/full`), cursor cap falling through to size, pause flushing a scroll group.
 - Minor fixed in the same pass: M1 (flush loop ends when the recorder is gone), M2 (header written at once), M3 (open clicks forgotten at pause), M4 (`AXElementInfo` fields `private(set)`; the `AXSecureTextField` subrole forces secure), M5 (timer cancelled when the reader answers), M7 (header `hasElements` false without a reader), M8 (gate wait bounded), M9 (dates without milliseconds read).
 - claude-review on #4 (2703ee8): 0 Critical, 0 Important, 2 Minor, both fixed with a failing test first: (1) a decoded element line with the `AXSecureTextField` subrole kept its title: `TimelineElement`'s field initializer is now failable for that subrole and the reader writes `withheld`; (2) `TimelineStore.observe` deleted on the main actor: deletions now run detached, and `waitForDeletions` reports them done.
+- claude-review on #4 (aabab8c): 0 Critical, 0 Important, 3 Minor, each fixed with a failing test first: (1) `MediaTime` and `RecordingClock.milliseconds` trapped on huge or NaN input (reproduced: a fatal error): both clamp now; (2) a header that can't be written didn't fail the recorder's creation: it throws now; (3) a text-entry element's title could be its typed value in some apps: dropped (see ruling).
 
 ## Final review of PR #13 (slice 2)
 
@@ -76,6 +77,8 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
+- Ruling: a text-entry element (text field, area, combo box, search field) keeps no title in the timeline, only its role, subrole and frame: some apps put the typed value in AXTitle, and §7.4 forbids typed text. Captions lose a search field's name. (cost if wrong: low; Wave 3 captions can say "the text field".)
+- Ruling: stacked branches take later fixes from the branch below by merging it in (no rebase): force-pushing was refused in this session. (cost if wrong: none; merge commits in a squash-or-merge PR.)
 - Ruling (superseded by claude-review #4 minor 2): `TimelineStore.observe` now deletes off the main actor.
 
 ## Waiting on
