@@ -20,7 +20,7 @@ enum CaptureWiring {
         var registrar: any HotkeyRegistrar
         var systemShortcuts: any SystemShortcutReader
 
-        static func live() -> Adapters {
+        @MainActor static func live() -> Adapters {
             Adapters(
                 screenSource: ScreenCaptureKitSource(), windowList: CGWindowListReader(), pipeline: ImageIOPipeline(),
                 registrar: CarbonHotkeyRegistrar(), systemShortcuts: SystemShortcutDefaultsReader())
