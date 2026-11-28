@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 struct ThumbnailActions {
     let id: CaptureID
-    weak var controller: QuickAccessController?
+    var controller: QuickAccessController?  // redcheck: deliberately strong
 
     func close() { controller?.handle(.closeTapped(id)) }
     func strip(_ button: StripButton) {
