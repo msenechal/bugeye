@@ -5,7 +5,7 @@
     import Synchronization
 
     /// The debug test channel (spec §5.6, `design/13` §4): a Unix-domain socket in the app's temp folder that
-    /// answers one command per line through `DebugCommandHandler`. Debug builds only; release builds contain
+    /// answers one command per line through `DebugCommandHandler`, on the main actor (contracts K23). Debug builds only; release builds contain
     /// none of it (`scripts/check-release-symbols.sh`).
     final class DebugChannel: Sendable {
         static func defaultSocketPath() -> String {
@@ -95,12 +95,19 @@
                 while let newline = pending.firstIndex(of: UInt8(ascii: "\n")) {
                     let line = String(decoding: pending[..<newline], as: UTF8.self)
                     pending.removeSubrange(...newline)
-                    let reply = Array((handler.respond(to: line) + "\n").utf8)
+                    let reply = Array((respondOnMain(line) + "\n").utf8)
                     let written = reply.withUnsafeBytes { write(client, $0.baseAddress, $0.count) }
                     guard written == reply.count else { return }
                 }
                 if pending.count > 4096 { return }  // No newline in sight: drop the client.
             }
+        }
+
+        /// Hops to the main actor for each command. Only the channel's own thread calls this, never the main thread
+        /// (which would deadlock).
+        private func respondOnMain(_ line: String) -> String {
+            let handler = self.handler
+            return DispatchQueue.main.sync { MainActor.assumeIsolated { handler.respond(to: line) } }
         }
 
         private static func posixError(_ code: Int32) -> POSIXError {

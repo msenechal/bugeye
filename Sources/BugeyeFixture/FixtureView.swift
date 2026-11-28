@@ -1,9 +1,11 @@
+import AppKit
 import BugeyeCore
 import BugeyeTestSupport
 import SwiftUI
 
 struct FixtureView: View {
     @State private var text = ""
+    @State private var password = ""
     @State private var checked = [false, false]
 
     var body: some View {
@@ -18,12 +20,18 @@ struct FixtureView: View {
                     ForEach(FixtureContent.buttons, id: \.self) { title in
                         Button(title) {}
                     }
+                    // Recording's Mac batch checks that a click sound reaches system audio (Recording §9.4.2).
+                    Button(FixtureContent.playClickButton) { NSSound(named: "Tink")?.play() }
                 }
                 ForEach(FixtureContent.checkboxes.indices, id: \.self) { index in
                     Toggle(FixtureContent.checkboxes[index], isOn: $checked[index])
                         .toggleStyle(.checkbox)
                 }
                 TextField(FixtureContent.textFieldPlaceholder, text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 260)
+                // Typed text here must never reach a recording's timeline (Recording §9.4.5).
+                SecureField(FixtureContent.passwordPlaceholder, text: $password)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 260)
 
@@ -52,7 +60,7 @@ struct FixtureView: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 760, minHeight: 560)
+        .frame(minWidth: 760, minHeight: 600)
     }
 
     /// Exact sRGB, so pixel checks can compare against `FixtureContent.swatches`.

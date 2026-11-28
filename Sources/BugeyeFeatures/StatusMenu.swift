@@ -54,6 +54,8 @@ public struct GeneralModule: FeatureModule {
 /// Every user-visible string of the shell, exactly as spec §5.3 settles them.
 public enum ShellStrings {
     public static let about = "About Bugeye"
+    /// The status item's title without a glyph and its accessibility label.
+    public static let statusItemLabel = "Bugeye"
     public static let settings = "Settings…"
     public static let quit = "Quit Bugeye"
     public static let settingsWindowTitle = "Bugeye Settings"
