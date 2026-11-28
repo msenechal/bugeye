@@ -48,6 +48,15 @@ import Testing
         #expect(!line.contains("secret"))
     }
 
+    /// claude-review #4: a text field's title can be its typed value in some apps: never kept.
+    @Test func aTextEntryElementKeepsNoTitle() throws {
+        let info = AXElementInfo(
+            role: "AXTextField", title: "Correct Horse", text: nil, frame: .zero, isTextEntry: true)
+        let element = try #require(TimelineElement(info: info, origin: .zero))
+        #expect(element.title == nil)
+        #expect(element.role == "AXTextField")
+    }
+
     @Test func titlesAreCutTo120CharactersWithAnEllipsis() {
         let long = String(repeating: "é", count: 200)
         let element = TimelineElement(role: "AXButton", subrole: nil, title: long, frame: .zero)!

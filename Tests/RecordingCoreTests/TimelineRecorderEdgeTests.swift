@@ -122,7 +122,7 @@ import Testing
         guard FileManager.default.fileExists(atPath: path) else { return }
         let writer = try TimelineWriter(
             url: URL(fileURLWithPath: path), handle: FileHandle(forWritingAtPath: path)!, header: T.header(),
-            limits: TimelineLimits())
+            limits: TimelineLimits(), flushHeader: false)
         writer.append(TimelineLine(t: 1, event: .pause))
         writer.flush()
         #expect(writer.error != nil)
@@ -130,6 +130,17 @@ import Testing
         writer.append(TimelineLine(t: 2, event: .resume))
         writer.finish(t: 3)
         #expect(writer.error != nil)
+    }
+
+    /// claude-review #4: a header that can't be written fails the recorder's creation, not its finish.
+    @Test func anUnwritableHeaderThrows() throws {
+        let path = "/dev/full"
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        #expect(throws: (any Error).self) {
+            try TimelineWriter(
+                url: URL(fileURLWithPath: path), handle: FileHandle(forWritingAtPath: path)!, header: T.header(),
+                limits: TimelineLimits())
+        }
     }
 
     /// I6: a lookup that lands after a discard writes nothing and recreates nothing.
