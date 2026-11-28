@@ -202,17 +202,38 @@ final class StubbornReader: TextReader, Sendable {
         #expect(await eventually { stubborn.sawCancellation })
     }
 
-    @Test func anOuterCancelSurfacesAsCancellationEvenFromAStubbornReader() async throws {
+    @Test func aCancelledReadWaitsForItsRecogniserUpToTheStripTimeout() async throws {
+        // Slice 3 review I2: a cancelled read must not free the store's one read slot while its recogniser still
+        // runs, so it resolves only when the recogniser returns or the strip timeout passes.
+        let clock = ManualClock()
         let stubborn = StubbornReader()
-        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: ManualClock())
+        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: clock)
+        let image = try blank(10, 10)
+        let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
+        #expect(await eventually { stubborn.hasStarted && clock.sleepers == 1 })
+        let completion = Completion(task)
+        task.cancel()
+        #expect(await eventually { stubborn.sawCancellation })
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(!completion.isDone)
+        clock.advance(by: .seconds(10))
+        let finished = await eventually { completion.isDone }
+        stubborn.release()
+        #expect(finished)
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
+    @Test func aCancelledReadResolvesAsSoonAsItsRecogniserReturns() async throws {
+        let clock = ManualClock()
+        let stubborn = StubbornReader()
+        let mapReader = TextMapReader(reader: stubborn, files: FakeImageFileReader(), clock: clock)
         let image = try blank(10, 10)
         let task = Task { try await mapReader.read(.buffer(image), pixelsPerPoint: 2) }
         #expect(await eventually { stubborn.hasStarted })
         let completion = Completion(task)
         task.cancel()
-        let finished = await eventually { completion.isDone }
         stubborn.release()
-        #expect(finished)
+        #expect(await eventually { completion.isDone })
         await #expect(throws: CancellationError.self) { try await task.value }
     }
 
@@ -272,5 +293,47 @@ final class Completion: Sendable {
         }
     }
 
+    init<T: Sendable>(_ task: Task<T, Never>) {
+        Task { [state = self] in
+            _ = await task.value
+            state.finish()
+        }
+    }
+
     private func finish() { state.withLock { $0 = true } }
+}
+
+@Suite struct TextMapReaderFileChangeTests {
+    @Test func aStripDecodedAtAnotherSizeThanTheFileSaidFailsTheRead() async throws {
+        // claude-review on #9: the file is rewritten between `info` and the strip's decode.
+        let files = FakeImageFileReader()
+        let url = URL(fileURLWithPath: "/captures/rewritten.png")
+        let print = FileFingerprint(size: 1, modified: Date())
+        files.set(
+            url, image: try PixelBuffer(width: 10, height: 20, fill: RGBA8(red: 9, green: 9, blue: 9)),
+            fingerprint: print)
+        let wider = try PixelBuffer(width: 30, height: 20, fill: RGBA8(red: 9, green: 9, blue: 9))
+        files.beforePixels = { files, url, _ in files.set(url, image: wider, fingerprint: print) }
+        let text = FakeTextReader()
+        await #expect(throws: TextMapError.unreadable(url)) {
+            try await TextMapReader(reader: text, files: files).read(.file(url), pixelsPerPoint: 2)
+        }
+        #expect(text.calls.isEmpty)
+    }
+}
+
+/// Throws `CancellationError` for its own reasons, with its task not cancelled.
+struct SelfCancellingReader: TextReader {
+    func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] { throw CancellationError() }
+}
+
+@Suite struct TextMapReaderSpuriousCancellationTests {
+    @Test func aRecogniserThatCancelsItselfIsARecognitionFailure() async throws {
+        // claude-review on #9: only a cancellation of the read itself is a cancellation.
+        let image = try PixelBuffer(width: 4, height: 4, fill: RGBA8(red: 0, green: 0, blue: 0))
+        await #expect(throws: TextMapError.recognitionFailed(String(describing: CancellationError()))) {
+            try await TextMapReader(reader: SelfCancellingReader(), files: FakeImageFileReader())
+                .read(.buffer(image), pixelsPerPoint: 2)
+        }
+    }
 }

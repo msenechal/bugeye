@@ -43,6 +43,9 @@ public actor CaptureTextMaps {
         let id: CaptureID
         let generation: UInt64
         let task: Task<Void, Never>
+        /// Cancelled by an event: its job is queued again, but the slot stays taken until the task returns, so a
+        /// recogniser that ignores cancellation never runs beside the next read (Q1, slice 3 review I2).
+        var cancelled = false
     }
 
     private struct Outcome: Sendable {
@@ -106,6 +109,9 @@ public actor CaptureTextMaps {
             if cancelRunning(id) {
                 log(.cancelled(id: id, reason: .moved))
                 requeue(id)
+            } else if jobs[id] == nil, cache[id] == nil, wanted(item) {
+                // A read that failed because the file moved before this event arrived (slice 3 review M1).
+                enqueue(id, priority: .background)
             }
         case .deleted:
             mirror[id] = nil
@@ -180,11 +186,16 @@ public actor CaptureTextMaps {
         jobs[id] = Job(priority: priority, order: counter, startedInBackground: priority == .background)
     }
 
-    /// A job read again (edit, move): a background job becomes the newest; a demand job keeps its place.
+    /// A job read again (edit, move): a background job, or one nobody waits on any more, becomes the newest
+    /// background read; a demand job with waiters keeps its place (slice 3 review M2).
     private func requeue(_ id: CaptureID) {
-        guard jobs[id]?.priority == .background else { return }
-        counter += 1
-        jobs[id]?.order = counter
+        guard var job = jobs[id] else { return }
+        if job.waiters.isEmpty { job.priority = .background }
+        if job.priority == .background {
+            counter += 1
+            job.order = counter
+        }
+        jobs[id] = job
     }
 
     private func addWaiter(_ waiter: Waiter, token: UInt64, to id: CaptureID) {
@@ -205,7 +216,7 @@ public actor CaptureTextMaps {
     private func cancelWaiter(_ token: UInt64, of id: CaptureID) {
         guard var job = jobs[id], let waiter = job.waiters.removeValue(forKey: token) else { return }
         waiter.resume(throwing: CancellationError())
-        if job.waiters.isEmpty, running?.id != id, job.priority == .demand {
+        if job.waiters.isEmpty, !isRunning(id), job.priority == .demand {
             if job.startedInBackground {
                 job.priority = .background
                 jobs[id] = job
@@ -221,11 +232,18 @@ public actor CaptureTextMaps {
         for waiter in job.waiters.values { waiter.resume(throwing: error) }
     }
 
-    /// Cancels the capture's running read, if any; its job stays queued.
+    /// Whether the capture's read is running and not cancelled.
+    private func isRunning(_ id: CaptureID) -> Bool {
+        running.map { $0.id == id && !$0.cancelled } ?? false
+    }
+
+    /// Cancels the capture's running read, if any; its job stays queued, and the slot stays taken until the
+    /// cancelled task returns.
     private func cancelRunning(_ id: CaptureID) -> Bool {
-        guard let current = running, current.id == id else { return false }
+        guard var current = running, current.id == id, !current.cancelled else { return false }
         current.task.cancel()
-        running = nil
+        current.cancelled = true
+        running = current
         return true
     }
 
@@ -285,10 +303,11 @@ public actor CaptureTextMaps {
     }
 
     private func finish(_ id: CaptureID, generation: UInt64, item: CaptureItem, result: Result<Outcome, any Error>) {
-        // A read cancelled by an event was already handled there: its late result changes nothing.
-        guard running?.generation == generation else { return }
+        guard let current = running, current.generation == generation else { return }
         running = nil
         defer { pump() }
+        // A read cancelled by an event was already handled there: its late result changes nothing.
+        guard !current.cancelled else { return }
         guard var job = jobs[id] else { return }
         switch result {
         case .success(let outcome):

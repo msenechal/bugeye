@@ -19,6 +19,8 @@ import Testing
         let older = Task { await latest.read(first, pixelsPerPoint: 2) }
         #expect(await eventually { gate.waiting == 1 })
         let newer = await latest.read(try image(2), pixelsPerPoint: 2)
+        let olderDone = Completion(Task { await older.value })
+        #expect(await eventually { olderDone.isDone })  // M5: a regression fails here instead of hanging
         #expect(await older.value == nil)
         #expect(gate.waiting == 0)  // cancelled, not left waiting
         #expect(newer?.lines.map(\.text) == ["new"])
@@ -53,5 +55,20 @@ import Testing
         _ = await latest.read(one, pixelsPerPoint: 2)
         _ = await latest.read(one, pixelsPerPoint: 2)
         #expect(text.calls.count == 2)
+    }
+
+    @Test func cancellingTheCallerCancelsItsRead() async throws {
+        // M4.
+        let gate = FakeGate()
+        let text = FakeTextReader(steps: [.gate(gate, [])])
+        let latest = LatestReading(reader: TextMapReader(reader: text, files: FakeImageFileReader()))
+        let one = try image(1)
+        let caller = Task { await latest.read(one, pixelsPerPoint: 2) }
+        #expect(await eventually { gate.waiting == 1 })
+        caller.cancel()
+        let done = Completion(Task { await caller.value })
+        #expect(await eventually { done.isDone })
+        #expect(await caller.value == nil)
+        #expect(gate.waiting == 0)
     }
 }
