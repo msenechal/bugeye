@@ -136,7 +136,8 @@ final class QuickAccessController {
         case .showPanel(let id, let frame):
             let panel = QuickAccessPanel(frame: Self.rect(frame))
             panel.onEscape = { [weak self] in self?.handle(.escape(id)) }
-            panel.alphaValue = animated ? 0 : 1
+            // Invisible until `.fadeIn`, which follows the first render, so a panel is never seen empty (claude-review).
+            panel.alphaValue = 0
             hosts[id] = Host(panel: panel, hosting: nil)
             panel.orderFrontRegardless()
         case .fadeIn(let id):
