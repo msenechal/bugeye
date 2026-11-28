@@ -76,6 +76,9 @@ public final class AIKeySettings {
     @ObservationIgnored private let model: @MainActor () -> String
     /// Bumped by every save, so a load or test that finishes after a new key was saved doesn't report on it.
     @ObservationIgnored private var generation = 0
+    /// The latest Keychain write. Each write waits for the one before it, so the Keychain always ends up
+    /// with the last key saved; reads wait for it too, so they never see a key that is being replaced.
+    @ObservationIgnored private var lastWrite: Task<Bool, Never>?
 
     /// Touches nothing slow: the status starts at "No key saved." and `load()` reads the Keychain.
     public init(secrets: any SecretStore, client: any LLMClient, model: @escaping @MainActor () -> String) {
@@ -89,6 +92,7 @@ public final class AIKeySettings {
     /// keychain). The app calls it once at launch. Ignored if a key was saved meanwhile.
     public func load() async {
         let started = generation
+        _ = await lastWrite?.value
         let stored = await Self.hasKey(secrets)
         guard generation == started else { return }
         status = stored ? .savedNotTested : .noKey
@@ -106,7 +110,9 @@ public final class AIKeySettings {
         // A test still running is about the old key: its answer is ignored, so the new key can be tested now.
         isTesting = false
         let secrets = secrets
-        let stored = await Self.offMainActor {
+        let previous = lastWrite
+        let write = Task.detached { () -> Bool in
+            _ = await previous?.value
             do {
                 try secrets.setSecret(key, for: .anthropicAPIKey)
                 return true
@@ -114,6 +120,8 @@ public final class AIKeySettings {
                 return false
             }
         }
+        lastWrite = write
+        let stored = await write.value
         guard generation == started else { return }
         status = stored ? .savedNotTested : .saveFailed
     }
@@ -134,6 +142,7 @@ public final class AIKeySettings {
         let started = generation
         // A stale test (a new key was saved meanwhile) must not end the test that replaced it.
         defer { if generation == started { isTesting = false } }
+        _ = await lastWrite?.value
         guard await Self.hasKey(secrets) else {
             if generation == started { status = .noKey }
             return

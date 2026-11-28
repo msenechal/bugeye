@@ -40,6 +40,21 @@ import Testing
         #expect(store.mainActorWasFree.allSatisfy { $0 }, "a SecretStore call blocked the main actor")
     }
 
+    @Test func twoQuickSavesStoreTheLaterKey() async throws {
+        let store = GatedSecretStore(holding: "A")
+        let settings = AIKeySettings(secrets: store, client: FakeLLM(), model: { "m" })
+        let first = Task { await settings.save("A") }
+        await store.waitUntilHeldWriteStarts()
+        let second = Task { await settings.save("B") }
+        // Give B's write every chance to land before A's (it must not: writes are serialized).
+        _ = await store.waitForAnotherWrite(timeout: 0.5)
+        store.releaseHeldWrite()
+        await first.value
+        await second.value
+        #expect(try store.secret(for: .anthropicAPIKey) == "B")
+        #expect(settings.status == .savedNotTested)
+    }
+
     @Test func savingStoresTheTrimmedKeyInTheSecretStore() async throws {
         let secrets = FakeSecretStore()
         let settings = AIKeySettings(secrets: secrets, client: FakeLLM(), model: { "m" })
@@ -283,4 +298,48 @@ final class MainActorProbeSecretStore: SecretStore {
         record()
         try inner.removeSecret(for: key)
     }
+}
+
+/// A SecretStore whose write of one value blocks until the test releases it, to order concurrent saves.
+final class GatedSecretStore: SecretStore {
+    private let inner = FakeSecretStore()
+    private let held: String
+    private let started = DispatchSemaphore(value: 0)
+    private let release = DispatchSemaphore(value: 0)
+    private let otherWrites = DispatchSemaphore(value: 0)
+
+    init(holding value: String) { held = value }
+
+    /// Waits on a plain thread, never blocking the cooperative pool the code under test needs.
+    func waitUntilHeldWriteStarts() async {
+        await withCheckedContinuation { done in
+            DispatchQueue.global().async {
+                self.started.wait()
+                done.resume()
+            }
+        }
+    }
+
+    func waitForAnotherWrite(timeout: TimeInterval) async -> Bool {
+        await withCheckedContinuation { done in
+            DispatchQueue.global().async {
+                done.resume(returning: self.otherWrites.wait(timeout: .now() + timeout) == .success)
+            }
+        }
+    }
+    func releaseHeldWrite() { release.signal() }
+
+    func secret(for key: SecretKey) throws -> String? { try inner.secret(for: key) }
+
+    func setSecret(_ value: String, for key: SecretKey) throws {
+        if value == held {
+            started.signal()
+            release.wait()
+        } else {
+            otherWrites.signal()
+        }
+        try inner.setSecret(value, for: key)
+    }
+
+    func removeSecret(for key: SecretKey) throws { try inner.removeSecret(for: key) }
 }
