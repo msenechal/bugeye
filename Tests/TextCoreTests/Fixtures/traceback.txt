@@ -3,5 +3,5 @@ Traceback (most recent call last):
     main()
   File "/app/main.py", line 8, in main
     return parse(data[0])
-          ^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^
 ValueError: invalid literal for int() with base 10: 'x'

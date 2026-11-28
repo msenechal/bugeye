@@ -3,13 +3,14 @@ import Foundation
 import Testing
 
 @Suite struct ImageFileReaderTests {
-    @Test func fingerprintsCompareSizeAndDateToTheNanosecond() {
+    // `Date` near 1.8e9 s resolves about 240 ns, so half a microsecond is the finest step this can check.
+    @Test func fingerprintsCompareSizeAndDateBelowAMicrosecond() {
         let date = Date(timeIntervalSince1970: 1_800_000_000.123456789)
         #expect(FileFingerprint(size: 10, modified: date) == FileFingerprint(size: 10, modified: date))
         #expect(FileFingerprint(size: 10, modified: date) != FileFingerprint(size: 11, modified: date))
         #expect(
             FileFingerprint(size: 10, modified: date)
-                != FileFingerprint(size: 10, modified: date.addingTimeInterval(0.000_001)))
+                != FileFingerprint(size: 10, modified: date.addingTimeInterval(0.000_000_5)))
     }
 
     @Test func aFingerprintRoundTripsThroughJSON() throws {

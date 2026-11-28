@@ -52,8 +52,11 @@ public enum PixelResample {
                 }
             }
         }
-        // The sizes come from a valid buffer, so this never falls back.
-        return (try? PixelBuffer(width: width, height: height, bytesPerRow: width * 4, bytes: out)) ?? buffer
+        guard let result = try? PixelBuffer(width: width, height: height, bytesPerRow: width * 4, bytes: out) else {
+            // The sizes come from a valid buffer: unreachable, and returning the 1× buffer would halve every box.
+            preconditionFailure("enlarged2x made an invalid buffer")
+        }
+        return result
     }
 
     /// For each output index: the two source indexes and the second one's weight in quarters.
