@@ -8,7 +8,7 @@ Trust this file and `git log` over memory.
 
 | Slice | Branch | PR | State |
 |---|---|---|---|
-| 1 core | `feat/wave1-quick-access-core` | #8 | final review done, fix pass done |
+| 1 core | `feat/wave1-quick-access-core` | #8 | green (linux, macos, review), ready to merge |
 | 2 model | `feat/wave1-quick-access-model` | #10 | done, stacked on #8 |
 | 3 mac | `feat/wave1-quick-access-mac` | #11 | macOS run pending, stacked on #10 |
 | 4 wiring | `feat/wave1-quick-access-wiring` | | draft pushed; waits for Capture's wiring PR (contracts §9) |
@@ -44,12 +44,19 @@ Plan rulings P1–P18 are in the plan. Every later deviation is recorded here as
 - Ruling: the `.selection` action runs only while its handler's state for the host is `enabled` or a submenu; `disabled` and `hidden` do nothing, as the builder greys or drops the button. (cost if wrong: low.)
 - Ruling (final review of #8, M1, treated as Important): a paused `DismissTimer` is never expired. A timer that ran out between two 0.5 s ticks and was then paused by a hover, an editor or a selection banked a negative remainder and stayed expired, so the model's `tick` would have dismissed a thumbnail under the pointer. It now expires at the first tick after it resumes. Test failed first. (cost if wrong: none.)
 - Ruling (final review of #8, M3): a primary whose handler answers `.submenu` is an enabled button that runs the action without a subitem (the strip has no submenus); a `.disabled` suggested action still gets its ring or ★, since the ring shows a habit, not availability. (cost if wrong: low; one line in the builder each.)
+- Ruling (process, 28 Nov 2026): the final-review subagent for #8 ran a `git checkout` in the shared working tree while slice 3 was being committed, so the macOS commit (`d6391b0`) landed on the core branch and reached #8. Repaired without rewriting history: reverted on core (`8ad1c52`), merged up, and re-applied on the mac branch with a revert of the revert. Every later review agent runs in its own worktree (`isolation: worktree`). (cost if wrong: none; #8's history shows the commit and its revert, its diff is clean.)
+- Ruling (final review of #10, I1, Important): every path that releases a thumbnail from `busy` (P6) now has a test: Cancel, the same file, `savedCopy`, `saveAsUnchanged`, `saveAsFailed`, `saved`, `saveFolderUnavailable`, `deleteFailed`, `deleted`, and a Save As… cancelled by `deleted`. Each was shown to fail by deleting that path's `busy.remove` line. (cost if wrong: none.)
+- Ruling (final review of #10, M2, treated as Important): a finished Save takes only `fileURL` and `isSaved` from the result and publishes the entry's current item, so an `edited` that arrived while the move ran isn't lost (contracts §4.1.1: never publish a stale copy). Test failed first. (cost if wrong: none.)
+- Ruling (final review of #10, M1 and M3): a Save As… cancelled by `deleted` releases `busy` when the panel answers; an `edited` preview arriving while the panel is open becomes the copy's preview. Tests failed first. M5's test gaps are filled (the same-file test now taps Save As… again; leaving a thumbnail that isn't key; Delete of the key thumbnail returns focus once). (cost if wrong: none.)
 
 ## Waiting on
 
 - Capture's wiring PR, for the wiring PR's merge, its Mac batch and the manual pass (contracts §9).
 
 ## Backlog
+
+- Final review of #10, M4 (28 Nov 2026): a `created` for an id whose panel is still fading out would show a new panel that the old `fadeOutFinished` then closes. Unreachable in Wave 1 (no publisher re-creates an id). Fix: ignore `created` while the id is fading, or close it first.
+- Final review of #10, M6 (28 Nov 2026): `loggedDecorations` keeps one short string per capture that had a duplicate decoration; prune it on dismissal.
 
 - Final review of #8, M2 (28 Nov 2026): `QuickAccessFileActions.run` is synchronous; only the controller's `Task.detached` keeps it off the main actor. Making it `@concurrent async` would enforce that in the type.
 - Final review of #8, M4 (28 Nov 2026): small test gaps: a `.selection` handler answering `.hidden` or `.disabled`; a second `.suggestedAction` reported; Save As… of a recording; Save As… over an existing different file.

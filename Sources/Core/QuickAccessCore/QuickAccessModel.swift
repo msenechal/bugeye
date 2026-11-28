@@ -192,7 +192,10 @@ public final class QuickAccessModel {
             render(id, &out)
         case .edited:
             entry.item = event.item
-            if let preview = event.preview { entry.preview = preview }
+            if let preview = event.preview {
+                entry.preview = preview
+                pendingSaveAs[id]?.preview = preview  // the copy carries the thumbnail's preview (review of #10, M3)
+            }
             update(entry)
             render(id, &out)
         case .deleted:
@@ -400,7 +403,10 @@ public final class QuickAccessModel {
     }
 
     private func saveAsChosen(_ id: CaptureID, _ url: URL?, _ out: inout [QuickAccessEffect]) {
-        guard let pending = pendingSaveAs[id] else { return }
+        guard let pending = pendingSaveAs[id] else {
+            busy.remove(id)  // a `deleted` event cancelled it (final review of #10, M1)
+            return
+        }
         guard let url, url.standardizedFileURL.path != pending.item.fileURL.standardizedFileURL.path else {
             pendingSaveAs[id] = nil
             busy.remove(id)
@@ -418,10 +424,15 @@ public final class QuickAccessModel {
         case .copyFailed(let name):
             guard isShown(id) else { return }
             fail("copy", id, QuickAccessStrings.copyFailedTitle, QuickAccessStrings.copyFailedBody(name: name), &out)
-        case .saved(let item, let previousURL):
+        case .saved(let moved, let previousURL):
             busy.remove(id)
+            // Only the file's place comes from the result; everything else is the item as it is now (contracts
+            // §4.1.1: never publish a stale copy; final review of #10, M2).
+            var item = moved
             if var entry = entry(id) {
-                entry.item = item
+                entry.item.fileURL = moved.fileURL
+                entry.item.isSaved = moved.isSaved
+                item = entry.item
                 update(entry)
                 render(id, &out)
             }
