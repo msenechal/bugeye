@@ -38,7 +38,7 @@ public struct FrozenDisplay: Sendable {
 }
 
 /// Why a screen capture failed. `permissionDenied` shows the Screen Recording alert; the rest post `Capture failed`.
-public enum ScreenSourceError: Error, Equatable, Sendable {
+public enum ScreenSourceError: Error, Hashable, Sendable {
     /// Screen Recording is missing, or ScreenCaptureKit answered `userDeclined`.
     case permissionDenied
     /// A display disappeared between the request and the capture.
