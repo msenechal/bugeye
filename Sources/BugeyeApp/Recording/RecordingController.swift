@@ -198,6 +198,47 @@ final class RecordingController {
         }
     }
 
+    /// V15: delivers what a crash left in the in-progress folder, each with the "Recovered a recording" notice.
+    func recoverTakes() async {
+        let folder = CaptureFolders.recordingsInProgress(home: context.home)
+        // This instance's own takes are live; another instance's (a debug build beside the installed app) are
+        // covered by the plan's quiet period (PR #25 review).
+        let live = Set(
+            requests.values.compactMap {
+                UUID(uuidString: String($0.output.deletingPathExtension().lastPathComponent.dropFirst(5)))
+            })
+        let files = await Task.detached { Self.listing(folder) }.value
+        let plan = TakeRecovery.plan(files: files, liveTakes: live, now: Date())
+        let doomed = plan.delete.map { folder.appendingPathComponent($0) }
+        await Task.detached { for url in doomed { try? FileManager.default.removeItem(at: url) } }.value
+        for recovery in plan.recover {
+            let movie = folder.appendingPathComponent(recovery.movie)
+            let duration = (try? await AVURLAsset(url: movie).load(.duration).seconds) ?? 0
+            let preview = await deps.firstFrame(movie)
+            let item = await delivery.deliver(
+                movie: movie, date: recovery.createdAt, duration: duration.isFinite ? duration : 0,
+                pixelsPerPoint: lastScale, timeline: recovery.timeline.map { folder.appendingPathComponent($0) },
+                preview: preview)
+            if let item {
+                logger.info("recovered \(item.fileURL.lastPathComponent, privacy: .private)")
+                context.notifier.post(
+                    title: RecordingStrings.Notice.recovered.title, body: RecordingStrings.Notice.recovered.body)
+            }
+        }
+    }
+
+    nonisolated private static func listing(_ folder: URL) -> [TakeRecovery.File] {
+        let keys: [URLResourceKey] = [.creationDateKey, .contentModificationDateKey, .fileSizeKey]
+        let urls = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
+        return urls.compactMap { url in
+            guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
+            let created = values.creationDate ?? Date.distantPast
+            return TakeRecovery.File(
+                name: url.lastPathComponent, created: created, modified: values.contentModificationDate ?? created,
+                size: Int64(values.fileSize ?? 0))
+        }
+    }
+
     /// Debug channel `recording.state`.
     var stateDescription: String { String(describing: flow.state) }
 
