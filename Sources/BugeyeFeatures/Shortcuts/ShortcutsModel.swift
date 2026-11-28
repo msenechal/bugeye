@@ -96,8 +96,12 @@ public final class ShortcutsModel {
         changed()
     }
 
+    /// Starts recording into a row. Every global hotkey is released meanwhile: Carbon takes a registered key before
+    /// the app sees it, so typing ⇧⌘3 would capture instead of reaching the field. Every way out of recording
+    /// (a combo, Esc, Delete, `stopRecording`) registers them again. Releasing isn't reported to `onRegistration`.
     public func startRecording(_ id: String) {
         guard let index = index(id) else { return }
+        for row in rows { registrar.unregister(row.spec.id) }
         for i in rows.indices { rows[i].isRecording = i == index }
         typedMessages[id] = nil
         refreshMessage(index)
@@ -107,7 +111,6 @@ public final class ShortcutsModel {
     /// The next combo typed while recording. Invalid or duplicate combos aren't saved.
     public func typed(_ combo: KeyCombo, for id: String) {
         guard let index = index(id) else { return }
-        rows[index].isRecording = false
         if !combo.isValidHotkey {
             typedMessages[id] = .invalid
         } else if let other = rows.first(where: { $0.spec.id != id && $0.combo == combo }) {
@@ -115,27 +118,33 @@ public final class ShortcutsModel {
         } else {
             typedMessages[id] = nil
             store.setValue(.string(combo.description), forKey: rows[index].spec.settingKey)
-            register(index)
         }
-        refreshMessage(index)
-        changed()
+        endRecording()
     }
 
     /// Esc while recording: the old combo stays.
     public func escapeTyped(_ id: String) {
-        guard let index = index(id) else { return }
-        rows[index].isRecording = false
-        changed()
+        guard index(id) != nil else { return }
+        endRecording()
     }
 
     /// Delete while recording: the binding is cleared.
     public func deleteTyped(_ id: String) {
         guard let index = index(id) else { return }
-        rows[index].isRecording = false
         typedMessages[id] = nil
         store.setValue(.string(HotkeyBindings.cleared), forKey: rows[index].spec.settingKey)
-        register(index)
-        changed()
+        endRecording()
+    }
+
+    /// The field lost focus or the pane closed: recording ends with nothing changed.
+    public func stopRecording() {
+        guard rows.contains(where: \.isRecording) else { return }
+        endRecording()
+    }
+
+    private func endRecording() {
+        for i in rows.indices { rows[i].isRecording = false }
+        registerAll()
     }
 
     public func tryAgain(_ id: String) {

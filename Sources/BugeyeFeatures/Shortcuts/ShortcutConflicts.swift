@@ -52,6 +52,9 @@ public enum ShortcutConflicts {
         return KeyCombo(key, modifiers)
     }
 
+    /// The unshifted key at an ANSI virtual key code: a recorded ⇧⌘4 arrives as "$", but its key is "4".
+    public static func key(forKeyCode code: Int) -> String? { keyCodes[code] }
+
     /// ANSI virtual key codes (`kVK_ANSI_*`).
     static let keyCodes: [Int: String] = [
         0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g", 4: "h", 34: "i", 38: "j", 40: "k", 37: "l", 46: "m",

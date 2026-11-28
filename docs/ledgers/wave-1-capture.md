@@ -74,6 +74,13 @@ Final review of PR #21 (slice 3, fresh reviewer): 0 Critical, 1 Important, 8 Min
 - Ruling (review M3, M7): `ScreenCaptureKitSource.targets` skips a display ScreenCaptureKit lists before `NSScreen` knows it (just plugged in) instead of failing the whole freeze; asked-for ids must exist. It and `pixelSize` are pure and tested. (cost if wrong: none.)
 - Ruling (review M4, M6, M8, M9): `CFPreferencesAppSynchronize` before reading `com.apple.symbolichotkeys`; the live window-list test that couldn't fail is gone; `Unchecked` is private to the source file; downscale keeps alpha (tested). M5 (layouts) is the backlog item below. (cost if wrong: none.)
 
+Slice 4 (app layer), final review of PR #27 (fresh reviewer): 1 Critical, 3 Important, 5 Minor. Fix pass:
+
+- Ruling (review C1, Critical): the Shortcuts field takes the key from the key code (US positions, as the registrar uses), not `charactersIgnoringModifiers`, which keeps ⇧ (⇧⌘4 arrived as "$" and was refused as invalid, so no default could be typed back). The test now sends what AppKit sends ("#", "$"); it failed first. (cost if wrong: none.)
+- Ruling (review I2, Important): while a row records, every global hotkey is released (Carbon takes a registered key before the field sees it); a combo, Esc, Delete, losing focus or closing the pane registers them again. Releasing isn't reported to `HotkeyStatus`. Tests failed first. (cost if wrong: low; the status menu keeps showing keys for the few seconds a row records.)
+- Ruling (review I3, I4): crosshair and loupe show only on the overlay under the pointer and hide on `mouseExited`; the overlay view takes every click inside it (the crosshair lines and loupe never hit-test), so `acceptsFirstMouse` is the overlay's. Tests failed first. (cost if wrong: none.)
+- Ruling (review M5–M9): a held Space or Return doesn't repeat and stray keys don't beep; recording ends when the field resigns or the pane disappears, and `performKeyEquivalent` takes a combo only while the field is first responder; `ShortcutsPaneModel` sets (not chains) a weak `onChange`; a view draws only for the live session, so a leftover's `mouseEntered` guard holds; the view removes only its own tracking area. (cost if wrong: none.)
+
 ## Waiting on user
 
 ## Backlog:

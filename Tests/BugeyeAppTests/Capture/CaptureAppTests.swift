@@ -163,6 +163,41 @@ func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, flags: NSEvent.Mod
         #expect(view.damage == view.bounds.union(expected))
     }
 
+    @Test func crosshairAndLoupeShowOnlyOnThePointersDisplay() throws {
+        let view = makeView(render: { live })
+        view.showPointer(at: NSPoint(x: 100, y: 100))
+        #expect(view.showsCursorViews)
+        view.showPointer(at: NSPoint(x: -50, y: 100))
+        #expect(!view.showsCursorViews)
+        view.showPointer(at: NSPoint(x: 100, y: 100))
+        let exited = try #require(
+            NSEvent.enterExitEvent(
+                with: .mouseExited, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                eventNumber: 0, trackingNumber: 0, userData: nil))
+        view.mouseExited(with: exited)
+        #expect(!view.showsCursorViews)
+    }
+
+    @Test func clicksOnTheCrosshairGoToTheOverlay() {
+        let view = makeView(render: { live })
+        view.showPointer(at: NSPoint(x: 100, y: 100))
+        // The pointer is on both crosshair lines: the overlay still takes the click.
+        #expect(view.hitTest(NSPoint(x: 100.2, y: 100.2)) === view)
+        #expect(view.hitTest(NSPoint(x: 500, y: 100)) == nil)
+    }
+
+    @Test func aHeldSpaceDoesNotRepeatAndStrayKeysAreDropped() throws {
+        var events: [FlowEvent] = []
+        let view = makeView(render: { live }, send: { events.append($0) })
+        let repeated = try #require(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                characters: " ", charactersIgnoringModifiers: " ", isARepeat: true, keyCode: 49))
+        view.keyDown(with: repeated)
+        view.keyDown(with: try #require(keyEvent(code: 0)))
+        #expect(events.isEmpty)
+    }
+
     @Test func theHintSitsTwelvePointsBelowTheVisibleFrameCentred() {
         let view = makeView(render: { nil })
         let frame = view.hintFrame("Drag an area")
@@ -236,11 +271,18 @@ func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, flags: NSEvent.Mod
         #expect(ShortcutKeyInput.from(keyCode: 53, characters: "\u{1B}", flags: []) == .escape)
         #expect(ShortcutKeyInput.from(keyCode: 51, characters: "\u{7F}", flags: []) == .delete)
         #expect(ShortcutKeyInput.from(keyCode: 117, characters: nil, flags: []) == .delete)
+        // What AppKit really sends: ⇧⌘3 has "#" as charactersIgnoringModifiers, ⇧⌘4 "$".
         #expect(
-            ShortcutKeyInput.from(keyCode: 20, characters: "3", flags: [.shift, .command])
+            ShortcutKeyInput.from(keyCode: 20, characters: "#", flags: [.shift, .command])
                 == .combo(KeyCombo("3", [.shift, .command])))
         #expect(
+            ShortcutKeyInput.from(keyCode: 21, characters: "$", flags: [.option, .shift, .command])
+                == .combo(KeyCombo("4", [.option, .shift, .command])))
+        #expect(
             ShortcutKeyInput.from(keyCode: 0, characters: "A", flags: [.control]) == .combo(KeyCombo("a", [.control])))
+        // Not a letter or digit key: the characters go to the model, which calls them invalid.
+        #expect(
+            ShortcutKeyInput.from(keyCode: 27, characters: "-", flags: [.command]) == .combo(KeyCombo("-", [.command])))
         #expect(ShortcutKeyInput.from(keyCode: 122, characters: nil, flags: []) == .ignored)
     }
 

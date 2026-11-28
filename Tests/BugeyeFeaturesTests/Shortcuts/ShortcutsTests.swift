@@ -298,6 +298,40 @@ final class ShortcutsHarness {
         #expect(h.registrar.registered["capture.area"] == shiftCmd4)
     }
 
+    @Test func recordingReleasesEveryKeySoTypedCombosReachTheField() {
+        let h = ShortcutsHarness()
+        h.model.registerAll()
+        h.model.startRecording("capture.area")
+        // Carbon would take ⇧⌘3 before the field sees it: nothing is registered while recording.
+        #expect(h.registrar.registered.isEmpty)
+        // …and that doesn't count as a failed registration for the status menu.
+        #expect(h.registrations.values.allSatisfy { $0 })
+        h.model.typed(KeyCombo("3", [.shift, .command]), for: "capture.area")
+        #expect(h.model.rows[2].message == .duplicate(KeyCombo("3", [.shift, .command]), title: "Capture Fullscreen"))
+        #expect(h.registrar.registered.count == 3)
+    }
+
+    @Test func everyWayOutOfRecordingRegistersTheKeysAgain() {
+        let h = ShortcutsHarness()
+        h.model.registerAll()
+        h.model.startRecording("capture.area")
+        h.model.escapeTyped("capture.area")
+        #expect(h.registrar.registered.count == 3)
+        h.model.startRecording("capture.area")
+        h.model.stopRecording()
+        #expect(h.registrar.registered.count == 3)
+        #expect(h.model.rows.allSatisfy { !$0.isRecording })
+        h.model.startRecording("capture.area")
+        h.model.deleteTyped("capture.area")
+        #expect(h.registrar.registered.count == 2)
+    }
+
+    @Test func keyCodesGiveTheUnshiftedKey() {
+        #expect(ShortcutConflicts.key(forKeyCode: 21) == "4")
+        #expect(ShortcutConflicts.key(forKeyCode: 0) == "a")
+        #expect(ShortcutConflicts.key(forKeyCode: 999) == nil)
+    }
+
     @Test func comboConvertsToAGlobalKey() {
         #expect(
             KeyCombo("3", [.option, .shift, .command]).globalKey
