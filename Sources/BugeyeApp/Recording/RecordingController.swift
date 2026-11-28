@@ -30,11 +30,16 @@ protocol RecordingSurfaces: AnyObject {
     func moveBubble(area: CGRect)
     func confirm(_ kind: ConfirmKind) async -> Bool
     func dismissConfirm()
+    /// The bubble's window, an exception to the app's exclusion (in the video), while it is shown.
+    var bubbleWindowID: CGWindowID? { get }
 }
 
 /// The click rings and keystroke badge window (slice 7 draws it through the Editor's executor).
 @MainActor
 protocol OverlayPresenting: AnyObject {
+    /// Shows the (empty) window over `area` before the stream starts: ScreenCaptureKit lists on-screen windows
+    /// only, so it must be there to be kept in the video.
+    func show(area: CGRect)
     func start(area: CGRect, clicks: Bool, keys: Bool, showAllKeys: Bool)
     func click(_ button: TimelineButton, at quartz: Point2D)
     func key(_ press: KeyPress)
@@ -239,6 +244,7 @@ final class RecordingController {
         case .stopRecorder(let s):
             stopRecorder(s)
         case .cancelRecorder(let s):
+            if recorders[s] != nil { deps.overlays?.stop() }
             let recorder = recorders.removeValue(forKey: s)
             requests[s] = nil
             Task { await recorder?.cancel() }
@@ -380,6 +386,10 @@ final class RecordingController {
             display: Size2D(width: display.bounds.width, height: display.bounds.height))
         var window: CGWindowID?
         if case .window(let id, _, _) = request.target { window = id.rawValue }
+        if request.options.clicks || request.options.keys, let cocoa = frame(of: request.target) {
+            deps.overlays?.show(area: cocoa)
+        }
+        let exceptions = (deps.overlays?.windowIDs ?? []) + [deps.surfaces.bubbleWindowID].compactMap { $0 }
         let take = UUID()
         let folder = CaptureFolders.recordingsInProgress(home: context.home)
         try? SaveFolder.ensureExists(at: folder)
@@ -387,7 +397,7 @@ final class RecordingController {
             display: request.target.display.rawValue,
             sourceRect: CGRect(x: local.origin.x, y: local.origin.y, width: local.width, height: local.height),
             displaySize: display.bounds.size, options: request.options, window: window,
-            overlayWindowIDs: deps.overlays?.windowIDs ?? [],
+            overlayWindowIDs: exceptions,
             output: folder.appendingPathComponent(TakeRecovery.movieName(take: take)))
         let callbacks = StreamRecorder.Callbacks(
             firstFrame: { [weak self] host, date in self?.firstFrame(s, host: host, date: date) },

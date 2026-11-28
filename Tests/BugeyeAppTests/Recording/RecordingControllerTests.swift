@@ -67,6 +67,7 @@ final class FakeSurfaces: RecordingSurfaces {
         return answer
     }
     func dismissConfirm() { calls.append("dismiss") }
+    var bubbleWindowID: CGWindowID? { 77 }
 }
 
 @MainActor @Suite struct RecordingControllerTests {
@@ -138,6 +139,8 @@ final class FakeSurfaces: RecordingSurfaces {
         await settle { rig.recorders.made.first?.calls.contains("prepare") == true }
         let recorder = try #require(rig.recorders.made.first)
         #expect(recorder.request?.sourceRect == CGRect(x: 0, y: 0, width: 1512, height: 982))
+        // The bubble's window stays in the video.
+        #expect(recorder.request?.overlayWindowIDs == [77])
         #expect(
             recorder.request?.output.deletingLastPathComponent().standardizedFileURL
                 == CaptureFolders.recordingsInProgress(home: rig.home.url.path).standardizedFileURL)

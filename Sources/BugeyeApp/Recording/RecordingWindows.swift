@@ -26,6 +26,11 @@ final class RecordingWindows: RecordingSurfaces {
     private var bubbleArea: CGRect = .zero
     private var alertOpen = false
 
+    var bubbleWindowID: CGWindowID? {
+        guard let bubble, bubble.isVisible, bubble.windowNumber > 0 else { return nil }
+        return CGWindowID(bubble.windowNumber)
+    }
+
     // MARK: Border
 
     func showBorder(_ frame: CGRect, recording: Bool) {
