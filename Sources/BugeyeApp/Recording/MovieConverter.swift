@@ -4,6 +4,7 @@ import CoreMedia
 import Foundation
 import MacAdapters
 import RecordingCore
+import Synchronization
 
 /// `.mov` → `.mp4` (V8, `design/04` §2.9): the video passed through untouched, every audio track mixed into one
 /// AAC 48 kHz stereo 160 kbit/s track. Both pumps run concurrently (pumping one after the other deadlocks the
@@ -44,10 +45,12 @@ enum MovieConverter {
         let movie: URL
         let output: URL
         let progress: @Sendable (Double) -> Void
-        private let lock = NSLock()
-        private var reader: AVAssetReader?
-        private var writer: AVAssetWriter?
-        private var aborted = false
+        private struct State {
+            var reader: UncheckedBox<AVAssetReader>?
+            var writer: UncheckedBox<AVAssetWriter>?
+            var aborted = false
+        }
+        private let state = Mutex(State())
 
         init(movie: URL, output: URL, progress: @escaping @Sendable (Double) -> Void) {
             self.movie = movie
@@ -56,13 +59,12 @@ enum MovieConverter {
         }
 
         func abort() {
-            lock.lock()
-            aborted = true
-            let reader = reader
-            let writer = writer
-            lock.unlock()
-            reader?.cancelReading()
-            writer?.cancelWriting()
+            let (reader, writer) = state.withLock { state in
+                state.aborted = true
+                return (state.reader, state.writer)
+            }
+            reader?.value.cancelReading()
+            writer?.value.cancelWriting()
         }
 
         func run() async -> MovieConverter.Outcome {
@@ -86,14 +88,15 @@ enum MovieConverter {
             try? FileManager.default.removeItem(at: output)
             let reader = try AVAssetReader(asset: asset)
             let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
-            lock.lock()
-            if aborted {
-                lock.unlock()
-                return .keptMovie(reason: "timed out")
+            let readerBox = UncheckedBox(reader)
+            let writerBox = UncheckedBox(writer)
+            let abortedEarly = state.withLock { state -> Bool in
+                guard !state.aborted else { return true }
+                state.reader = readerBox
+                state.writer = writerBox
+                return false
             }
-            self.reader = reader
-            self.writer = writer
-            lock.unlock()
+            if abortedEarly { return .keptMovie(reason: "timed out") }
 
             let videoOut = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: nil)
             videoOut.alwaysCopiesSampleData = false
@@ -157,11 +160,7 @@ enum MovieConverter {
             return .converted(output)
         }
 
-        private var isAborted: Bool {
-            lock.lock()
-            defer { lock.unlock() }
-            return aborted
-        }
+        private var isAborted: Bool { state.withLock { $0.aborted } }
 
         /// Copies samples until the output runs dry or the input refuses one; always marks the input finished,
         /// so the other pump can't wait forever.
@@ -173,23 +172,19 @@ enum MovieConverter {
             let output = UncheckedBox(output)
             let input = UncheckedBox(input)
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                var done = false
+                // Only touched on `queue`; a lock keeps the compiler (and a stray callback) honest.
+                let done = Mutex(false)
                 input.value.requestMediaDataWhenReady(on: queue) {
-                    guard !done else { return }
+                    guard !done.withLock({ $0 }) else { return }
+                    func finish() {
+                        done.withLock { $0 = true }
+                        input.value.markAsFinished()
+                        continuation.resume()
+                    }
                     while input.value.isReadyForMoreMediaData {
-                        guard let sample = output.value.copyNextSampleBuffer() else {
-                            done = true
-                            input.value.markAsFinished()
-                            continuation.resume()
-                            return
-                        }
+                        guard let sample = output.value.copyNextSampleBuffer() else { return finish() }
                         onTime(CMSampleBufferGetPresentationTimeStamp(sample).seconds)
-                        if !input.value.append(sample) {
-                            done = true
-                            input.value.markAsFinished()
-                            continuation.resume()
-                            return
-                        }
+                        if !input.value.append(sample) { return finish() }
                     }
                 }
             }
