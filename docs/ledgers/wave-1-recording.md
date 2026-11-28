@@ -39,6 +39,18 @@ Trust this file and `git log` over memory.
 - Minor fixed in the same pass: M1 (flush loop ends when the recorder is gone), M2 (header written at once), M3 (open clicks forgotten at pause), M4 (`AXElementInfo` fields `private(set)`; the `AXSecureTextField` subrole forces secure), M5 (timer cancelled when the reader answers), M7 (header `hasElements` false without a reader), M8 (gate wait bounded), M9 (dates without milliseconds read).
 - claude-review on #4 (2703ee8): 0 Critical, 0 Important, 2 Minor, both fixed with a failing test first: (1) a decoded element line with the `AXSecureTextField` subrole kept its title: `TimelineElement`'s field initializer is now failable for that subrole and the reader writes `withheld`; (2) `TimelineStore.observe` deleted on the main actor: deletions now run detached, and `waitForDeletions` reports them done.
 
+## Final review of PR #13 (slice 2)
+
+Fresh reviewer: 1 Critical, 5 Important, 7 Minor. Each fix has a test in `RecordingFlowReviewTests` that was seen failing first (13 failures before the fix).
+- C1 a Pause before the first frame dropped `takeStarted`: the timer read 00:00, Restart and Discard didn't ask, and delivery had no date. `takeStarted` in paused now starts the clock paused at the first frame. The writer (slice 5) follows the same rule.
+- I1 losing Screen Recording mid-take posted an invented "Recording stopped / Screen Recording was declined." notice: it now stops the take and shows Capture's alert (§5.7).
+- I2 the bubble's double-click size was refused once the bar closed: `option(.bubbleSize)` is taken from the countdown to the end of the take, saved, and kept across Restart.
+- I3 the alert bookkeeping: an alert survives a pause; a second Restart or Discard while one is up is ignored; a take that ends another way emits `dismissConfirm(s)` (new effect).
+- I4 the stale-ready cancel was dead code: a late `recorderReady` for any prepared session is cancelled again (idempotent in the shell), never for a stopped one. Found on the way: without that last rule, a late ready after Stop would cancel, and delete, a take being finished.
+- I5 the invariant checker gained: stop-after-cancel and cancel-after-stop, a discarded take never delivered, a monotonic ● timer that doesn't move while paused, failure paths in the drain, no `Date()`. R1 per attempt is structural (leaving and returning alternate), noted rather than tested.
+- Minor fixed: M1 (final punctuation, empty error), M2 (camera loss with Cam off is silent), M3 (`failedToStart` built explicitly), M7 (dead lines, table tests for quit, targetGone and restart from paused). `recordingHotkeyIsIgnoredDuringAScreenshotSelection` stays beside its twin: the spec names it.
+- Minor as rulings or backlog: M4, M5, M6 below.
+
 ## Rulings
 
 Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as `Ruling: <what and why> (cost if wrong: …)`.
@@ -57,6 +69,10 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 - Ruling (slice 2): an extra event `conversionProgress(s, fraction)` drives the ● menu's `Finishing… <n> %`, which the spec's event list didn't have. The finishing entry's id is `recording.finishing` (disabled); the menu ids are `recording.pause|resume|stop|restart|discard`. (cost if wrong: none.)
 - Ruling (slice 2): the reducer keeps the set of live recorders: each `prepareRecorder(s)` gets exactly one `stopRecorder(s)` or `cancelRecorder(s)` (R3), and a late `recorderReady` for a moved-on session is cancelled only if that session's recorder was never ended. The shell's `cancelRecorder` must also cancel a recorder still preparing. (cost if wrong: low.)
 - Ruling (slice 2): bug found by the invariant test: with `recording.timeline` off, Stop emitted `timeline(finish)` for a timeline never started. The flow now tracks an open timeline and emits `finish` / `discard` only after a `start`. (cost if wrong: none.)
+- Ruling (slice 2, review M4): a permission answer arriving after Record is ignored: the countdown records what was effective at Record (R8), and the next recording picks the new permission up. (cost if wrong: low.)
+- Ruling (slice 2, review M5): `stopKey` stays a property the controller sets before each event; slice 6 tests that the ● menu's Stop shows the current binding after a change. (cost if wrong: low.)
+- Ruling (slice 2, review I4): the shell's `cancelRecorder(s)` is idempotent and tears down a recorder still preparing; the reducer cancels a late ready for any prepared, unstopped session. (cost if wrong: low.)
+- Ruling (slice 2, review C1): a take paused before its first frame starts paused: its clock begins and pauses at the first frame's host time. (cost if wrong: low.)
 - Ruling (slice 2): disk thresholds are decimal (1 GB = 10⁹ bytes, 300 MB, 50 MB), as Finder shows free space. (cost if wrong: low; 7 % either way.)
 - Ruling (slice 2): `cameraUnavailable` is handled from configuring to paused (the bubble shows during set-up): bubble removed, `recording.camera` false, notice. In configuring the bar updates too. (cost if wrong: none.)
 - Ruling (slice 2): a stopped recording keeps its stop notice (disk full, failure) until delivery, then posts it after the `.mov` notice if any; "Nothing was recorded" replaces it when no frame was written. (cost if wrong: low.)
@@ -65,6 +81,8 @@ Plan rulings P1–P8 are in the plan. Every later deviation is recorded here as 
 ## Waiting on
 
 ## Backlog
+
+- 2026-11-28, PR #13 review M6: no deadline on `stopping` / `delivering`. The controller (slice 6) guarantees `stopped` and `delivered` always arrive (a `defer`, as `design/04` §2.9), tested with a recorder that throws, so ⌘Q never waits forever.
 
 - 2026-11-28, PR #4 review M6: `TimelineRecorder.init` creates the folder and file synchronously in the caller's context; the controller (slice 6) must create it off the main actor, or the recorder gains an async factory.
 - 2026-11-28, PR #4 review I1: slice 4's `AXPointReader` must set `AXUIElementSetMessagingTimeout` (≤ 250 ms) and run off the cooperative pool.

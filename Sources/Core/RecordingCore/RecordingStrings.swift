@@ -89,7 +89,7 @@ public enum RecordingStrings {
     public static func sentence(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
-        return trimmed.hasSuffix(".") ? trimmed : trimmed + "."
+        return [".", "?", "!", "…"].contains(where: trimmed.hasSuffix) ? trimmed : trimmed + "."
     }
 
     // Notices (§5.7).
@@ -109,7 +109,9 @@ public enum RecordingStrings {
             title: "Recovered a recording", body: "Bugeye quit while recording. What was recorded has been kept.")
 
         public static func stopped(error: String) -> RecordingNotice {
-            RecordingNotice(title: "Recording stopped", body: sentence(error) + " What was recorded has been kept.")
+            let kept = "What was recorded has been kept."
+            let text = sentence(error)
+            return RecordingNotice(title: "Recording stopped", body: text.isEmpty ? kept : text + " " + kept)
         }
 
         public static func couldNotStart(error: String) -> RecordingNotice {

@@ -183,6 +183,8 @@ public enum RecordingEffect: Hashable, Sendable {
     case ticker(start: Bool)
     case statusItem(StatusItemOverride?)
     case confirm(SessionID, ConfirmKind)
+    /// Closes the Restart / Discard alert left open when the take ended another way.
+    case dismissConfirm(SessionID)
     /// Seconds from now.
     case convert(SessionID, URL, deadline: Double)
     case deliver(SessionID, URL, date: Date?, duration: Double)
@@ -214,6 +216,8 @@ public struct RecordingFlow: Sendable {
     private var lastSession = 0
     /// Sessions whose recorder was prepared and not yet stopped or cancelled (R3).
     private var liveRecorders: Set<SessionID> = []
+    /// Every session a recorder was prepared for (the last 64): a late `recorderReady` for one is cancelled.
+    private var preparedRecorders: [SessionID] = []
     private var progress: Double?
     /// A timeline was started for the current take and not yet finished or discarded (R6).
     private var timelineOpen = false
@@ -234,8 +238,12 @@ public struct RecordingFlow: Sendable {
             return []
         }
         let before = state
-        let effects = transition(event)
-        if effects != nil, !sameCase(before, state) { confirming = nil }
+        guard let effects = transition(event) else { return nil }
+        if let open = confirming, !sameCase(before, state) {
+            // The take ended another way while its alert was up: close it (its answer would mean nothing).
+            confirming = nil
+            return [.dismissConfirm(open.session)] + effects
+        }
         return effects
     }
 
@@ -308,11 +316,13 @@ public struct RecordingFlow: Sendable {
             let effective = effectiveOptions(options, permissions: permissions, devices: devices)
             state = .countingDown(s, target, effective, remaining: Self.countdownStart, recorderReady: false)
             liveRecorders.insert(s)
+            notePrepared(s)
             return [
                 .closeBar, .countdown(Self.countdownStart),
                 .prepareRecorder(s, RecorderRequest(target: target, options: effective)),
             ]
         case (.configuring(let s, let target, let options, let permissions, let devices), .cameraUnavailable):
+            guard options.camera else { return [] }
             let updated = options.applying(.camera(false))
             state = .configuring(s, target, updated, permissions: permissions, devices: devices)
             let effective = effectiveOptions(updated, permissions: permissions, devices: devices)
@@ -350,11 +360,23 @@ public struct RecordingFlow: Sendable {
         case (.countingDown(let s, _, _, _, _), .quitRequested):
             return cancelStart(s, endActivity: .recordingSetup) + [.allowQuit]
         case (.countingDown(let s, let target, var options, let remaining, let ready), .cameraUnavailable):
+            guard options.camera else { return [] }
             options.camera = false
             state = .countingDown(s, target, options, remaining: remaining, recorderReady: ready)
             return cameraLost(s)
 
+        case (
+            .countingDown(let s, let target, var options, let remaining, let ready), .option(_, .bubbleSize(let size))
+        ):
+            options.bubbleSize = size
+            state = .countingDown(s, target, options, remaining: remaining, recorderReady: ready)
+            return bubbleResized(options)
+
         // starting
+        case (.starting(let s, let target, var options), .option(_, .bubbleSize(let size))):
+            options.bubbleSize = size
+            state = .starting(s, target, options)
+            return bubbleResized(options)
         case (.starting(let s, let target, let options), .recorderReady):
             return goLive(s, target, options)
         case (.starting(let s, _, _), .recorderFailed(_, let failure)):
@@ -365,6 +387,7 @@ public struct RecordingFlow: Sendable {
         case (.starting(let s, _, _), .quitRequested):
             return cancelStart(s, endActivity: .recording) + [.allowQuit]
         case (.starting(let s, let target, var options), .cameraUnavailable):
+            guard options.camera else { return [] }
             options.camera = false
             state = .starting(s, target, options)
             return cameraLost(s)
@@ -375,6 +398,14 @@ public struct RecordingFlow: Sendable {
             take.clock.begin(at: host)
             take.startedAt = date
             state = .recording(s, take)
+            return [.log("first frame")]
+        case (.paused(let s, var take), .takeStarted(_, let host, let date)):
+            // Paused before the first frame (C1): the take starts paused at its first frame.
+            guard take.startedAt == nil else { return nil }
+            take.clock.begin(at: host)
+            take.clock.pause(at: host)
+            take.startedAt = date
+            state = .paused(s, take)
             return [.log("first frame")]
         case (.recording(let s, var take), .pause(_, let host)):
             take.clock.pause(at: host)
@@ -392,12 +423,14 @@ public struct RecordingFlow: Sendable {
             if take.ticks % Self.ticksPerDiskCheck == 0 { effects.append(.diskCheck) }
             return effects
         case (.recording(let s, let take), .restart(_, let host)), (.paused(let s, let take), .restart(_, let host)):
+            guard confirming == nil else { return nil }
             if take.elapsed(at: host) > Self.confirmAfterSeconds {
                 confirming = (s, .restart)
                 return [.confirm(s, .restart)]
             }
             return restart(s, take)
         case (.recording(let s, let take), .discard(_, let host)), (.paused(let s, let take), .discard(_, let host)):
+            guard confirming == nil else { return nil }
             if take.elapsed(at: host) > Self.confirmAfterSeconds {
                 confirming = (s, .discard)
                 return [.confirm(s, .discard)]
@@ -414,6 +447,10 @@ public struct RecordingFlow: Sendable {
             return stop(s, take, notice: nil, reason: "quit")
         case (.recording(let s, let take), .recorderFailed(_, let failure)),
             (.paused(let s, let take), .recorderFailed(_, let failure)):
+            // Losing Screen Recording shows Capture's alert, not a notice (§5.7).
+            guard failure != .userDeclined else {
+                return stop(s, take, notice: nil, reason: "failed: \(failure.text)") + [.screenPermissionAlert]
+            }
             return stop(
                 s, take, notice: RecordingStrings.Notice.stopped(error: failure.text), reason: "failed: \(failure.text)"
             )
@@ -421,7 +458,13 @@ public struct RecordingFlow: Sendable {
             (.paused(let s, let take), .diskChecked(_, let free)):
             guard DiskGuard.mustStop(freeBytes: free) else { return [] }
             return stop(s, take, notice: RecordingStrings.Notice.diskFull, reason: "disk")
+        case (.recording(let s, var take), .option(_, .bubbleSize(let size))),
+            (.paused(let s, var take), .option(_, .bubbleSize(let size))):
+            take.options.bubbleSize = size
+            state = isPaused ? .paused(s, take) : .recording(s, take)
+            return bubbleResized(take.options)
         case (.recording(let s, var take), .cameraUnavailable), (.paused(let s, var take), .cameraUnavailable):
+            guard take.options.camera else { return [] }
             take.options.camera = false
             state = isPaused ? .paused(s, take) : .recording(s, take)
             return cameraLost(s)
@@ -510,6 +553,11 @@ public struct RecordingFlow: Sendable {
         return effects
     }
 
+    private mutating func notePrepared(_ s: SessionID) {
+        preparedRecorders.append(s)
+        if preparedRecorders.count > 64 { preparedRecorders.removeFirst() }
+    }
+
     private mutating func cancelRecorder(_ s: SessionID) -> [RecordingEffect] {
         liveRecorders.remove(s) == nil ? [] : [.cancelRecorder(s)]
     }
@@ -525,7 +573,8 @@ public struct RecordingFlow: Sendable {
         let report: RecordingEffect =
             failure == .userDeclined
             ? .screenPermissionAlert : .notify(RecordingStrings.Notice.couldNotStart(error: failure.text))
-        return cancelStart(s, endActivity: endActivity).dropLast() + [
+        state = .idle
+        return cancelRecorder(s) + teardown(endActivity: endActivity) + [
             report, .log("failed: \(failure.text)"), .log("finish \(s)"),
         ]
     }
@@ -536,6 +585,8 @@ public struct RecordingFlow: Sendable {
         state = .finishing(s, .stopping, notice: notice, startedAt: take.startedAt, duration: nil)
         progress = nil
         liveRecorders.remove(s)
+        // A stopped take is finishing: a late ready must never cancel (and delete) it.
+        preparedRecorders.removeAll { $0 == s }
         return windDown(take, stopping: true) + [.closeBorder, .stopRecorder(s), .log("stop \(reason)")]
     }
 
@@ -544,6 +595,7 @@ public struct RecordingFlow: Sendable {
         let next = SessionID(lastSession)
         state = .countingDown(next, take.target, take.options, remaining: Self.countdownStart, recorderReady: false)
         liveRecorders.insert(next)
+        notePrepared(next)
         // The bubble stays through the new countdown (it is shown during set-up).
         var effects = windDown(take, stopping: false, keepBubble: take.options.camera) + cancelRecorder(s)
         effects += closeTimeline(.discard)
@@ -567,6 +619,14 @@ public struct RecordingFlow: Sendable {
         guard timelineOpen else { return [] }
         timelineOpen = false
         return [.timeline(command)]
+    }
+
+    /// The bubble's double-click size, once the bar is closed (§5.4): saved, and the bubble resized.
+    private func bubbleResized(_ options: RecordingOptions) -> [RecordingEffect] {
+        let setting = RecordingOptionChange.bubbleSize(options.bubbleSize).setting
+        var effects: [RecordingEffect] = [.persist(key: setting.key, value: setting.value)]
+        if options.camera { effects.append(.bubble(wish(options))) }
+        return effects
     }
 
     private func cameraLost(_ s: SessionID) -> [RecordingEffect] {
@@ -614,9 +674,12 @@ public struct RecordingFlow: Sendable {
     // MARK: Stale sessions (R9)
 
     private mutating func staleEvent(_ event: RecordingEvent, _ session: SessionID) -> [RecordingEffect]? {
-        // A recorder that becomes ready for a session that moved on is cancelled (R3), once.
-        guard case .recorderReady = event, liveRecorders.contains(session) else { return nil }
-        return cancelRecorder(session)
+        // A recorder that becomes ready for a session that moved on is cancelled (the §6 row; `design/04` §2.3),
+        // even when its cancel was already sent: the shell's cancel is idempotent and a recorder still preparing
+        // may have missed it.
+        guard case .recorderReady = event, preparedRecorders.contains(session) else { return nil }
+        liveRecorders.remove(session)
+        return [.cancelRecorder(session)]
     }
 
     // MARK: Status item (§5.3)
@@ -651,9 +714,11 @@ public struct RecordingFlow: Sendable {
             ])
     }
 
+    /// Recording and paused of one session are one take: an alert survives a pause.
     private func sameCase(_ a: RecordingState, _ b: RecordingState) -> Bool {
         switch (a, b) {
-        case (.recording, .recording), (.paused, .paused): a.session == b.session
+        case (.recording, .recording), (.paused, .paused), (.recording, .paused), (.paused, .recording):
+            a.session == b.session
         default: false
         }
     }
@@ -673,7 +738,8 @@ public enum RecordingMenu {
 extension RecorderFailure {
     var text: String {
         switch self {
-        case .userDeclined: "Screen Recording was declined"
+        // Logged only; the user sees Capture's alert.
+        case .userDeclined: "user declined"
         case .other(let description): description
         }
     }
