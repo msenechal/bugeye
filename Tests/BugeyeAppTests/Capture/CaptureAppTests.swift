@@ -58,7 +58,7 @@ private func makeView(render: @escaping () -> OverlayRender?, send: @escaping (F
     @Test func theSweepClosesOtherSessionsWindowsAndLogsVisibleOnes() throws {
         let shell = AppCaptureShell()
         var logged: [String] = []
-        shell.onLog = { logged.append($0.1) }
+        shell.onLog = { logged.append($1) }
         shell.showOverlays(SessionID(1), frames: [try frozen()], mode: .area)
         shell.showOverlays(SessionID(2), frames: [try frozen()], mode: .area)
         let old = try #require(shell.overlays[SessionID(1)]?.first)
