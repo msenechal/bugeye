@@ -2,11 +2,16 @@ import BugeyeCore
 
 /// The text map: a word map as plain text with rows and indentation (OCR §4.6).
 public enum TextLayout {
+    /// Below this many pixels per character there is no indentation: no real text is that narrow, and a bad
+    /// recogniser result would otherwise indent by tens of thousands of spaces (ledger ruling, PR #5 review).
+    public static let minimumCharacterWidth = 1.0
+
     /// The widest first line `summary` keeps, in characters.
     public static let summaryLength = 60
 
     /// One output line per row, the row's line texts joined with one space, indented by
-    /// `round((row.minX − leftmost minX) / characterWidth)` spaces (half away from zero); nil with no rows.
+    /// `round((row.minX − leftmost minX) / characterWidth)` spaces (half away from zero), or none when the
+    /// character width is under `minimumCharacterWidth`; nil with no rows.
     public static func lines(_ map: TextMap) -> String? {
         var rows: [[TextLine]] = []
         for line in map.lines {
@@ -21,7 +26,8 @@ public enum TextLayout {
         let leftmost = rowMinX.min() ?? 0
         let width = characterWidth(map)
         return zip(rows, rowMinX).map { row, minX in
-            let indent = width > 0 ? Int(((minX - leftmost) / width).rounded(.toNearestOrAwayFromZero)) : 0
+            let indent =
+                width >= minimumCharacterWidth ? Int(((minX - leftmost) / width).rounded(.toNearestOrAwayFromZero)) : 0
             return String(repeating: " ", count: max(indent, 0)) + row.map(\.text).joined(separator: " ")
         }.joined(separator: "\n")
     }

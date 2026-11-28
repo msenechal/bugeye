@@ -62,6 +62,12 @@ import Testing
         #expect(TextLayout.lines(m) == "y\nx")
     }
 
+    @Test func aCharacterWidthBelowOnePixelMeansNoIndent() {
+        // A bad recogniser result: 0.01 px per character would indent the second row by 50,000 spaces.
+        let m = map([ocr(String(repeating: "i", count: 1000), rect(0, 0, 10, 20)), ocr("x", rect(500, 40, 0.01, 20))])
+        #expect(TextLayout.lines(m) == String(repeating: "i", count: 1000) + "\nx")
+    }
+
     @Test func anEmptyMapHasNoText() {
         #expect(TextLayout.lines(TextMap(width: 10, height: 10, lines: [])) == nil)
     }
