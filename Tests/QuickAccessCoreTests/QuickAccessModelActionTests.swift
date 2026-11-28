@@ -235,6 +235,7 @@ import Testing
         h.handle(.stripTapped(item.id, .save))
         let same = URL(fileURLWithPath: item.fileURL.path + "/../" + item.fileURL.lastPathComponent)
         #expect(h.handle(.saveAsChosen(item.id, same)).isEmpty)
+        h.handle(.stripTapped(item.id, .save))  // a fresh Save As…: the first answer cleared the pending copy
         #expect(h.handle(.saveAsChosen(item.id, item.fileURL)).isEmpty)
     }
 
