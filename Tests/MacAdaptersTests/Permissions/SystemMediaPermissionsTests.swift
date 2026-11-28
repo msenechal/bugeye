@@ -11,8 +11,8 @@ import Testing
         #expect(SystemMediaPermissions.state(.restricted) == .denied)
     }
 
-    /// Reading never prompts; Accessibility is never "not determined".
-    @Test func statesReadWithoutPrompting() {
+    /// Reading doesn't crash or prompt; Accessibility reads granted or denied.
+    @Test func statesReadWithoutCrashing() {
         let permissions = SystemMediaPermissions()
         _ = permissions.state(.microphone)
         _ = permissions.state(.camera)

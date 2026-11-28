@@ -27,15 +27,30 @@ import Testing
         #expect(field.title == nil)
     }
 
+    /// PR #17 review I1: a text field's title (or description) can be what was typed: never kept.
+    @Test func textEntryElementsKeepNoTitle() {
+        for (role, subrole) in [
+            ("AXTextField", nil), ("AXTextArea", nil), ("AXComboBox", nil), ("AXTextField", "AXSearchField"),
+        ] {
+            let info = AXPointReader.info(
+                role: role, subrole: subrole, title: "hunter2", description: "hunter2", frame: .zero)
+            #expect(info.title == nil)
+            #expect(info.text == nil)
+            #expect(info.isTextEntry)
+        }
+    }
+
     @Test func untrustedAnswersNilAndWindowQueriesAreUnsupported() async throws {
         let reader = AXPointReader(isTrusted: { false })
         #expect(try await reader.element(at: Point2D(x: 10, y: 10)) == nil)
         await #expect(throws: AXPointReader.Failure.unsupported) { try await reader.elements(inWindowOf: 1) }
     }
 
-    /// On the runner (Accessibility rarely granted) the real query must return, not hang or crash.
-    @Test func aRealQueryReturns() async throws {
-        let reader = AXPointReader()
+    /// The real calls run (the runner isn't trusted, so they fail fast) and the lookup returns within its deadline.
+    @Test func aRealQueryReturnsWithinItsDeadline() async throws {
+        let reader = AXPointReader(deadline: 0.25, isTrusted: { true })
+        let started = ContinuousClock.now
         _ = try await reader.element(at: Point2D(x: 5, y: 5))
+        #expect(ContinuousClock.now - started < .seconds(2))
     }
 }
