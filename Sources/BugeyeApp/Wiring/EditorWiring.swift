@@ -1,7 +1,6 @@
 import BugeyeCore
 import BugeyeFeatures
 import EditorCore
-import Foundation
 
 /// The editor's registration (E2, K7): the module, the Quick Access Edit action (button and double-click),
 /// Open Last Capture, the screenshot opener and the quit prompt.
@@ -14,7 +13,7 @@ enum EditorWiring {
             environment: EditorManager.environment(
                 bus: context.captureEvents, documentWindows: context.documentWindows, writer: context.fileWriter,
                 clipboard: context.clipboard, notifier: context.notifier,
-                saveFolder: { [weak context] in context?.general.folderURL ?? URL(fileURLWithPath: NSHomeDirectory()) }
+                saveFolder: { [general = context.general] in general.folderURL }
             ))
         let lastCapture = LastCapture(bus: context.captureEvents, router: context.router)
         context.retain(manager)

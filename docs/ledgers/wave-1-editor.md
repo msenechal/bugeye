@@ -11,7 +11,7 @@ Trust this file and `git log` over memory.
 | A executor | `feat/wave1-editor-executor` | https://github.com/msenechal/bugeye/pull/7 | draft; final review done |
 | B core | `feat/wave1-editor-core` | https://github.com/msenechal/bugeye/pull/14 | draft; final review done, fix pass below |
 | C app | `feat/wave1-editor-app` | https://github.com/msenechal/bugeye/pull/18 | draft; final review done, fix pass below |
-| D wiring | `feat/wave1-editor-wiring` | (draft) | waits for Capture's and Quick Access's wiring PRs |
+| D wiring | `feat/wave1-editor-wiring` | https://github.com/msenechal/bugeye/pull/26 | waits for Capture's and Quick Access's wiring PRs |
 
 ## Tasks
 
@@ -115,6 +115,18 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 
 - Ruling (claude-review on #14, Minor, not changed): `EditorSessions` keeps its `fileExists` check and Save As's `realpath` comparisons on the main actor. Each user action does one cached metadata lookup (plus two `realpath` calls for Save As), and the check has to decide between the gone alert and a render before either starts (E19). Decode, render, encoding and the write itself stay off the main actor. If a capture on a network volume ever stalls the UI, the fix is an async existence check with the same ordering. (cost if wrong: low; a brief stall on a slow network volume.)
 - Ruling (claude-review on #18, Important): the drag handle's export is tied to the press that started it, by a generation counter that every press and release advances. A late export from an earlier press can no longer become the dragged file, and a release cancels the export (this was in the backlog as final review C's Minor). A test drives two presses against a slow first export. It can't be seen failing on Linux; the macOS job is the check. (cost if wrong: none.)
+
+- Ruling (final review D, I1, Important): a test drives every entry point through the router: Edit, double-click, the screenshot opener and Open Last Capture. It sees the retained manager react through the open-failed notice, which needs no window. A `.recording` item through Edit does nothing. It also checks that install shows nothing and opens no document window. Deleting `context.retain(manager)` makes it fail. (cost if wrong: none.)
+- Ruling (final review D, Minors): fixed.
+  - The save-folder closure captures `GeneralSettings`, with no unreachable fallback.
+  - The vacuous `AppServices.modules` test is dropped.
+  - The checklist got three fixes:
+    - B3 runs on a fresh capture with the drag tools named.
+    - The Shortcuts table gains ⇧⌘3 and "⇧⌘4, then Space", and the prerequisites now say macOS's own screenshot shortcuts must be off.
+    - The xattr checks CI already covers are dropped, and A5 now checks the real missing-file notice.
+  - The PR body's `Next` line points to `docs/backlog.md`.
+
+  (cost if wrong: none.)
 
 ## Waiting on
 

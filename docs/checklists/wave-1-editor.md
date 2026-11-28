@@ -13,7 +13,7 @@ Run it on the Editor wiring PR's build (`feat/wave1-editor-wiring`), once Captur
    git fetch origin && git checkout feat/wave1-editor-wiring && git pull
    make install
    ```
-3. Have Screen Recording permission for the new Bugeye (Capture's checklist sets it up).
+3. Have Screen Recording permission for the new Bugeye, and macOS's own ⇧⌘3 / ⇧⌘4 screenshot shortcuts turned off (Capture's checklist sets both up).
 4. Prepare:
    - a window with some text on screen (Safari on any article);
    - a 5K display, or a capture of a full Retina screen, for test J;
@@ -24,6 +24,8 @@ Run it on the Editor wiring PR's build (`feat/wave1-editor-wiring`), once Captur
 | Key or item | Where | Does |
 |---|---|---|
 | ⇧⌘4 | anywhere | Capture Area (Capture) |
+| ⇧⌘4, then Space | anywhere | Capture Window (Capture) |
+| ⇧⌘3 | anywhere | Capture Fullscreen (Capture) |
 | Edit, or a double-click | Quick Access thumbnail | opens the editor |
 | Open Last Capture | Bugeye status menu | opens the newest capture |
 | V C A R O L T P H B N | the canvas | Select, Crop, Arrow, Rectangle, Ellipse, Line, Text, Pen, Highlighter, Blur / Pixelate, Numbered step |
@@ -56,9 +58,11 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'   # catego
    **Expected:** the same window comes forward; no second window opens.
 4. Close it, then choose **Open Last Capture** in the status menu.
    **Expected:** the newest capture opens.
-5. Move the capture to the Trash in Finder, then open the status menu.
+5. With its thumbnail still up, move the newest capture to the Trash in Finder, then click **Edit** on the thumbnail.
+   **Expected:** no window, and the notice `Couldn't open capture` / `<name> is missing or unreadable.`
+6. Open the status menu.
    **Expected:** Open Last Capture is disabled.
-6. Close every editor.
+7. Close every editor.
    **Expected:** the Dock icon and the menu bar go away.
 
 ### B. Tools
@@ -67,7 +71,7 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'   # catego
    **Expected:** the button highlights; the cursor is an arrow for Select, an I-beam for Text and a crosshair for the rest; each shape appears where you drew it.
 2. Hold ⇧ while drawing a rectangle, an ellipse, an arrow and a line.
    **Expected:** a square, a circle, and 45° steps.
-3. Click once, without dragging, with each shape tool.
+3. Open a fresh capture. Click once, without dragging, with Arrow, Rectangle, Ellipse, Line, Pen, Highlighter and Blur / Pixelate.
    **Expected:** nothing is added, and Undo stays disabled.
 4. Add three numbered steps, then select step 2 and press ⌫.
    **Expected:** the old step 3 now shows 2; ⌘Z brings back 1 2 3.
@@ -110,7 +114,7 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'   # catego
    **Expected:** each value shows as `<n> pt`, and one slider drag is one undo.
 3. Click a slider, then use the arrow keys several times, then draw a shape.
    **Expected:** ⌘Z undoes the shape; the next ⌘Z undoes the whole keyboard run.
-4. Capture a window (Capture's window mode), then add the frame.
+4. Capture a window (⇧⌘4, then Space), then add the frame.
    **Expected:** the shadow follows the window's rounded corners.
 
 ### F. Undo
@@ -132,9 +136,9 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'   # catego
 ### H. Output
 
 1. Edit a capture and press ⌘S.
-   **Expected:** the Quick Access thumbnail shows the edit. `xattr -l` still shows the same `dev.msenechal.bugeye.id`. The log shows `saved <name> in N ms`.
+   **Expected:** the Quick Access thumbnail shows the edit, and the log shows `saved <name> in N ms`. (CI already checks the file's attributes survive.)
 2. Press ⇧⌘S and save a copy to the Desktop.
-   **Expected:** the copy's `dev.msenechal.bugeye.id` differs from the original's; the window keeps its title and still shows the edited dot.
+   **Expected:** the copy appears on the Desktop; the window keeps its title and still shows the edited dot.
 3. Press ⌘C, then paste into Slack.
    **Expected:** the edited image is pasted.
 4. Drag the hand icon into Finder.
@@ -157,7 +161,7 @@ log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'   # catego
 
 ### J. Big capture
 
-1. Capture a full 5K (or full Retina) screen, add a frame, and draw and move shapes.
+1. Capture a full 5K (or full Retina) screen with ⇧⌘3, add a frame, and draw and move shapes.
    **Expected:** it stays smooth.
 2. Add a Strong Blur over most of the image, then save.
    **Expected:** the blur appears within about a third of a second (E23: at 300 ms or more, the gaussian moves to Core Image). The log's `saved … in N ms` is reasonable.
