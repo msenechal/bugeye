@@ -136,9 +136,10 @@ public final class ShortcutsModel {
         endRecording()
     }
 
-    /// The field lost focus or the pane closed: recording ends with nothing changed.
-    public func stopRecording() {
-        guard rows.contains(where: \.isRecording) else { return }
+    /// A row's field lost focus, or the pane closed (nil): that recording ends with nothing changed. A field that
+    /// resigns after another row started recording leaves the new recording alone.
+    public func stopRecording(_ id: String? = nil) {
+        guard rows.contains(where: { $0.isRecording && (id == nil || $0.spec.id == id) }) else { return }
         endRecording()
     }
 

@@ -83,6 +83,8 @@ Slice 4 (app layer), final review of PR #27 (fresh reviewer): 1 Critical, 3 Impo
 
 - Ruling (claude-review on PR #27, Minor): only bare Esc and Delete cancel or clear while recording; with a modifier they're typed combos, which the model refuses as invalid. Carried in the next push, as the review rules ask. (cost if wrong: none.)
 
+- Ruling (claude-review on PR #28, unverified concern): a field that resigns after another row started recording no longer stops the new recording; `stopRecording(id)` ends only that row's recording (nil, from the pane closing, ends any). Test failed first. (cost if wrong: none.)
+
 ## Waiting on user
 
 ## Backlog:
