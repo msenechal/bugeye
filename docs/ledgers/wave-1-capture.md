@@ -59,6 +59,8 @@ Final review of PR #20 (slice 2, fresh reviewer): 0 Critical, 2 Important, 7 Min
 
 - Ruling (claude-review on PR #20, Minor): each queued event carries the settings read at its request, so a request made while effects run (queued) keeps its own snapshot instead of reloading at delivery. Test failed first. PR #20's linux and macos were green before this commit. (cost if wrong: none.)
 
+- Ruling (claude-review on PR #20, Important): a window-capture result checks that its session is still live and finishing before storing the image, as the freeze does. The path is unreachable today (nothing ends `finishing` while a window capture is awaited), so no test can fail first; the tests now assert no window image or frame is held after a window capture succeeds or fails. (cost if wrong: none.)
+
 ## Waiting on user
 
 ## Backlog:
