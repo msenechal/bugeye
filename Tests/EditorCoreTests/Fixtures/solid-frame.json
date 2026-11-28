@@ -1,0 +1,264 @@
+{
+  "commands" : [
+    {
+      "fillPath" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 0,
+                  "y" : 0
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 440,
+                  "y" : 0
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 440,
+                  "y" : 340
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 0,
+                  "y" : 340
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        },
+        "color" : {
+          "alpha" : 1,
+          "blue" : 1,
+          "green" : 1,
+          "red" : 1
+        }
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "isolated" : true,
+          "opacity" : 1
+        }
+      }
+    },
+    {
+      "clip" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 20,
+                  "y" : 20
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 420,
+                  "y" : 20
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 420,
+                  "y" : 320
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 20,
+                  "y" : 320
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "isolated" : false,
+          "opacity" : 1
+        }
+      }
+    },
+    {
+      "clip" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 20,
+                  "y" : 20
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 420,
+                  "y" : 20
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 420,
+                  "y" : 320
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 20,
+                  "y" : 320
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "image" : {
+        "imageID" : "capture",
+        "rect" : {
+          "origin" : {
+            "x" : 20,
+            "y" : 20
+          },
+          "size" : {
+            "height" : 300,
+            "width" : 400
+          }
+        }
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "bounds" : {
+            "origin" : {
+              "x" : 14,
+              "y" : 14
+            },
+            "size" : {
+              "height" : 82,
+              "width" : 82
+            }
+          },
+          "isolated" : true,
+          "opacity" : 1
+        }
+      }
+    },
+    {
+      "fillPath" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 30,
+                  "y" : 30
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 80,
+                  "y" : 30
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 80,
+                  "y" : 80
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 30,
+                  "y" : 80
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        },
+        "color" : {
+          "alpha" : 1,
+          "blue" : 0.19,
+          "green" : 0.23,
+          "red" : 1
+        }
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    }
+  ],
+  "size" : {
+    "height" : 340,
+    "width" : 440
+  }
+}
