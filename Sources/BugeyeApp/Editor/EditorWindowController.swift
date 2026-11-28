@@ -146,6 +146,12 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
             controller.setFrame(frame)
             canvas.refresh()
         }
+        model.onFrameApply = { [weak self] frame in
+            guard let self else { return }
+            canvas.commitText()
+            controller.applyFrame(frame)
+            canvas.refresh()
+        }
         model.onResetCrop = { [weak self] in
             guard let self else { return }
             canvas.commitText()
