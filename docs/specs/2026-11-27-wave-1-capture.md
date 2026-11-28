@@ -2,7 +2,7 @@
 
 **Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
 
-Capture rebuilds the first build's still captures (`design/02` §1.1–1.3): full screen, every display, area and window, the selection overlay, and output (save, copy, announce). It runs as one of the parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton, and shares one contract with the Quick Access epic (§3).
+Capture rebuilds the first build's still captures (`design/02` §1.1–1.3): full screen, every display, area and window, the selection overlay, and output (save, copy, announce). It runs as one of the parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton. Everything it shares with the other epics lands first in the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`); §3 lists what Capture uses from it.
 
 ## 1. Decisions
 
@@ -17,129 +17,49 @@ Rulings I made (each can be overturned at approval; cost if wrong in brackets):
 
 | # | Ruling | Why |
 |---|---|---|
-| C1 | **The contract with Quick Access lands first, alone.** PR 1 of this epic adds `CaptureItem`, `CaptureKind`, `CaptureEvent`, `CaptureEventBus`, the `Notifier` port, `HotkeySpec.title` and their fakes, nothing else (§3). The Quick Access session starts building against them only after PR 1 merges. After that, changing the contract needs a ruling in both ledgers. | Area cores can't depend on each other (Wave 0 P14), so the contract goes in `BugeyeCore`. A frozen contract is what lets the two sessions run in parallel. [Medium: a contract change after the merge costs both sessions a rework.] |
+| C1 | **The contract lands in the Wave 1 contracts PR, before this epic starts** (contracts K1). The bus, `CaptureItem`, the `Notifier` port, `HotkeySpec.title` and their fakes are no longer this epic's PR 1. After the merge, changing any of them is a contract amendment (contracts K2). | Five sessions need the same shared code; one PR lands it for all. [Medium: a contract change after the merge costs several sessions a rework.] |
 | C2 | **Capture stops at "announced".** Capture owns everything up to a saved and copied file and a `created` event on the bus. Quick Access owns thumbnails, Save, Save As, Delete, and the `saved`, `moved` and `deleted` events. Output step 3, "show Quick Access", becomes "publish `created`". | One owner per screen element. The bus replaces the first build's chained `onItemChanged` closures (`design/02` §5.9). [Low] |
 | C3 | **Clipboard in Wave 1 is PNG + file URL**, on one item, through the existing `ClipboardPayload`. Lazy TIFF, lazy HTML and provenance come with the provenance and clipboard epic (`design/06`, Wave 2). | The rich clipboard has its own spec. [Low: apps that only paste TIFF get nothing until then. Mail and Notes attach the file instead of embedding it.] |
-| C4 | **Screenshot purpose only.** The recording, scrolling and text overlay variants, their hints and their click rules are out of scope. The state machine still carries a `purpose`, and its tables mark where those purposes branch, so later epics add rows instead of rewriting it. | They belong to Wave 2 and later. [Low] |
-| C5 | **The Shortcuts pane belongs to the shell, and this epic builds it.** Like the AI pane (Wave 0 P5), it lists every module's `HotkeySpec`, so it lives in `BugeyeFeatures` (model) and `BugeyeApp` (view). It sits before AI in Settings. Capture is the first module with hotkeys, so this epic writes it. Later modules get rows for free. `HotkeySpec` gains a `title` for the row label (part of PR 1). | No module should own a pane that serves all modules. [Low] |
-| C6 | **Capture settings live in `CaptureCore`, not in `AppSettings`.** A `CaptureSettings` value is read through `SettingsStore` before each capture, under keys prefixed `capture.` (§5.7). Quick Access does the same with its own keys. | Two parallel sessions editing the shared `AppSettings` struct would collide. The old app uses a different bundle id, so there's nothing to migrate. [Low] |
-| C7 | **Frozen frames stay native images in the shell.** The core works on geometry (rects, scales, pixel crops) and on decisions. A macOS `ImagePipeline` adapter crops, downscales and encodes PNG with ImageIO, keeping each display's colour space. Pixels reach the core as `PixelBuffer` only where it needs them: window-shadow measurement on the window capture's alpha channel. | `PixelBuffer` has no colour space, and colours drifted on P3 displays once already (`design/05` A3). Copying a 6K display into RGBA8 just to crop it wastes about 80 MB and time. [Medium: if a later epic needs whole frozen frames in the core, it adds a conversion.] |
-| C8 | **Ports this epic changes or adds in `BugeyeCore`** (PR 2 onward, each with a ledgered ruling, Capture-only users): `ScreenSource` is reshaped to `freeze(displays:)` (one content fetch, concurrent, own windows excluded) plus `captureWindow(_:pixelSize:)`. New: `WindowListReader`, `ImagePipeline`, `ScreenCapturePermission`, `HotkeyRegistrar` and `SystemShortcutReader`. `DisplayInfo.frame` is documented as **Cocoa global** points. `CaptureFileWriter` gains `create(_:named:in:identity:)`, which never replaces an existing file (it uses `renameatx_np(RENAME_EXCL)` / `renameat2(RENAME_NOREPLACE)`, and on a clash the namer tries the next suffix). | Wave 0 allows port changes with a ruling. Without them `.withoutOverwriting` can't hold: the writer renames over its target. [Medium: these are shared files, so later waves inherit the shapes.] |
+| C4 | **Screenshot purpose, plus the selector Recording calls.** Capture implements the contract's `AreaSelector` (contracts §4.1.8, K15) for `.recording`: the request's hint, click-selects-display, the window-centre rule, the request's own last area, an external cancel, and the `.display` and `.busy` results (§6.1). The scrolling and text purposes stay out of scope; their rows are left for Wave 2. | One overlay owner (Recording V2). Scrolling and text belong to Wave 2. [Medium: Recording's last PR waits for this.] |
+| C5 | **The Shortcuts pane belongs to the shell, and this epic builds it**, in folders Capture owns in Wave 1: `Sources/BugeyeFeatures/Shortcuts/` (model) and `Sources/BugeyeApp/Shortcuts/` (view, registrar wiring). Like the AI pane (Wave 0 P5), it lists every module's `HotkeySpec`. The contracts PR adds its spec (`SettingsLayout.shortcutsPane`, before AI), `HotkeySpec.title` and `HotkeyBindings`; the pane appears once Capture registers its view. Later modules get rows for free. | No module should own a pane that serves all modules. [Low] |
+| C6 | **Capture settings live in `CaptureCore`, not in `AppSettings`.** A `CaptureSettings` value is read through `SettingsStore` before each capture, under keys prefixed `capture.` (§5.7). The two keys Recording also follows (`capture.copyToClipboard`, `capture.saveToFolder`) are read through the contract's `OutputSettings`. Quick Access does the same with its own keys. | Two parallel sessions editing the shared `AppSettings` struct would collide. The old app uses a different bundle id, so there's nothing to migrate. [Low] |
+| C7 | **Frozen frames stay native images in the shell.** The core works on geometry (rects, scales, pixel crops) and on decisions. A macOS `ImagePipeline` adapter (Capture-owned) crops, downscales and encodes PNG with ImageIO, keeping each display's colour space; it never decodes a file (contracts K9). Pixels reach the core as `PixelBuffer` (RGBA8, premultiplied, contracts §4.1.6) only where it needs them: window-shadow measurement on the window capture's alpha channel, and the `created` preview, both through the contract's `PixelBufferImages`. | `PixelBuffer` has no colour space, and colours drifted on P3 displays once already (`design/05` A3). Copying a 6K display into RGBA8 just to crop it wastes about 80 MB and time. [Medium: if a later epic needs whole frozen frames in the core, it adds a conversion.] |
+| C8 | **Capture-only ports live in `Sources/BugeyeCore/Ports/Capture/`, which this epic owns** (contracts K3; each change with a ruling in this epic's ledger). The contracts PR moves `ScreenSource` and `FakeScreenSource` there unchanged; this epic reshapes `ScreenSource` to `freeze(displays:)` (one content fetch, concurrent, own windows excluded) plus `captureWindow(_:pixelSize:)`, and adds `WindowListReader`, `ImagePipeline`, `HotkeyRegistrar` and `SystemShortcutReader`. Shared, from the contracts PR: `ScreenCapturePermission` and its adapter (Recording uses it too), `WindowID`, `DisplayInfo.frame` documented as **Cocoa global** points, and `CaptureFileWriter.create(_:named:in:identity:)`, which never replaces an existing file and suffixes ` (2)`, ` (3)` itself on a clash. | Wave 0 allows port changes with a ruling. Without `create`, `.withoutOverwriting` can't hold: the writer renames over its target. [Medium: later waves inherit the shapes.] |
 | C9 | **Return recaptures the single last area, on the display where it was taken** (`design/02` §1.1, as the user chose: as documented). It is persisted under `capture.lastArea` as JSON: display id, display-local rect, and that display's size in points, so it survives restarts. Return beeps when there is no last area, its display is gone or has changed size, or the crop is empty. Every area capture replaces it, Return included. | Follows §1.1 exactly; §5.10's "per display" only asked for persistence. [Low: a different rule is a small change in one transition.] |
 | C10 | **One timestamp per press for ⌥⇧⌘3.** Every display is frozen at once, so all files share the press time. Names take ` (2)`, ` (3)` in display order (primary display first, then `ScreenSource` order). For every mode, a file's name and `createdAt` are the moment its pixels were taken: freeze time for full screen, every display and area; live-capture time for a window. | Follows from the concurrent freeze. The first build's files carried different seconds (`design/02` §4). [Low] |
-| C11 | **Temp folder `~/Library/Caches/dev.msenechal.bugeye/Captures/`**, from one constant derived from the bundle id (`design/01` §5.7). Files older than 24 h are purged at launch and then every hour, off the main actor. | The documented path carries the old bundle id. Periodic purge is B2. [Low] |
-| C12 | **One action router in the shell.** `FeatureModule` is pure values. `AppServices` gains a map from menu-item and hotkey ids to `@MainActor` closures, which `AppDelegate`'s default branch looks up. The capture module joins `AppServices.modules` only in the epic's last PR, so `main` never shows half a feature. No feature flag. | The first module with actions builds the hook once. [Low] |
+| C11 | **Temp folder `~/Library/Caches/dev.msenechal.bugeye/Captures/`**, the contract's `CaptureFolders.temp(home:)` (`design/01` §5.7). This epic's janitor purges files older than 24 h at launch and then every hour, off the main actor. | The documented path carries the old bundle id. Periodic purge is B2. [Low] |
+| C12 | **Actions go through the contract's `ActionRouter`** (contracts K6): menu items with `onMenuItem`, hotkeys with `onHotkey`, registered from `CaptureWiring.install`. `CaptureModule` joins `CaptureWiring.modules`, and `install` gets its body, only in the epic's last PR, so `main` never shows half a feature. No feature flag (contracts K7). | One router serves every epic and the shell. [Low] |
 | C13 | **macOS screenshot-shortcut conflicts are detected only for keys Bugeye binds.** The shell reads `com.apple.symbolichotkeys` and compares each enabled macOS screenshot entry's key with Bugeye's current bindings. These are entries 28 ⇧⌘3, 29 ⌃⇧⌘3, 30 ⇧⌘4, 31 ⌃⇧⌘4, 184 ⇧⌘5 and 181 ⇧⌘6, with 181 counted as on when missing only on Touch Bar models (`design/05` A2). A conflict is not a registration failure: Carbon succeeds, but macOS gets the key first. The Wave 1 notice names only the conflicting keys. | The first build's body text also lists ⇧⌘5–⇧⌘9, which Bugeye doesn't bind yet. [Low: the entry numbers are checked in the Mac batch.] |
 | C14 | **No Settings "Setup" section in Wave 1.** The permission alert (§5.5) is the only permission UI. Settings doesn't open by itself at launch. Problems with shortcuts show as a notice and in the Shortcuts pane. | The Setup section serves the five permissions of later waves. It comes with the first epic that needs a second one. [Low] |
 | C15 | **New strings the docs don't give**, settled in §5: the `Capture failed` bodies for a failed disk write, a closed window and a lost display, and every Shortcuts-pane string. | Every string is settled before implementation (`design/11` §7). [Low] |
 | C16 | **A display change during selection cancels it.** Plugging, unplugging or rearranging a display while the overlay is up cancels the selection: overlays close and the result is `cancelled`. | Frozen frames and window lists go stale. The first build left this undefined. [Low] |
-| C17 | **Testing split** (§8): the portable core on Linux; the AppKit wiring, ImageIO and pasteboard on hosted macOS CI; real ScreenCaptureKit, permission, hotkeys against the old app, and the overlay's look in the Mac batch and your manual pass. Every PR that touches capture gets the `needs-mac-check` label. | Hosted runners can't grant Screen Recording (`design/14` R8, R9). [Low] |
+| C17 | **Testing split** (§8): the portable core on Linux; the AppKit wiring and ImageIO on hosted macOS CI (the pasteboard and notifier adapters are the contracts PR's); real ScreenCaptureKit, permission, hotkeys against the old app, and the overlay's look in the Mac batch and your manual pass. Every PR that touches capture gets the `needs-mac-check` label. | Hosted runners can't grant Screen Recording (`design/14` R8, R9). [Low] |
+| C18 | **Reconciled with the Wave 1 contracts spec** (27 Nov 2026). The former PR 1 contract, the router (C12), the writer's `create`, the clipboard and notifier adapters, `ScreenCapturePermission` and the temp-folder constant moved into the contracts PR; Capture's scope gained the `AreaSelector` rows for Recording (C4, §6.1) and the `ScreenActivity` rule (§6), which refuses screenshots during a recording's set-up as `design/01` §1.2 documents (contracts §6, item 3). No settled string changed. | One contract for five parallel epics. [Low] |
 
 ## 2. Scope
 
 In scope:
-1. The contract with Quick Access (§3), in its own first PR.
+1. Nothing shared: what Capture uses from other epics' work and the shell comes from the Wave 1 contracts PR (§3).
 2. Capture modes: ⇧⌘3, ⌥⇧⌘3, ⇧⌘4 (area, Space for window, Return for the last area), and the menu items Capture Area, Capture Window, Capture Fullscreen.
-3. The selection overlay for screenshots, and window captures at full scale with their shadow.
+3. The selection overlay for screenshots, and window captures at full scale with their shadow. The same overlay behind the contract's `AreaSelector`, for Recording's selection (C4, §6.1).
 4. Output: save (with the temp fallback), copy (PNG + file URL), publish `created`; naming; temp folder and purge; downscale.
 5. The Screen Recording permission alert and relaunch.
-6. Global hotkeys: the Carbon registrar, the temporary Esc hotkey, the Shortcuts pane, macOS conflict detection, launch notices.
-7. The Capture settings pane, notifications (the `Notifier` port and its adapter), logging.
+6. Global hotkeys: the Carbon registrar (every module's `HotkeySpec`, each press routed through `ActionRouter.performHotkey`), the temporary Esc hotkey, the Shortcuts pane, macOS conflict detection, launch notices.
+7. The Capture settings pane, logging.
 
-Out of scope: Quick Access (its own epic); recording, scrolling and text capture and their overlay variants (C4); provenance, AX snapshot, sensitive sweep, indexing; Open Last Capture (it needs the editor); the rich clipboard (C3); the Settings Setup section (C14); `HotkeyRoute` rules for recording and guide; the disk guard; folder migration (the old app has its own bundle id).
+Out of scope: Quick Access (its own epic); recording itself, scrolling and text capture and their overlay variants (C4: only the selector's recording rows are in); provenance, AX snapshot, sensitive sweep, indexing; Open Last Capture (it needs the editor); the rich clipboard (C3); the Settings Setup section (C14); `HotkeyRoute` rules for recording and guide; the disk guard; folder migration (the old app has its own bundle id).
 
-## 3. The contract (PR 1)
+## 3. Uses from the contracts
 
-Files: `Sources/BugeyeCore/Captures/CaptureItem.swift`, `CaptureEventBus.swift`, `Sources/BugeyeCore/Ports/Notifier.swift`, the `title` on `HotkeySpec` in `BugeyeFeatures`, `CaptureEventRecorder` and `FakeNotifier` in `BugeyeTestSupport`, and a `captureEvents` bus instance in `AppServices`. Exact shapes:
+Everything below is in `docs/specs/2026-11-27-wave-1-contracts.md` and lands in the Wave 1 contracts PR, which merges before this epic's first PR. Capture never edits a contract file (contracts §3); it writes only the folders that spec gives it. Section numbers below are the contracts spec's.
 
-```swift
-public enum CaptureKind: String, Hashable, Codable, Sendable, CaseIterable {
-    case screenshot, recording, gif, collection
-    /// "Screenshot", "Recording", "Recording", "Collection".
-    public var namePrefix: String { get }
-    /// "png", "mp4", "gif", "bugeye".
-    public var fileExtension: String { get }
-}
-
-/// One capture as every module knows it. Provenance and snapshots stay on the file (xattrs), not here.
-public struct CaptureItem: Hashable, Codable, Sendable, Identifiable {
-    public var id: CaptureID
-    public var fileURL: URL
-    /// In the save folder. False: in the temp folder, until Quick Access saves it.
-    public var isSaved: Bool
-    public var kind: CaptureKind
-    /// When the pixels were taken (C10).
-    public var createdAt: Date
-    /// 2 on Retina, 1 on a 1× display or after "Downscale Retina captures to 1×".
-    public var pixelsPerPoint: Double
-    public init(id: CaptureID, fileURL: URL, isSaved: Bool, kind: CaptureKind, createdAt: Date, pixelsPerPoint: Double)
-}
-
-/// What happened to a capture. An open set: later epics add values (provenanceAttached, snapshotAttached, …)
-/// without breaking anyone's switch, so subscribers ignore changes they don't know.
-public struct CaptureChange: RawRepresentable, Hashable, Sendable {
-    public var rawValue: String
-    public init(rawValue: String)
-    public static let created: CaptureChange   // a new capture's file exists
-    public static let saved: CaptureChange     // moved from the temp folder into the save folder
-    public static let moved: CaptureChange     // the file now lives at another URL, for any other reason
-    public static let edited: CaptureChange    // the file's content was rewritten in place
-    public static let deleted: CaptureChange   // trashed (saved) or removed (temp)
-}
-
-public struct CaptureEvent: Hashable, Sendable {
-    public var change: CaptureChange
-    /// The capture as it is after the change.
-    public var item: CaptureItem
-    /// For saved and moved: where the file was.
-    public var previousURL: URL?
-    /// For created only: the image at most 480 px wide, so no subscriber decodes the full file.
-    public var preview: PixelBuffer?
-    /// The publishing module's id ("capture", "quickAccess", …).
-    public var origin: String
-    public init(change: CaptureChange, item: CaptureItem, previousURL: URL? = nil, preview: PixelBuffer? = nil,
-                origin: String)
-}
-
-/// The one "capture changed" channel (design/02 §5.9). Main actor, synchronous, deterministic.
-@MainActor
-public final class CaptureEventBus {
-    public init()
-    /// Handlers run in subscription order. An event published from inside a handler is queued and
-    /// delivered after the current one has reached every subscriber, so all subscribers see one order.
-    public func subscribe(_ handler: @escaping @MainActor (CaptureEvent) -> Void) -> CaptureSubscription
-    public func publish(_ event: CaptureEvent)
-    /// The latest item for a capture after every event so far; nil if never created or deleted.
-    /// A late result (provenance, snapshot, sweep) looks the capture up here to find its current file.
-    public func item(_ id: CaptureID) -> CaptureItem?
-}
-
-@MainActor
-public final class CaptureSubscription {
-    /// Stops delivery. Dropping the subscription also cancels it.
-    public func cancel()
-}
-
-/// User notifications (UNUserNotificationCenter on macOS).
-public protocol Notifier: Sendable {
-    func post(title: String, body: String)
-}
-
-// BugeyeFeatures: HotkeySpec gains a label for the Shortcuts pane (C5).
-public struct HotkeySpec: Hashable, Sendable {
-    public var id: String
-    public var title: String
-    public var defaultKey: KeyCombo
-    public var settingKey: String
-    public init(id: String, title: String, defaultKey: KeyCombo, settingKey: String)
-}
-```
-
-Contract rules, each a test in PR 1:
-- `publish` delivers to every live subscriber, in subscription order. A cancelled or dropped subscription gets nothing.
-- Nested publishes are delivered FIFO after the current event, to everyone.
-- `item(_:)` follows `created`, `saved`, `moved` and `edited`, and forgets the capture on `deleted`. A change for an unknown id is still delivered, but not stored.
-- `CaptureKind` prefixes and extensions are exactly as above.
+- **Bus and items** (§4.1.1): `CaptureKind`, `CaptureItem`, `CaptureChange`, `CaptureEvent` (`previewMaxWidth`), `CaptureEventBus`, `CaptureSubscription`; `CaptureEventRecorder` for tests. Capture publishes `created` with `origin: "capture"`.
+- **Output** (§4.1.2–4.1.4): `CaptureFileWriter.create`, `CaptureFileNamer.name`, `CaptureFolders.temp`, `OutputSettings` (the keys of §5.7 it shares with Recording), `OutputStrings` (the `Couldn't save to folder` notice of §5.4).
+- **Ports and adapters** (§4.1.5, §4.4): `Notifier` + its adapter + `FakeNotifier`; `ClipboardWriter`'s pasteboard adapter; `ScreenCapturePermission` + its adapter + `FakeScreenCapturePermission`; `WindowID`; `PixelBufferImages` (`CGImage` ↔ `PixelBuffer`, the 480 px preview).
+- **Selection** (§4.1.8): `AreaSelector`, `SelectionRequest`, `SelectionResult`, `StoredArea` (the `capture.lastArea` JSON shape, C9), `AreaSelectorRelay` (Capture's wiring sets its `target`), `ScreenActivity`, `FakeAreaSelector`.
+- **Features** (§4.2): `HotkeySpec.title`, `MenuItemSpec.hotkeyID`, `HotkeyBindings` and `KeyCombo(description:)`, `ActionRouter`, `SettingsLayout.shortcutsPane`.
+- **Shell** (§4.5): `CaptureWiring` (`modules`, `install`), `AppContext` (`router`, `settingsPanes`, `screenRecordingAlert`, `areaSelector`, `screenActivity`, `onLaunch`, `retain`).
+- **Moved to Capture** (§4.1.9): `ScreenSource` and `FakeScreenSource`, now in `Sources/BugeyeCore/Ports/Capture/` and `Sources/BugeyeTestSupport/Capture/`, for this epic to reshape (C8).
 
 ## 4. Coordinates and geometry
 
@@ -163,7 +83,7 @@ Tests cover negative-origin displays (left of and above the primary), 1×, 2× a
 | ⇧⌘4, then Space | | | Window mode (§5.3) |
 | ⇧⌘4, then Return / keypad Enter | | | The last area, on its own display, cropped from the new frozen frame (C9). Beeps if there is none or its display is gone |
 
-Orders 10 and 20 stay free for Capture Scrolling Area and Capture Text. A request while another capture is in progress (any state but `idle`, §6) is dropped and logged. Bugeye's own windows never appear in full-screen or area captures: the freeze excludes them by process id.
+Orders 10 and 20 stay free for Capture Scrolling Area and Capture Text. A request while another capture is in progress (any state but `idle`, §6), or while `ScreenActivity` refuses screenshots (a recording being set up, contracts §4.1.8), is dropped and logged. Bugeye's own windows never appear in full-screen or area captures: the freeze excludes them by process id.
 
 ### 5.2 The overlay (screenshot purpose)
 
@@ -192,7 +112,7 @@ Window properties (`design/02` §2.8) are unchanged: borderless, `.screenSaver` 
 ### 5.4 Output
 
 After each still capture, in this order:
-1. **Save** (`capture.saveToFolder`, on by default) to the folder in General ("Save captures to"), through `CaptureFileWriter.create` with a new `CaptureID` (C8). If the folder is unusable, the file goes to the temp folder (C11) and this notice is posted. `<path>` is shown as the General pane shows it (`~/…`):
+1. **Save** (`capture.saveToFolder`, on by default) to the folder in General ("Save captures to"), through `CaptureFileWriter.create` with a new `CaptureID` (C8). If the folder is unusable, the file goes to the temp folder (C11) and this notice (`OutputStrings`) is posted. `<path>` is shown as the General pane shows it (`~/…`):
    - `Couldn't save to folder` / `<path> is unavailable. The capture is kept temporarily; use Save in Quick Access.`
 
    With saving off, the file goes to the temp folder.
@@ -200,7 +120,7 @@ After each still capture, in this order:
 3. **Announce:** publish `CaptureEvent(change: .created, item:, preview:, origin: "capture")`.
 
 - **Format:** PNG at native resolution. **Downscale** (`capture.downscaleToPoints`, off by default) scales by 1/scale before encoding when scale > 1, with high-quality interpolation in the display's colour space. `pixelsPerPoint` is then 1.
-- **Names:** `Screenshot YYYY-MM-DD at HH.MM.SS.png` (local time zone, `en_US_POSIX`). A taken name gets ` (2)`, ` (3)`, … before the extension. Bugeye never overwrites an existing file (C8).
+- **Names:** `Screenshot YYYY-MM-DD at HH.MM.SS.png` (local time zone, `en_US_POSIX`, `CaptureFileNamer`). A taken name gets ` (2)`, ` (3)`, … before the extension, added by `create`. Bugeye never overwrites an existing file (C8).
 - **Failures** (title `Capture failed`), body by cause:
   - PNG encoding: `Could not encode PNG.`
   - Even the temp write failed, with copy on: `Couldn't write the file. The image is on the clipboard.` The clipboard gets the PNG alone, and no event is published.
@@ -211,16 +131,16 @@ After each still capture, in this order:
 
 ### 5.5 Permission
 
-`ScreenCapturePermission.preflight` runs before every request. If Screen Recording is missing, or ScreenCaptureKit reports `userDeclined`, nothing is captured and this alert shows (`design/01` §2.8):
+`ScreenCapturePermission.preflight` (contract port) runs before every request. If Screen Recording is missing, or ScreenCaptureKit reports `userDeclined`, nothing is captured and this alert shows (`design/01` §2.8). Capture's wiring installs it as `AppContext.screenRecordingAlert.presenter`, so Recording shows the same alert:
 - Title `Screen Recording permission needed`, text `Enable Bugeye under Privacy & Security → Screen & System Audio Recording, then relaunch the app.`, buttons `Open System Settings` / `Relaunch` / `Cancel`.
-- **Open System Settings** calls `CGRequestScreenCaptureAccess()`, which adds Bugeye to the list, then opens `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`.
+- **Open System Settings** calls `ScreenCapturePermission.requestAccess()` (`CGRequestScreenCaptureAccess()`), which adds Bugeye to the list, then opens `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`.
 - **Relaunch** spawns `/bin/sh -c`, which polls `kill -0 <pid>` every 0.1 s for up to 5 s, then `open`s Bugeye's own bundle path, and Bugeye terminates. Relaunching by path keeps the old app, in `/Applications`, out of it.
 
 ### 5.6 Hotkeys and the Shortcuts pane
 
-Registration: Carbon `RegisterEventHotKey` through `HotkeyRegistrar`, at launch and whenever a binding changes. The signature is the 4-char code `'BgEy'`, distinct from the old app's `'CSC!'`. While any overlay is up, bare Esc is a temporary hotkey, registered on entering `selecting` and released on leaving it (§6 I3). It never outlives the selection.
+Registration: Carbon `RegisterEventHotKey` through `HotkeyRegistrar`, for every `HotkeySpec` in the registry (Recording's ⇧⌘5 included), from an `onLaunch` step and whenever a binding changes. A press calls `ActionRouter.performHotkey(id)`. The signature is the 4-char code `'BgEy'`, distinct from the old app's `'CSC!'`. While any overlay is up, bare Esc is a temporary hotkey, registered on entering `selecting` and released on leaving it (§6 I3). It never outlives the selection.
 
-A binding is stored as its `KeyCombo` description (`⇧⌘3`). `none` means cleared; a missing or invalid value means the default. A valid binding is a letter or digit with at least one of ⌘, ⌥ or ⌃. A binding that fails to register stays stored and is retried at every launch and by Try Again, so quitting the old app and pressing Try Again (or relaunching) brings it back.
+A binding is stored as its `KeyCombo` description (`⇧⌘3`). `none` means cleared; a missing or invalid value means the default (the contract's `HotkeyBindings.current`, which the status menu also uses to show each item's current binding). A valid binding is a letter or digit with at least one of ⌘, ⌥ or ⌃. A binding that fails to register stays stored and is retried at every launch and by Try Again, so quitting the old app and pressing Try Again (or relaunching) brings it back.
 
 **Pane** `Shortcuts` (C5, before AI). One row per `HotkeySpec`, labelled with its title: `Capture Fullscreen`, `Capture All Displays`, `Capture Area`. Each row has a shortcut field:
 - It shows the combo, or `None` when cleared or not registered.
@@ -253,20 +173,21 @@ Pane `Capture` (module `capture`, order 10, after General). It has one section, 
 | `capture.lastArea` | String (JSON, C9) | empty |
 | `capture.hotkey.fullscreen` / `.allDisplays` / `.area` | String | `⇧⌘3` / `⌥⇧⌘3` / `⇧⌘4` |
 
-Settings are read fresh at each request. Notifications: the `Notifier` adapter becomes the `UNUserNotificationCenter` delegate, so banners show while Bugeye is frontmost. It asks for `.alert` and `.sound` at launch, and logs through `NSLog` when there is no bundle id (`design/01` §2.13).
+Settings are read fresh at each request. Notifications go through the contract's `Notifier` adapter (contracts §4.4): it is the `UNUserNotificationCenter` delegate, so banners show while Bugeye is frontmost; it asks for `.alert` and `.sound` at launch, holds posts until that is answered (so the launch notices of §5.6 can be posted at once), and logs through `NSLog` when there is no bundle id (`design/01` §2.13).
 
 ## 6. The capture state machine
 
 `CaptureFlow` in `CaptureCore` is the single owner of a capture: it is pure, has no AppKit, and is tested on Linux. The shell feeds it events and performs the effects it returns. Every overlay window and every view event carries the `SessionID` that created it, and an event from another session is ignored. Together with I1, that makes the stuck overlay inexpressible: no handler can show or key a window. Only the `showOverlays` and `makeKey` effects can, and the machine emits them only in `selecting` for the live session.
 
-**States:** `idle` · `freezing(session, request)` · `selecting(session, purpose, mode: .area | .window, drag?, hovered?)` · `finishing(session)` (window live capture, encode, save, copy, publish) · back to `idle`. `purpose` is `.screenshot` in Wave 1 (C4).
+**States:** `idle` · `freezing(session, request)` · `selecting(session, purpose, mode: .area | .window, drag?, hovered?)` · `finishing(session)` (window live capture, encode, save, copy, publish) · back to `idle`. `purpose` is `.screenshot` or, through the selector, `.recording` in Wave 1 (C4, §6.1).
 
-**Events:** `request(kind, permitted)` with kind ∈ {fullscreen, allDisplays, area, window} · `frozen(frames, windows, pointer)` / `freezeFailed(error)` · from views: `pointerMoved`, `pointerEntered(display, buttonDown)`, `mouseDown`, `mouseDragged` (both with modifiers), `mouseUp`, `rightMouseDown`, `key(.escape | .space | .return)` · `globalEscape` · `displaysChanged` · `windowCaptured(image)` / `windowCaptureFailed(error)` · `delivered(outcome)`.
+**Events:** `request(kind, permitted, activityAllows)` with kind ∈ {fullscreen, allDisplays, area, window} · `select(SelectionRequest)` / `externalCancel(purpose)` (§6.1) · `frozen(frames, windows, pointer)` / `freezeFailed(error)` · from views: `pointerMoved`, `pointerEntered(display, buttonDown)`, `mouseDown`, `mouseDragged` (both with modifiers), `mouseUp`, `rightMouseDown`, `key(.escape | .space | .return)` · `globalEscape` · `displaysChanged` · `windowCaptured(image)` / `windowCaptureFailed(error)` · `delivered(outcome)`.
 
 **Effects:** `readWindowList`, `freeze(displays)`, `showOverlays(session, displays, mode)`, `closeOverlays(session)` (close + leftover sweep), `sweepLeftovers`, `makeKey(display)`, `redraw(display, damage)`, `registerEscape`, `unregisterEscape`, `activateBugeye`, `reactivate(previousApp)`, `beep`, `captureWindow(id, pixelSize)`, `deliver(source, scale, time)`, `storeLastArea`, `showPermissionAlert`, `notify(title, body)`, `log(category, message)`.
 
 | From | Event | To | Effects |
 |---|---|---|---|
+| idle | `request`, `ScreenActivity` refuses `.screenshot` | idle | `log("busy")` |
 | idle | `request`, not permitted | idle | `showPermissionAlert` |
 | idle | `request(fullscreen \| allDisplays)` | freezing | `freeze` (display under pointer, or all) |
 | idle | `request(area \| window)` | freezing | `readWindowList`, `freeze(all)` |
@@ -291,30 +212,47 @@ Settings are read fresh at each request. Notifications: the `Notifier` adapter b
 | finishing | `delivered` | idle | `notify` for any warning |
 | any but selecting | any view event, `globalEscape` | same | none (stale-session events: `sweepLeftovers` only) |
 
-*Leave* means `closeOverlays`, `unregisterEscape`, `reactivate(previousApp)` and `log(finish)`, in that order. The recording, scrolling and text purposes will branch on click-without-drag and on window clicks (`design/02` §1.2); C4 leaves those rows for them.
+*Leave* means `closeOverlays`, `unregisterEscape`, `reactivate(previousApp)` and `log(finish)`, in that order. The shell holds `ScreenActivity.screenshotSelection` from a screenshot `request` leaving `idle` until the flow is back in `idle` (contracts §4.1.8). The scrolling and text purposes will branch on click-without-drag and on window clicks (`design/02` §1.2); C4 leaves those rows for Wave 2.
 
 **Invariants** (each a test that drives random event sequences, plus named regression tests):
 - I1. Overlays exist only in `selecting`. `showOverlays` and `makeKey` are emitted only there, and `makeKey` only with no button down.
 - I2. Leaving `selecting` emits `closeOverlays` and `unregisterEscape` exactly once.
 - I3. The Esc hotkey is registered exactly while the state is `selecting`.
 - I4. Every `request` that leaves `idle` returns to `idle` exactly once, so the busy state always clears, on every failure path too.
-- I5. Each `selecting` ends in exactly one result: area, window or cancelled.
+- I5. Each `selecting` ends in exactly one result: area, window, display (§6.1) or cancelled.
 - I6. In area mode, the selection rect stays inside the display where the drag started.
 - I7. Events tagged with another session never produce effects other than `sweepLeftovers`.
 - I8. `log(begin)` and `log(finish)` come in pairs, with the same window numbers.
 
 Regression tests carried over by name (`design/02` §3.1): `aFinishedSelectionsOverlayIsNotBroughtBackByTheMouseEntering`, `leftoverOverlaysAreClosedWhenASelectionBeginsOrEnds`, `escapeHotkeyIsHeldWhileTheOverlayIsUpAndCancels`, `escapeHotkeyIsReleasedWhenAnAreaIsChosen`, `rightClickCancelsTheSelection`.
 
+### 6.1 The selector for other purposes (C4)
+
+`AreaSelector.select(request)` (contract, §3) drives the same flow with `request.purpose`. Rows added to the table above, for purposes other than `.screenshot`; everything not listed behaves as for screenshots:
+
+| From | Event | To | Effects |
+|---|---|---|---|
+| idle | `select(request)` | freezing | `readWindowList`, `freeze(all)`; mode = window if `startInWindowMode` |
+| any but idle | `select` | same | answers `.busy` |
+| selecting | area: `mouseUp` under 4 × 4 pt, `clickSelectsDisplay` | idle | *leave*, result `.display(display under the pointer)` |
+| selecting | area: `mouseUp` ≥ 4 × 4 pt | idle | *leave*, result `.area(display, display-local rect)`; no `storeLastArea`, no `deliver` |
+| selecting | `key(.return)` | idle or same | uses `request.lastArea` (C9's rules); `.area` result, else `beep` |
+| selecting | window: `mouseDown` on a window, `windowNeedsDisplayCentre` and its centre on no display | same | `beep` |
+| selecting | window: `mouseDown` on a window | idle | *leave*, result `.window(id, display, frame)`; no live capture |
+| selecting | `externalCancel(purpose)` matching | idle | *leave*, result `.cancelled` |
+
+The overlay draws `request.hint` at the top of each display, as `design/02` §1.2 describes hints. Recording's own purpose never stores `capture.lastArea`, never captures a window and never publishes; it only returns the result. I1–I8 hold for every purpose. While a selector request is up, `ScreenActivity.screenshotSelection` is not held (Recording holds `recordingSetup`).
+
 ## 7. Architecture
 
 | Target | Platform | Capture's content |
 |---|---|---|
-| `BugeyeCore` | portable | PR 1: the contract (§3). Later: the port changes in C8 and `CaptureFileWriter.create` |
-| `BugeyeFeatures` | portable | `HotkeySpec.title` (PR 1). The Shortcuts pane model: bindings, validation, duplicate and conflict detection (`ShortcutConflicts`, given the parsed `symbolichotkeys` dictionary and the `hw.model` string), row messages, launch-notice texts, `ShortcutStrings`. `SettingsLayout` gains the Shortcuts pane |
-| `BugeyeTestSupport` | portable | `CaptureEventRecorder`, `FakeNotifier` (PR 1). Fakes for every C8 port, with a call counter on `freeze` so "one content fetch per freeze" is testable |
-| `CaptureCore` | portable | `CaptureModule` (menu items, hotkeys, Capture pane); coordinate types (§4); `SelectionGeometry` (axis lock, from-centre, capturable, loupe sample and frame, size readout frame); `CaptureFlow` (§6); `WindowHitTest`; `WindowShadow` on a `PixelBuffer` alpha channel with an injected capture closure; `FileNamer`; `OutputRouter` (save → copy → publish, fallbacks, warnings); `LastAreaStore`; `TempJanitor`; `CaptureSettings`; `CaptureStrings` |
-| `MacAdapters` | macOS | ScreenCaptureKit `ScreenSource` (one fetch, task group, own-PID exclusion, error mapping); `CGWindowList` reader; ImageIO `ImagePipeline` (crop, downscale, PNG, `CGImage` ↔ `PixelBuffer`); `NSPasteboard` clipboard; `UNUserNotificationCenter` notifier; permission adapter; Carbon registrar; `symbolichotkeys` and `hw.model` reader |
-| `BugeyeApp` | macOS | Overlay windows and views (render state, translate `NSEvent`s into `CaptureFlow` events, nothing else); Capture and Shortcuts panes; permission alert and relaunch; the action router (C12); wiring in `AppServices`; the hourly purge timer |
+| `BugeyeCore` | portable | Only `Ports/Capture/` (C8). Everything else it uses is contract (§3) |
+| `BugeyeFeatures` | portable | Only `Shortcuts/` (C5). The Shortcuts pane model: bindings, validation, duplicate and conflict detection (`ShortcutConflicts`, given the parsed `symbolichotkeys` dictionary and the `hw.model` string), row messages, launch-notice texts, `ShortcutStrings`. `SettingsLayout.shortcutsPane`, `HotkeySpec.title` and `HotkeyBindings` are contract |
+| `BugeyeTestSupport` | portable | Only `Capture/`: fakes for every C8 port, with a call counter on `freeze` so "one content fetch per freeze" is testable |
+| `CaptureCore` | portable | `CaptureModule` (menu items, hotkeys, Capture pane); coordinate types (§4); `SelectionGeometry` (axis lock, from-centre, capturable, loupe sample and frame, size readout frame); `CaptureFlow` (§6); `WindowHitTest`; `WindowShadow` on a `PixelBuffer` alpha channel with an injected capture closure; `OutputRouter` (save → copy → publish, fallbacks, warnings); `LastAreaStore`; `TempJanitor`; `CaptureSettings`; `CaptureStrings` |
+| `MacAdapters` (`Capture/`) | macOS | ScreenCaptureKit `ScreenSource` (one fetch, task group, own-PID exclusion, error mapping); `CGWindowList` reader; ImageIO `ImagePipeline` (crop, downscale, PNG; `CGImage` ↔ `PixelBuffer` through the contract's `PixelBufferImages`); Carbon registrar; `symbolichotkeys` and `hw.model` reader. The pasteboard, notifier and permission adapters are contract |
+| `BugeyeApp` (`Capture/`, `Shortcuts/`, `Wiring/CaptureWiring.swift`) | macOS | Overlay windows and views (render state, translate `NSEvent`s into `CaptureFlow` events, nothing else); the `AreaSelector` implementation; Capture and Shortcuts panes (registered through `settingsPanes`); permission alert and relaunch (`screenRecordingAlert.presenter`); registrations with `ActionRouter` (C12); the hourly purge timer (an `onLaunch` step) |
 
 Main thread: freezing, window capture, encoding, writing and purging run off the main actor. Only `CaptureFlow`, the views and the bus are on it.
 
@@ -332,8 +270,8 @@ Read with `log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'
 
 ## 9. Done when
 
-1. PR 1 (the contract) has merged, and the Quick Access session has been told.
-2. `linux` and `macos` are green on every PR of the epic, and `claude-review` has posted on each. Linux covers §4, §6 (with I1–I8 and the named regressions), geometry, hit test, window shadow, naming, the output order and every fallback, the last-area store, the purge, the bindings and conflicts, and every string in §5, character for character. macOS CI covers the overlay window's properties and its close-on-finish behaviour, a late `mouseEntered` after finish, damage rects, translation of synthetic `NSEvent`s, the ImageIO round trip with the colour space kept, the pasteboard item (PNG + file URL), the menu, and both panes.
+1. The Wave 1 contracts PR has merged before this epic's first PR, and the session has checked §3's names against it.
+2. `linux` and `macos` are green on every PR of the epic, and `claude-review` has posted on each. Linux covers §4, §6 (with I1–I8 and the named regressions), geometry, hit test, window shadow, naming, the output order and every fallback, the last-area store, the purge, the bindings and conflicts, the selector rows of §6.1 for `.recording` requests, and every string in §5, character for character. macOS CI covers the overlay window's properties and its close-on-finish behaviour, a late `mouseEntered` after finish, damage rects, translation of synthetic `NSEvent`s, the ImageIO round trip with the colour space kept, the clipboard payload (PNG + file URL), the menu, and both panes.
 3. The final review's Critical and Important findings are fixed, each with a test that failed first.
 4. The Mac batch (`needs-mac-check`) passes on your Mac:
    1. Real freeze on the Retina display and the 1× external: one content fetch, freeze time logged, Bugeye's windows absent.

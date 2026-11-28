@@ -2,7 +2,7 @@
 
 **Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
 
-Quick Access rebuilds the first build's thumbnail stack (`design/02` §1.4, §2.12): one floating thumbnail per capture, its strip and ⋯ menu, hover, Esc, drag-out, ⇧-click selection. It runs as one of the parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton. It consumes the Capture contract (`docs/specs/2026-11-27-wave-1-capture.md` §3, C1, C2) and the Wave 1 contracts PR (§3 here). It owns thumbnails, Save, Save As…, Delete, and the `saved` and `deleted` events.
+Quick Access rebuilds the first build's thumbnail stack (`design/02` §1.4, §2.12): one floating thumbnail per capture, its strip and ⋯ menu, hover, Esc, drag-out, ⇧-click selection. It runs as one of the parallel Wave 1 sessions (`design/14` R1), on Wave 0's skeleton. It builds on the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`; §3 here lists what it uses) and on Capture's split of ownership (`docs/specs/2026-11-27-wave-1-capture.md` C2). It owns thumbnails, Save, Save As…, Delete, and the `saved` and `deleted` events.
 
 ## 1. Decisions
 
@@ -16,218 +16,48 @@ Rulings I made (each can be overturned at approval; cost if wrong in brackets):
 
 | # | Ruling | Why |
 |---|---|---|
-| Q1 | **Wave 1 ships only the actions that exist in Wave 1:** Copy (PNG + URL), Save, Save As…, Reveal in Finder, Delete, drag-out, ✕. Everything else arrives later through the extension points in §3, with no edit to Quick Access: Edit / Trim / Open (primary), Copy Text, Copy for AI, Copy as Markdown, Open Source, Find Similar, Export GIF…, Combine, the source chip, the sweep badge, the media badge and the learned ★ ring. | One owner per action. The parallel Editor epic registers Edit itself (§3.2). [Low] |
+| Q1 | **Wave 1 ships only the actions that exist in Wave 1:** Copy (PNG + URL), Save, Save As…, Reveal in Finder, Delete, drag-out, ✕. Everything else arrives later through the extension points in §3, with no edit to Quick Access: Edit / Trim / Open (primary), Copy Text, Copy for AI, Copy as Markdown, Open Source, Find Similar, Export GIF…, Combine, the source chip, the sweep badge and the learned ★ ring. The media badge on recordings arrives in Wave 1 the same way: the Recording epic sets it as a decoration (contracts K12). | One owner per action. The parallel Editor epic registers Edit itself (§3). [Low] |
 | Q2 | **While no primary action is registered for a kind, the strip shows Copy · Save · ⋯ only**, sharing the width. There is no disabled placeholder, and double-click does nothing (no beep). Once the Editor epic registers Edit, the strip becomes Copy · Save · Edit · ⋯ with no Quick Access change. | A dead yellow button would be tapped and do nothing. [Low: a placeholder is one row in the strip table.] |
-| Q3 | **Extension points live in shared code, landed by the contracts PR** (§3): a reshaped `QuickAccessActionSpec` with a placement and kinds, a runtime handler registry, a thumbnail-decoration store, an activity feed for the habits epic, and two new bus changes for the editor. | Area cores can't depend on each other (Wave 0 P14), and the Editor session works in parallel. [Medium: a missed extension point means a later epic edits Quick Access.] |
+| Q3 | **Extension points live in shared code, landed by the contracts PR** (§3): a reshaped `QuickAccessActionSpec` with a placement and kinds, handlers registered in the shared `ActionRouter` (contracts K6), the thumbnail-decoration store, and the editor's two bus changes. The activity feed for the habits epic stays in `QuickAccessCore` until that epic promotes it (contracts K3). | Area cores can't depend on each other (Wave 0 P14), and the Editor and Recording sessions work in parallel. [Medium: a missed extension point means a later epic edits Quick Access.] |
 | Q4 | **⇧-click selection works now; Combine does not.** Selecting shows the border and ✓ and pauses every timer. The host's strip is replaced only while an action with `placement: .selection` is registered (the collections epic's Combine). Until then the host keeps its normal strip. | B1 asks for the selection rules; Combine needs collections. [Low] |
-| Q5 | **Editing state and preview refresh come over the bus.** The editor publishes `openedInEditor` / `closedInEditor` (new values, §3.1) and `edited` with a ≤ 480 px `preview`. Quick Access never decodes a capture file. | One "capture changed" channel (`design/02` §5.9). The editor already holds the render. [Low] |
-| Q6 | **Save moves through `CaptureFileWriter.move` (new, §3.1); Save As… writes through the existing `write(_:to:attributesFrom:identity: .new(id))`.** The copy is published as `created` with `origin: "quickAccess"`, and Quick Access ignores `created` events it published itself, so the copy gets no thumbnail. Quick Access publishes no `moved` in Wave 1; it follows `moved` from others. | Keeps the one-writer rule and the xattrs (`design/11` §6). The copy is a new capture for the index (`design/02` §1.4). [Low] |
+| Q5 | **Editing state and preview refresh come over the bus.** The editor publishes `editingStarted` / `editingEnded` (contract values, contracts K5) and `edited` with a ≤ 480 px `preview`. Quick Access never decodes a capture file. | One "capture changed" channel (`design/02` §5.9). The editor already holds the render. [Low] |
+| Q6 | **Save moves through the contract's `CaptureFileWriter.move(_:into:)` (contracts §4.1.2); Save As… writes through the existing `write(_:to:attributesFrom:identity: .new(id))`.** The copy is published as `created` with `origin: "quickAccess"`, and Quick Access ignores `created` events it published itself, so the copy gets no thumbnail. Quick Access publishes no `moved` in Wave 1; it follows `moved` from others. | Keeps the one-writer rule and the xattrs (`design/11` §6). The copy is a new capture for the index (`design/02` §1.4). [Low] |
 | Q7 | **No new ports for macOS-only effects.** Trash, Reveal in Finder, the save panel, panels, animation and focus are effects the view model emits and Quick Access's own macOS files perform. Moving and copying files is portable and runs in `QuickAccessCore`. | Fewer shared files; the decisions stay Linux-testable. [Low] |
 | Q8 | **Settings live in `QuickAccessCore`, under `quickAccess.*` keys**, read fresh at each show (Capture C6). Pane `Quick Access`, order 20, after Capture (10). A duration change applies to thumbnails shown afterwards; a position change at the next layout. | No edit to the shared `AppSettings`. [Low] |
-| Q9 | **This epic creates `NightChrome`** (tokens and view styles, `design/01` §2.15) in `Sources/BugeyeApp/Chrome/`. No other Wave 1 epic draws night panels. Later epics reuse it. | First user builds it. [Low: if another Wave 1 spec needs it, it moves to the contracts PR.] |
+| Q9 | **`NightChrome` comes from the contracts PR** (tokens and view styles, `design/01` §2.15, with §4's values; contracts §4.5), because Recording's options bar and countdown are night panels too. This epic uses it and doesn't edit it. | Q9's own cost case: another Wave 1 spec needed it. [Low] |
 | Q10 | **Every user-visible string is settled in §5**, including those the docs leave open: failure notices, accessibility labels, Settings options. | `design/11` §7. [Low] |
 | Q11 | **Edge rules the docs leave open:** Delete of a file that is already gone counts as deleted (no notice). Save As… onto the capture's own file does nothing. Only clicks on the image area toggle or clear the selection; ✕, strip and ⋯ clicks don't. ⇧-click on a recording, GIF or collection is ignored. A `created` for a capture already shown is ignored. Delete asks no confirmation (as documented). | Each is one test. [Low] |
 | Q12 | **The documented layout stays, known issues included.** A new capture still pushes the hovered thumbnail up one slot, and on a one-slot screen a hovered thumbnail plus the new one exceed the limit (`design/02` §4). They go to `docs/backlog.md`. | B1: exactly as documented. [Low] |
 | Q13 | **⋯ menu order is by `order`, with no separators.** Reveal in Finder is 800, Delete 1000. Later epics use: Copy Text 100, Copy for AI 200, Copy as Markdown 300, Open Source 400, Find Similar 500, Export GIF… 850. That reproduces the documented order for every kind. | The docs list no separators. [Low] |
 | Q14 | **Testing split** (§8): the view model, file actions and every string on Linux; panel properties, hosting, Esc routing, drag provider and leak tests on hosted macOS CI; the look, animations and focus return into real apps in the Mac batch and your manual pass. | `design/14` R8–R10. [Low] |
+| Q15 | **Reconciled with the Wave 1 contracts spec** (27 Nov 2026). §3 is now a list of what this epic uses from it. Renamed: `openedInEditor` / `closedInEditor` → `editingStarted` / `editingEnded`. Moved: `QuickAccessActionHandlers` into `ActionRouter`, `ModuleWiring` / `SharedServices` into `QuickAccessWiring` / `AppContext`, `NightChrome` into the contracts PR; `QuickAccessActionID` and the activity feed into `QuickAccessCore`. Dropped: `RecordingQuickAccessHandler` (tests write handlers inline). Recording thumbnails get their ▶ badge in Wave 1 as a Recording decoration (contracts §6, item 1). No settled string changed. | One contract for five parallel epics. [Low] |
 
 ## 2. Scope
 
 In scope:
 1. The stack: show, layout, eviction, screen fit, timers and their pauses, fade and slide.
-2. The thumbnail: image, ✕, selection border and ✓, strip, ⋯ menu, the decoration slots (empty in Wave 1).
+2. The thumbnail: image, ✕, selection border and ✓, strip, ⋯ menu, the decoration slots (in Wave 1 only Recording's media badge fills one).
 3. Actions: Copy, Save, Save As…, Reveal in Finder, Delete, drag-out, double-click (runs the primary once registered), Esc.
 4. Hover and key focus, with focus return.
 5. ⇧-click selection; the `.selection` slot for Combine.
-6. Following the bus: `created`, `saved`, `moved`, `edited`, `deleted`, `openedInEditor`, `closedInEditor`; publishing `saved`, `deleted` and the Save As copy's `created`.
-7. The Quick Access settings pane, `NightChrome`, logging.
+6. Following the bus: `created`, `saved`, `moved`, `edited`, `deleted`, `editingStarted`, `editingEnded`; publishing `saved`, `deleted` and the Save As copy's `created`.
+7. The Quick Access settings pane, logging.
 
-Out of scope: every action and decoration listed in Q1 (later epics); recordings, GIFs and collections arriving at all (Wave 1 creates screenshots only, though the model handles every `CaptureKind`); the action-habits store; Duplicates; Open Last Capture.
+Out of scope: every action and decoration listed in Q1 (later epics); GIFs and collections arriving at all (Wave 1 creates screenshots and recordings, though the model handles every `CaptureKind`); the action-habits store; Duplicates; Open Last Capture.
 
-## 3. Contract needs
+## 3. Uses from the contracts
 
-These land in the Wave 1 contracts PR, before any epic starts. Nothing else in this epic touches a shared file. Exact names may be harmonised with the other four specs in that PR; the capabilities and shapes may not shrink.
+Everything below is in `docs/specs/2026-11-27-wave-1-contracts.md` and lands in the Wave 1 contracts PR, before any epic starts. Nothing in this epic touches a contract file (contracts §3); after the merge it writes only `QuickAccessCore`, `Sources/BugeyeApp/QuickAccess/`, `Sources/BugeyeApp/Wiring/QuickAccessWiring.swift` and their tests. Section numbers below are the contracts spec's.
 
-**Capture's C1 contract is enough for:** `CaptureItem`, `CaptureKind`, `CaptureEvent`, `CaptureEventBus` (subscribe, publish, `item(_:)`), `CaptureSubscription`, the `Notifier` port and `FakeNotifier`, `CaptureEventRecorder`, and the `captureEvents` instance. **Wave 0 is enough for:** `ClipboardWriter` / `ClipboardPayload` (Copy), `CaptureFileWriter.write(_:to:attributesFrom:identity:)` (Save As…), `AppSettings.saveFolder`, `FolderPath`, `SaveFolder.ensureExists`, `SettingsStore`, `CaptureID`, `PixelBuffer`, `Rect2D`.
+- **Bus and items** (§4.1.1): `CaptureItem` (with `duration`), `CaptureKind`, `CaptureChange` (with `editingStarted`, `editingEnded`), `CaptureEvent` (`preview` on `created` and `edited`), `CaptureEventBus` (subscribe, publish, `item(_:)`), `CaptureSubscription`, `CaptureEventRecorder`. Quick Access publishes with `origin: "quickAccess"`.
+- **Files** (§4.1.2): `CaptureFileWriter.move(_:into:)` for Save (never replaces; ` (2)` on a clash; same-volume rename or cross-volume copy keeping the attributes; the source untouched on failure); Wave 0's `write(_:to:attributesFrom:identity:)` for Save As….
+- **Ports and adapters** (§4.1.5, §4.4): `Notifier` + `FakeNotifier`; `ClipboardWriter` and its pasteboard adapter; `PixelBufferImages.cgImage` to draw a `preview`.
+- **Quick Access types** (§4.2.1, §4.2.3): `QuickAccessActionSpec` with `QuickAccessPlacement` (`.primary`, `.menu`, `.selection`) and `kinds`; the registry conflicts `quickAccessPrimaryTaken` and `quickAccessSelectionTaken`; `QuickAccessTrigger`, `QuickAccessSubitem`, `QuickAccessActionState`, `QuickAccessActionContext`, `QuickAccessActionHandler`; `ThumbnailDecoration` and `ThumbnailDecorations`.
+- **Router** (§4.2.4): `ActionRouter.quickAccessHandler(for:)` is the handler registry: a spec is shown only while it has a handler (`onQuickAccessAction`, registered by its owning module, Quick Access included).
+- **Shell** (§4.5): `QuickAccessWiring` (`modules`, `install`), `AppContext` (`captureEvents`, `router`, `thumbnailDecorations`, `settingsPanes`, `clipboard`, `notifier`, `fileWriter`, `general`, `retain`), `NightChrome`.
+- **Wave 0, unchanged:** `ClipboardPayload`, `AppSettings.saveFolder`, `FolderPath`, `SaveFolder.ensureExists`, `SettingsStore`, `CaptureID`, `PixelBuffer`, `Rect2D`.
 
-### 3.1 BugeyeCore
-
-```swift
-// Captures/CaptureEventBus.swift: two more changes, published by the editor (Q5).
-extension CaptureChange {
-    public static let openedInEditor: CaptureChange   // "openedInEditor": an editor window shows this capture
-    public static let closedInEditor: CaptureChange   // "closedInEditor": the last editor window on it closed
-}
-// CaptureEvent.preview's doc becomes: "For created and edited: the image at most 480 px wide."
-// item(_:) is unchanged by the two new values.
-
-// Files/CaptureFileWriter.swift
-extension CaptureFileWriter {
-    /// Moves a capture into `folder` under its own file name and extension, never replacing a file:
-    /// on a clash it tries "<stem> (2).<ext>", "<stem> (3).<ext>", … (stem = the name without its last
-    /// extension, as is). Same volume: a no-replace rename, so every attribute follows. Another volume:
-    /// a no-replace write of a copy carrying the kept attributes (P11), then the source is removed.
-    /// Returns the final URL. On failure the source is untouched and no partial file remains.
-    public func move(_ source: URL, into folder: URL) throws -> URL
-}
-```
-
-`move` shares the no-replace primitive (`renameatx_np(RENAME_EXCL)` / `renameat2(RENAME_NOREPLACE)`) with Capture's `create(_:named:in:identity:)` (Capture C8), so both land together in the contracts PR. Tests on Linux: same-volume move keeps attributes, suffixing on clash, the source survives a failure, and a cross-volume path through an injected "rename fails with `EXDEV`" seam.
-
-### 3.2 BugeyeFeatures
-
-```swift
-// QuickAccess/QuickAccessActionSpec.swift: replaces Wave 0's QuickAccessActionSpec(id:title:order:).
-public struct QuickAccessActionSpec: Hashable, Sendable {
-    public enum Placement: Hashable, Sendable {
-        /// The yellow strip button; double-click runs it too. At most one per kind across all modules.
-        case primary
-        /// An item of the ⋯ menu, sorted by `order` (Q13).
-        case menu
-        /// Replaces the selection host's strip with one yellow button "<title> (N)". At most one.
-        case selection
-    }
-    public var id: String          // unique across modules, e.g. "editor.edit"
-    public var title: String       // "Edit", "Copy for AI", "Combine"
-    public var order: Int
-    public var placement: Placement
-    /// Kinds it is offered for, e.g. [.screenshot].
-    public var kinds: Set<CaptureKind>
-    public init(id: String, title: String, order: Int, placement: Placement, kinds: Set<CaptureKind>)
-}
-
-// FeatureRegistry.swift: two more conflicts, each a test.
-extension FeatureConflict {
-    // case quickAccessPrimaryTaken(CaptureKind, ids: [String])   two .primary specs share a kind
-    // case quickAccessSelectionTaken(ids: [String])               more than one .selection spec
-}
-
-// QuickAccess/QuickAccessRuntime.swift
-public enum QuickAccessActionID {
-    public static let copy = "quickAccess.copy"
-    public static let save = "quickAccess.save"
-    public static let saveAs = "quickAccess.saveAs"
-    public static let reveal = "quickAccess.reveal"
-    public static let delete = "quickAccess.delete"
-}
-
-public enum QuickAccessTrigger: Hashable, Sendable { case strip, menu, doubleClick, decoration, selection }
-
-public struct QuickAccessSubitem: Hashable, Sendable {
-    public var id: String
-    public var title: String
-    public init(id: String, title: String)
-}
-
-/// Asked at every render of a thumbnail (§6.9).
-public enum QuickAccessActionState: Hashable, Sendable {
-    case enabled, disabled, hidden
-    /// A submenu under the action's title (Open Source with several sources).
-    case submenu([QuickAccessSubitem])
-}
-
-public struct QuickAccessActionContext: Hashable, Sendable {
-    public var actionID: String
-    /// The thumbnail's item; for `.selection`, the selected items in stack order, oldest first.
-    public var items: [CaptureItem]
-    public var trigger: QuickAccessTrigger
-    public var subitemID: String?
-    public init(actionID: String, items: [CaptureItem], trigger: QuickAccessTrigger, subitemID: String? = nil)
-}
-
-public struct QuickAccessActionHandler: Sendable {
-    public var state: @MainActor @Sendable (CaptureItem) -> QuickAccessActionState
-    public var perform: @MainActor @Sendable (QuickAccessActionContext) -> Void
-    public init(state: @escaping @MainActor @Sendable (CaptureItem) -> QuickAccessActionState = { _ in .enabled },
-                perform: @escaping @MainActor @Sendable (QuickAccessActionContext) -> Void)
-}
-
-/// Runtime behaviour for registered specs. A spec without a handler is not shown (logged once).
-@MainActor public final class QuickAccessActionHandlers {
-    public init()
-    /// Registering an id twice is a programming error (assertion in debug; the first stays).
-    public func register(_ id: String, _ handler: QuickAccessActionHandler)
-    public func handler(for id: String) -> QuickAccessActionHandler?
-}
-
-// QuickAccess/ThumbnailDecorations.swift
-public enum ThumbnailDecoration: Hashable, Sendable {
-    /// Top of the image, right of ✕: app icon + short label (provenance). Tapping runs `actionID`.
-    case sourceChip(label: String, appBundleID: String?, actionID: String?)
-    /// Bottom-right corner: "▶ 0:42", "GIF".
-    case mediaBadge(text: String)
-    /// Bottom edge, centred, amber capsule (sweep "⚠ 2 possible"). Tapping runs `actionID`.
-    case warningBadge(text: String, tooltip: String?, actionID: String?)
-    /// The learned usual action: a ring on its strip button, else on ⋯ plus "★ " before its menu title.
-    case suggestedAction(actionID: String)
-}
-
-@MainActor public final class ThumbnailDecorations {
-    public init()
-    /// Replaces everything `provider` shows on `capture`; [] removes it.
-    public func set(_ decorations: [ThumbnailDecoration], for capture: CaptureID, from provider: String)
-    /// All providers' decorations, providers in first-set order.
-    public func decorations(for capture: CaptureID) -> [ThumbnailDecoration]
-    /// Called after every `set`, with the capture it changed. Observers live as long as the app.
-    public func observe(_ handler: @escaping @MainActor (CaptureID) -> Void)
-}
-
-// QuickAccess/QuickAccessActivity.swift: what the habits epic learns from (design/06 §1.6).
-public struct PerformedQuickAccessAction: Hashable, Sendable {
-    public var actionID: String
-    public var item: CaptureItem
-    public var trigger: QuickAccessTrigger
-    public init(actionID: String, item: CaptureItem, trigger: QuickAccessTrigger)
-}
-
-@MainActor public final class QuickAccessActivity {
-    public init()
-    public func record(_ action: PerformedQuickAccessAction)
-    public func observe(_ handler: @escaping @MainActor (PerformedQuickAccessAction) -> Void)
-}
-```
-
-Wave 0's `FeatureRegistryTests` that build `QuickAccessActionSpec(id:title:order:)` are updated in the same PR. `BugeyeTestSupport` gets `RecordingQuickAccessHandler` (counts `perform` calls, returns a scripted state).
-
-### 3.3 App shell (`BugeyeApp`)
-
-Five sessions must never edit `AppServices.swift`, `SettingsWindowController.swift` or `AppDelegate.swift`. The contracts PR therefore adds one wiring file per Wave 1 epic and the hooks that read them:
-
-```swift
-/// Shared instances every epic's wiring may use, built before any wiring runs.
-@MainActor struct SharedServices {
-    let registry: FeatureRegistry
-    let settingsStore: any SettingsStore
-    let metadata: any FileMetadataStore
-    let clipboard: any ClipboardWriter
-    let notifier: any Notifier
-    let general: GeneralSettings
-    let captureEvents: CaptureEventBus               // C1
-    let quickAccessHandlers: QuickAccessActionHandlers
-    let thumbnailDecorations: ThumbnailDecorations
-    let quickAccessActivity: QuickAccessActivity
-}
-
-/// What one epic plugs into the shell.
-@MainActor struct ModuleWiring {
-    var actions: [String: @MainActor () -> Void] = [:]          // menu-item and hotkey ids (Capture C12)
-    var settingsPanes: [String: @MainActor () -> AnyView] = [:] // pane id → view
-    var retained: [AnyObject] = []                              // controllers kept alive for the app's life
-}
-
-// Sources/BugeyeApp/Wiring/QuickAccessWiring.swift, created empty by the contracts PR, owned by this epic.
-extension ModuleWiring {
-    static let quickAccessModules: [any FeatureModule] = []   // this epic's last PR adds QuickAccessModule()
-    static func quickAccess(_ shared: SharedServices) -> ModuleWiring { ModuleWiring() }
-}
-```
-
-- `AppServices.modules` = `[GeneralModule()]` + each epic's `…Modules` list, written once by the contracts PR.
-- `AppServices` builds `SharedServices`, calls the five wiring functions and merges their results; a duplicate action or pane id fails at launch with a test.
-- `SettingsView`'s pane switch looks unknown ids up in the merged `settingsPanes`.
-- `PixelBuffer → CGImage` (sRGB, premultiplied last) in `MacAdapters`, used by Capture's `ImagePipeline` and by Quick Access's renderer.
-
-No new settings keys in shared code (Q8), no `Notifier` change, and no bus addition beyond §3.1.
+Quick Access-only and therefore in `QuickAccessCore`, not shared: `QuickAccessActionID` (`quickAccess.copy`, `.save`, `.saveAs`, `.reveal`, `.delete`), `PerformedQuickAccessAction` and `QuickAccessActivity` (record, observe), shaped as this spec's earlier draft had them, for the habits epic to promote later.
 
 ## 4. The thumbnail and stack (look)
 
@@ -240,7 +70,7 @@ No new settings keys in shared code (Q8), no `Notifier` change, and no bus addit
 | Image | The `created` preview, aspect-fill, clipped to the image area |
 | ✕ | Top-left, yellow (accent) glyph on a dark circle; dismisses |
 | Selected | 2 pt accent border and a ✓ at top-right |
-| Decorations | Source chip at the top, right of ✕; media badge bottom-right; warning badge centred on the image's bottom edge (all empty in Wave 1). At most one of each case is drawn, the first provider's; a second is logged |
+| Decorations | Source chip at the top, right of ✕; media badge bottom-right; warning badge centred on the image's bottom edge (in Wave 1 only the media badge, set by Recording). At most one of each case is drawn, the first provider's; a second is logged |
 | Strip | 8 pt padding, 6 pt gaps, 28 pt high buttons: Copy, Save, primary (accent fill), ⋯ (28 pt square). Buttons other than ⋯ share the remaining width |
 | Ring | 1.5 pt accent ring on the suggested strip button, or on ⋯ |
 | Animation | Fade in 0.18 s; fade out 0.15 s, then close; the stack slides to close gaps in 0.18 s |
@@ -326,7 +156,7 @@ Pane `Quick Access` (module `quickAccess`, order 20). Two pickers:
 6. **Esc.** On the key thumbnail: selection non-empty → clear it (rule 7); else dismiss that thumbnail.
 7. **Selection.** `imageClicked(shift: true)` on a screenshot toggles its id; the host is the most recently ⇧-clicked id still selected. The first selected id pauses every timer. `imageClicked(shift: false)` on any image clears the selection. Clearing (plain click, Esc, a `.selection` action, the last selected dismissed) restarts every timer with its entry's full duration, except the hovered one and those editing. A `.selection` action runs with the selected items in stack order, oldest first, then clears the selection. ⇧-click on other kinds does nothing.
 8. **Dismiss** (✕, Esc, expiry, eviction, Delete, a `deleted` event): remove from the selection (clearing rules if it empties), from `hovered`; if `keyPanel == id`, focus returns as in rule 5; `fadeOut` then `closePanel` on `fadeOutFinished`; the rest `layout`. A dismissed id never produces effects again.
-9. **Following the bus.** For a shown id: `saved` / `moved` replace the item (button title follows `isSaved`); `edited` replaces the preview when one is given; `deleted` dismisses; `openedInEditor` sets `isEditing` and pauses; `closedInEditor` clears it and resumes per rule 4; any other change, known or not, re-renders (so handler states and decorations refresh). Events for ids not shown are ignored.
+9. **Following the bus.** For a shown id: `saved` / `moved` replace the item (button title follows `isSaved`); `edited` replaces the preview when one is given; `deleted` dismisses; `editingStarted` sets `isEditing` and pauses; `editingEnded` clears it and resumes per rule 4; any other change, known or not, re-renders (so handler states and decorations refresh). Events for ids not shown are ignored.
 10. **Strip and menu.** Built per §5.1 from the registry's specs filtered by kind and by handler presence; each handler's `state` is asked at render: `hidden` drops the item, `disabled` greys it, `submenu` nests subitems. The primary is never hidden by state; `disabled` greys it.
 11. **Actions.** Per §5.2. Delete on a saved file emits `trash`, on a temp file `remove`; the dismiss and `deleted` follow the success result. Save emits `runFileAction(.save)`; success publishes `saved` and re-renders. Save As… emits `showSavePanel`; `saveAsChosen(nil)` does nothing.
 12. **No captured entries.** Every closure a panel or view holds captures only a `CaptureID` and a `weak` reference to the controller (`design/02` §5.8).
@@ -337,10 +167,10 @@ Regression tests carried over by name (`design/02` §3.2): `evictedQuickAccessPa
 
 | Target | Platform | Quick Access content |
 |---|---|---|
-| `BugeyeCore`, `BugeyeFeatures`, `BugeyeApp` shared files | | §3 only, in the contracts PR |
-| `QuickAccessCore` | portable | `QuickAccessModule` (pane spec; `.menu` specs for Reveal in Finder and Delete); `QuickAccessStack`; `DismissTimer`; `QuickAccessSelection`; `QuickAccessLayout`; `QuickAccessModel` (§6); `ThumbnailState` and the strip/menu builder; `QuickAccessFileActions` (copy read, Save via `move`, Save As via `write`, results as values); `QuickAccessSettings`; `QuickAccessStrings`; `WindowToken` |
-| `BugeyeTestSupport` | portable | nothing beyond §3.2's handler fake; Quick Access tests use the C1 and Wave 0 fakes |
-| `BugeyeApp` (`QuickAccess/`, `Chrome/`, `Wiring/QuickAccessWiring.swift`) | macOS | `QuickAccessController` (bus subscription, display-under-pointer lookup, 0.5 s ticker, effect executor); `QuickAccessPanel`; SwiftUI `ThumbnailView` in an `NSHostingView` whose `rootView` is replaced on render; drag provider; `NSSavePanel`, Trash, Reveal and focus effects; the Quick Access pane; `NightChrome` |
+| `BugeyeCore`, `BugeyeFeatures`, `BugeyeApp` shared files | | none: §3 comes from the contracts PR |
+| `QuickAccessCore` | portable | `QuickAccessModule` (pane spec; `.menu` specs for Reveal in Finder and Delete); `QuickAccessStack`; `DismissTimer`; `QuickAccessSelection`; `QuickAccessLayout`; `QuickAccessModel` (§6); `ThumbnailState` and the strip/menu builder; `QuickAccessFileActions` (copy read, Save via `move`, Save As via `write`, results as values); `QuickAccessSettings`; `QuickAccessStrings`; `WindowToken`; `QuickAccessActionID`, `QuickAccessActivity`, `PerformedQuickAccessAction` |
+| `BugeyeTestSupport` | portable | nothing; tests use the contract's and Wave 0's fakes and write handlers inline |
+| `BugeyeApp` (`QuickAccess/`, `Wiring/QuickAccessWiring.swift`) | macOS | `QuickAccessController` (bus subscription, display-under-pointer lookup, 0.5 s ticker, effect executor); `QuickAccessPanel`; SwiftUI `ThumbnailView` in an `NSHostingView` whose `rootView` is replaced on render; drag provider; `NSSavePanel`, Trash, Reveal and focus effects; the Quick Access pane (registered through `settingsPanes`), drawn with the contract's `NightChrome` |
 
 Main thread: file reads, moves, copies and trashing run off the main actor. Only the model, the controller, the views and the bus are on it.
 
@@ -348,7 +178,7 @@ Main thread: file reads, moves, copies and trashing run off the main actor. Only
 
 ## 8. Done when
 
-1. The contracts PR with §3 has merged before this epic's first PR, and the session has checked §3's shapes against it.
+1. The Wave 1 contracts PR has merged before this epic's first PR, and the session has checked §3's names against it.
 2. `linux` and `macos` are green on every ready-for-review PR of the epic (R10: drafts get no CI; pushes are batched), and `claude-review` has posted on each. Linux covers §6 rules 1–12 and the named regressions, `fitting` and layout on 1 and 2 displays with negative origins, timer banking, selection and host order, the strip/menu builder with fake specs and handlers (primary absent, primary present, hidden/disabled/submenu, ★ and ring placement, `Combine (N)`), Save, Save As… and Copy against temp folders and `FakeFileMetadataStore`, published events with `CaptureEventRecorder`, settings parsing, and every string in §5 character for character. macOS CI covers the panel's properties, Esc through both `keyDown` 53 and `cancelOperation`, render replacement, the drag provider's URL after Save, the pane, and leak tests: an evicted, a dismissed and an Esc-dismissed panel and its hosting view deallocate.
 3. The final review's Critical and Important findings are fixed, each with a test that failed first.
 4. The Mac batch (`needs-mac-check` on PRs touching panels or focus) passes: drag-out to Finder makes a copy of the current file; with the fixture app's `Type here` field focused, hovering a thumbnail then leaving returns typing to the fixture; thumbnails never appear in a full-screen capture.

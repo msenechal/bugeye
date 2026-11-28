@@ -2,7 +2,7 @@
 
 **Status:** draft for approval · **Date:** 27 November 2026 · **Process:** brainstorm → spec (this) → plan → execution → final review → fix pass → Mac batch → manual pass
 
-Recording rebuilds the first build's screen recorder (`design/04` §1.1–1.6): ⇧⌘5, area, display and window targets, the options bar, the countdown, MP4 with microphone and system audio, click rings, the keystroke badge, the webcam bubble, the ● menu, and delivery to Quick Access. It also records an **event timeline** next to every recording, silently, for the motion engine of Wave 3 (`design/14` §2). It runs as one of the parallel Wave 1 sessions (`design/14` R1) on Wave 0's skeleton. What it needs from shared code lands first, in the Wave 1 contracts PR (§3).
+Recording rebuilds the first build's screen recorder (`design/04` §1.1–1.6): ⇧⌘5, area, display and window targets, the options bar, the countdown, MP4 with microphone and system audio, click rings, the keystroke badge, the webcam bubble, the ● menu, and delivery to Quick Access. It also records an **event timeline** next to every recording, silently, for the motion engine of Wave 3 (`design/14` §2). It runs as one of the parallel Wave 1 sessions (`design/14` R1) on Wave 0's skeleton. What it needs from shared code lands first, in the Wave 1 contracts PR (`docs/specs/2026-11-27-wave-1-contracts.md`; §3 here lists what it uses).
 
 ## 1. Decisions
 
@@ -18,63 +18,57 @@ Rulings I made (each can be overturned at approval; cost if wrong in brackets):
 | # | Ruling | Why |
 |---|---|---|
 | V1 | **`RecordingFlow` in `RecordingCore` is the single owner of a recording**: a pure reducer, state + event → state + effects, with a session id on every async result (§6). The shell executes effects and translates callbacks into events, nothing else. | `design/04` §5.3. The first build's 524-line coordinator cost two review rounds on "⇧⌘5 at a bad moment". [Low] |
-| V2 | **The recording overlay is Capture's overlay, reached through an `AreaSelector` contract** (§3.6). Recording passes a `SelectionRequest` whose fields carry everything recording-specific (hint text, click-selects-display, window-centre rule, its own last area) as data; Capture's flow implements those rows generically and returns a `SelectionResult`. Recording never edits a capture-owned file. | One overlay owner keeps the stuck-overlay fixes in one place (`design/11` §6). Recording-specific behaviour as data means Capture's code knows no recording. [Medium: Capture's Wave 1 scope grows by the rows in §3.6; if Capture slips, Recording's last PR waits for it.] |
-| V3 | **The element under a click comes from the existing `AXReader.element(at:)`**, with `AXElementInfo` gaining `subrole` and `isSecure` (§3.2) and a minimal macOS adapter that answers only point queries (`elements(inWindowOf:)` throws `unsupported`). One lookup in flight, 250 ms timeout, off the main actor. The Wave 2 AX epic absorbs the adapter. | The port already exists. A point query is all the timeline needs. [Low: the Wave 2 epic replaces one file.] |
+| V2 | **The recording overlay is Capture's overlay, reached through the contract's `AreaSelector`** (contracts §4.1.8, K15; Capture §6.1). Recording passes a `SelectionRequest` whose fields carry everything recording-specific (hint text, click-selects-display, window-centre rule, its own last area) as data; Capture's flow implements those rows generically and returns a `SelectionResult`. Recording never edits a capture-owned file. | One overlay owner keeps the stuck-overlay fixes in one place (`design/11` §6). Recording-specific behaviour as data means Capture's code knows no recording. [Medium: Capture's Wave 1 scope grows by the rows in its §6.1; if Capture slips, Recording's last PR waits for it.] |
+| V3 | **The element under a click comes from the existing `AXReader.element(at:)`**, which the contracts PR moves unchanged into `Sources/BugeyeCore/Ports/Accessibility/`, Recording-owned in Wave 1 (contracts K3). This epic adds `subrole` and `isSecure` to `AXElementInfo` (§3.1) and a minimal macOS adapter that answers only point queries (`elements(inWindowOf:)` throws `unsupported`). One lookup in flight, 250 ms timeout, off the main actor. The Wave 2 AX epic absorbs the adapter. | The port already exists. A point query is all the timeline needs. [Low: the Wave 2 epic replaces one file.] |
 | V4 | **Typed text can't be represented in the timeline.** `TimelineKey`'s only initializer rejects any press that isn't a shortcut or a non-text key; `TimelineElement`'s initializer has no text parameter and returns nil for secure fields. Decoding re-runs the same initializers. A Linux test types a known password and sentence through the whole recorder and greps the written bytes (§7.4). The overlay's "Show all keystrokes" never reaches the timeline. | `design/11` §6: "data the user typed must never leak into output". A rule in the type can't be forgotten by a later caller. [Low] |
-| V5 | **The timeline is stored by capture identity, not beside the `.mp4`**: `~/Library/Application Support/dev.msenechal.bugeye/Timelines/<CaptureID>.timeline.jsonl`, versioned JSON Lines (§7). It is deleted when a `deleted` event for that capture reaches the bus. | A sidecar beside the file would need Quick Access's Save, Move and Delete to know about it (cross-epic coupling), would clutter `~/Pictures/Bugeye`, and would travel with the movie when you drag the folder somewhere. The `CaptureID` xattr already follows the file. [Low: if you want a visible sidecar, it's one path function. Orphans: a recording deleted in Finder leaves its timeline; the Wave 2 index can sweep them.] |
+| V5 | **The timeline is stored by capture identity, not beside the `.mp4`**: `~/Library/Application Support/dev.msenechal.bugeye/Timelines/<CaptureID>.timeline.jsonl` (under the contract's `CaptureFolders.applicationSupport`), versioned JSON Lines (§7). It is deleted when a `deleted` event for that capture reaches the bus. | A sidecar beside the file would need Quick Access's Save, Move and Delete to know about it (cross-epic coupling), would clutter `~/Pictures/Bugeye`, and would travel with the movie when you drag the folder somewhere. The `CaptureID` xattr already follows the file. [Low: if you want a visible sidecar, it's one path function. Orphans: a recording deleted in Finder leaves its timeline; the Wave 2 index can sweep them.] |
 | V6 | **Timeline clock = video time.** `t` is integer milliseconds on the output timeline: 0 is the first video frame, paused spans are removed, input captured during a pause or before the first frame is dropped. The same `RecordingClock` maps both samples and input. Cursor sampled at 30 Hz, only when it moved ≥ 0.5 pt. Size cap 64 MiB (§7.3). | Zoom and captions are planned against frames; one clock means no drift maths later. 30 Hz ≈ 5 MB per hour of motion. [Low] |
-| V7 | **Recording's macOS code lives in `Sources/BugeyeApp/Recording/`**, including its adapters (stream + writer, finalizer, camera, input monitor, devices, disk). Only two adapters go to `MacAdapters`: the AX point reader and `MediaPermissions`, whose ports are shared. Recording-only interfaces are internal protocols of the shell with fakes for macOS tests; the core has no recording ports at all, because the reducer only emits effects. | `MacAdapters` depends on `BugeyeCore` only (Wave 0 P14), but the writer needs `RecordingClock` and `RecordingGeometry` from `RecordingCore`. [Low: Wave 4's guide reuses recording through the shell.] |
+| V7 | **Recording's macOS code lives in `Sources/BugeyeApp/Recording/`**, including its adapters (stream + writer, finalizer, camera, input monitor, devices, disk). Only two adapters go to `MacAdapters`, in Recording-owned folders: the AX point reader (`Accessibility/`) and `MediaPermissions` (`Permissions/`), whose ports are `BugeyeCore` ports (Recording-owned in Wave 1, contracts K3). The overlay window draws through the Editor's display-list executor (`MacAdapters/DisplayList/`, contracts K10); it never has its own. Recording-only interfaces are internal protocols of the shell with fakes for macOS tests; the core has no recording ports at all, because the reducer only emits effects. | `MacAdapters` depends on `BugeyeCore` only (Wave 0 P14), but the writer needs `RecordingClock` and `RecordingGeometry` from `RecordingCore`. [Low: Wave 4's guide reuses recording through the shell.] |
 | V8 | **Keep the two-step `.mov` → `.mp4` design**, with a deadline (60 s + half the duration) and progress in the ● menu. A missed deadline or failure delivers the `.mov`. Mixing at capture time is not done. | Fragmented `.mov` survives a crash; SCK delivers mic and system audio as separate streams with separate clocks. `design/04` §5.3 allows keeping it "with a timeout and progress". [Low] |
 | V9 | **No Format control in Wave 1.** The bar has no MP4/GIF segment and the ⚙ menu has no GIF rows. `recording.format`, `recording.gifWidth`, `recording.gifFps` are reserved keys. The Wave 2 Trim + GIF epic adds the segment between Record and Mic. | GIF is a later epic (B1). [Low] |
 | V10 | **Window recordings include the window's child windows**: windows of the same process at layer > 0 (menus, pop-ups, sheets) whose frame intersects the followed rect, re-evaluated on each follow tick with `updateContentFilter`. | `design/04` §5.3. Menus were the main known gap (§4). [Low: if a filter update stutters, drop back to the window alone.] |
 | V11 | **The stream starts during the countdown**, frames discarded until the countdown ends; the take begins at the next complete frame after it. Permission and stream failures surface during the countdown. | Hides SCK's start latency; the recording starts on "1" running out, not a beat later. Mic indicator lights 3 s early. [Low] |
-| V12 | **Recordings follow the Capture pane's "Copy to clipboard" and "Save to folder"** (read by key through `SettingsStore`, §3.5). "Downscale" doesn't apply. The clipboard gets the file reference only. | "Delivered like a capture" (`design/04` §1.6). One pane, no duplicate toggles. [Low] |
+| V12 | **Recordings follow the Capture pane's "Copy to clipboard" and "Save to folder"** (read through the contract's `OutputSettings`). "Downscale" doesn't apply. The clipboard gets the file reference only. | "Delivered like a capture" (`design/04` §1.6). One pane, no duplicate toggles. [Low] |
 | V13 | **Accessibility gates keys and elements, nothing else.** Keys (badge and timeline) and element lookups need it; clicks, cursor, scrolls and focus need no permission. Input Monitoring is not requested. With Accessibility granted, the timeline records shortcuts even when the Keys toggle is off. A hidden key `recording.timeline` (default true) turns the timeline off. | Global key monitors are covered by Accessibility. The timeline is invisible, so it shouldn't depend on a visible toggle. [Low: confirmed in the Mac batch.] |
 | V14 | **Window titles are never recorded** (focus events carry bundle id, app name, window id and frame). Element titles are kept, trimmed to 120 characters. | Titles carry document names, mail subjects and URLs; captions need button names, not window names. [Low] |
 | V15 | **A take left behind by a crash is recovered at launch**: a `.mov` in the in-progress folder with no live take is delivered as a `.mov` named by its creation time, with a notice (§5.7). | The 2 s fragments exist to make that file playable; without recovery it rots in Caches. [Low] |
 | V16 | **Testing split** (§9): the reducer, clock, geometry, overlay logic, timeline and privacy filter on Linux; windows, the writer and finalizer with synthetic samples, and the status item on hosted macOS CI; real ScreenCaptureKit, audio, camera, overlays in the video and permissions in the Mac batch and your manual pass. Every recording PR gets `needs-mac-check`. | Hosted runners can't grant Screen Recording, microphone or camera (`design/14` R8, R9). [Low] |
 | V17 | **New strings the docs don't give**, settled in §5: start failure, delivery failure, the disk-stop body, Restart/Discard informative text, finishing progress, recovery, tooltips for the bar's toggles when available, status-item accessibility labels. | `design/11` §7. [Low] |
+| V18 | **Reconciled with the Wave 1 contracts spec** (27 Nov 2026). §3 is now a list of what this epic uses from it, plus the shapes it owns. Changed: the writer's `adopt` is the contract's `CaptureFileWriter.move(_:into:named:identity:)`, which adds ` (2)` itself; `CaptureFileNamer.name` has no `attempt`; Recording's `TerminationCoordinator` is the contract's `TerminationGate.addFinish`; the router is `ActionRouter`; wiring is `RecordingWiring.modules` + `install`; the Settings pane goes through `settingsPanes`. Moved out of the contracts PR into Recording-owned folders: `MediaPermissions`, the `AXElementInfo` fields, `MediaTime`, the timeline schema. New: Recording sets the thumbnail's `▶` badge as a `mediaBadge` decoration (contracts K12, §6 item 1), and its overlay uses the Editor's executor. No settled string changed. | One contract for five parallel epics. [Low] |
 
 ## 2. Scope
 
 In scope:
-1. Recording's entries in the Wave 1 contracts PR (§3).
+1. Nothing shared: what Recording uses from other epics and the shell comes from the Wave 1 contracts PR (§3); the ports only Recording uses are in its own folders (§3.1).
 2. ⇧⌘5 and the menu item Record Screen; selection through Capture's overlay (area, display, window, last area); the options bar; the 3 · 2 · 1 countdown; ● menu with Pause, Resume, Stop, Restart, Discard; ⌘Q waits for a recording.
 3. Recording: ScreenCaptureKit stream, `.mov` writer, MP4 conversion with one mixed audio track, H.264 / HEVC, window following, disk guard, failure handling, crash recovery.
 4. Overlays: click rings, keystroke badge, webcam bubble.
-5. Delivery: naming, save or temp folder, clipboard, `created` on the bus with a first-frame preview and the duration.
+5. Delivery: naming, save or temp folder, clipboard, the thumbnail's `▶ mm:ss` badge (a `mediaBadge` decoration), `created` on the bus with a first-frame preview and the duration.
 6. The event timeline (§7).
 7. The Recording settings pane; microphone, camera and Accessibility permission handling in the bar.
 
-Out of scope: trim, GIF recording and export (Wave 2); captions, auto-zoom, compositor (Wave 3); Record Guide (Wave 4); recording provenance (`design/06`, Wave 2); Quick Access's thumbnail, ▶ badge and buttons (the Quick Access epic draws them from the contract); the Settings Setup section (Capture C14); Open Last Capture playback.
+Out of scope: trim, GIF recording and export (Wave 2); captions, auto-zoom, compositor (Wave 3); Record Guide (Wave 4); recording provenance (`design/06`, Wave 2); Quick Access's thumbnail and buttons (Quick Access draws them; Recording only supplies the badge's text as a decoration, contracts K12); the Settings Setup section (Capture C14); Open Last Capture playback.
 
-## 3. Contract needs
+## 3. Uses from the contracts
 
-These are edits to shared files or shapes another epic implements or consumes. They go in the Wave 1 contracts PR, which merges before any epic starts. Items marked **(moved)** are already in the Capture spec as Capture's own PR work; they move to the contracts PR because Recording needs them too. Everything not listed here lives in `RecordingCore`, `Sources/BugeyeApp/Recording/`, and the two `MacAdapters` files of V7.
+Everything in this list is in `docs/specs/2026-11-27-wave-1-contracts.md` and lands in the Wave 1 contracts PR, which merges before any epic starts. Recording never edits a contract file; after the merge it writes only the folders that spec's §3 gives it. Section numbers below are the contracts spec's.
 
-### 3.1 `ScreenSource`: no streaming member
+- **Bus and items** (§4.1.1): `CaptureItem` with `duration` (seconds; nil for stills) and `CaptureKind.recording`, whose `fileExtension` (`mp4`) is only the default: the extension of `fileURL` is authoritative, so a `.mov` fallback stays `.mov` through Quick Access's Save. Recording publishes `CaptureEvent(change: .created, item:, preview:, origin: "recording")`, `pixelsPerPoint` = the stream's pixel scale, `preview` = the first frame at most `CaptureEvent.previewMaxWidth` (480) px wide through `PixelBufferImages.preview` (nil if it can't be read). It subscribes for `deleted` of `.recording` items to delete their timeline (V5). No new `CaptureChange`.
+- **Delivery** (§4.1.2–4.1.4): `CaptureFileWriter.move(take, into: folder, named: name, identity: .new(id))`, which never replaces a file and adds ` (2)` itself, copying across volumes when needed; `CaptureFileNamer.name(kind: .recording, date:, fileExtension:)`; `CaptureFolders.temp`, `.recordingsInProgress` and `.applicationSupport`; `OutputSettings` (V12); `OutputStrings` (the `Couldn't save to folder` notice).
+- **Decoration** (§4.2.3): before publishing `created`, `thumbnailDecorations.set([.mediaBadge(text: "▶ " + MediaTime.text(seconds: duration))], for: id, from: "recording")` (K12).
+- **Selection and gating** (§4.1.8): `AreaSelector` (through `AppContext.areaSelector`, Capture's implementation once its last PR lands), `SelectionPurpose`, `SelectionRequest`, `SelectionResult`, `StoredArea` (the `recording.lastArea` JSON), `FakeAreaSelector`; `ScreenActivity` (`recordingSetup`, `recording`, `allows(.startRecording)`). Capture's side of the selector is Capture §6.1.
+- **Permission** (§4.1.5, §4.5): `ScreenCapturePermission.preflight()` and `FakeScreenCapturePermission`; Capture's Screen Recording alert through `AppContext.screenRecordingAlert.show()`.
+- **Drawing** (§4.1.5, §4.1.7, §4.4): the display list (`fillPath`, `strokePath`, `textRun`, `VectorPath.ellipse(in:)`, `roundedRect`), `TextMeasuring` + `FakeTextMeasurer` + `CoreTextMeasurer` for the keystroke badge; the executor is the Editor's (`MacAdapters/DisplayList/`, contracts K10).
+- **Shell** (§4.2, §4.5): `HotkeySpec.title`, `MenuItemSpec.hotkeyID`, `HotkeyBindings.current` (the ● menu's `Stop` shows the current ⇧⌘5 binding); `ActionRouter` (`onMenuItem` for Record Screen and every override-menu entry, `onHotkey` for `recording.toggle`); `StatusItemOverride` and `AppContext.statusItem.setOverride(_:owner: "recording")`; `TerminationGate.addFinish` (its participant sends `quitRequested` and returns on `allowQuit`; editors are asked first, K11); `NightChrome` (options bar, countdown); `RecordingWiring` (`modules`, `install`, `onLaunch` for crash recovery); `settingsPanes` for the Recording pane; `Notifier`, `ClipboardWriter` and their adapters.
+- **Resources** (§4.6): `NSMicrophoneUsageDescription` = `Bugeye records your microphone only when you turn on Mic for a recording.` and `NSCameraUsageDescription` = `Bugeye shows your camera only when you turn on Cam for a recording.`; the fixture app's `Password` field and `Play Click` button.
 
-Recording does not stream through `ScreenSource`. Samples are `CMSampleBuffer`s that never enter the portable core, and the stream, the writer, pause stamps and the follow timer must share one serial queue (`design/04` §5.2), so they live together in the shell's recorder. The combined shape is therefore Capture's C8 shape, unchanged, moved into its own file so no two epics edit `Ports.swift`:
+### 3.1 Shapes Recording owns in shared targets
 
-```swift
-// Sources/BugeyeCore/Ports/ScreenSource.swift (moved out of Ports.swift)
-public protocol ScreenSource: Sendable {
-    /// Every display. `frame` is in Cocoa global points (bottom-left of the primary display).
-    func displays() async throws -> [DisplayInfo]
-    // Capture C8: freeze(displays:) and captureWindow(_:pixelSize:), shapes as Capture's plan defines them.
-}
-
-/// A window server window id (CGWindowID). Shared by Capture's window list, the selector and recording.
-public struct WindowID: Hashable, Codable, Sendable {
-    public var rawValue: UInt32
-    public init(_ rawValue: UInt32)
-}
-```
-
-### 3.2 `AXReader` point query
+Single-epic ports live in folders this epic owns (contracts K3, §4.1.9). Each change after the contracts PR is a ruling in this epic's ledger, not a contract amendment.
 
 ```swift
-// Sources/BugeyeCore/Ports/Ports.swift: AXElementInfo gains two fields; old call sites still compile.
+// Sources/BugeyeCore/Ports/Accessibility/AXReader.swift (moved there unchanged by the contracts PR).
+// AXElementInfo gains two fields; old call sites still compile.
 public struct AXElementInfo: Hashable, Sendable {
     public var role: String
     public var subrole: String?            // new: "AXSecureTextField", "AXSearchField", …
@@ -94,14 +88,8 @@ public protocol AXReader: Sendable {
     func element(at point: Point2D) async throws -> AXElementInfo?
     func elements(inWindowOf processID: Int32) async throws -> [AXElementInfo]
 }
-```
 
-Rule test in the contracts PR: an `AXElementInfo` with `isSecure: true` has nil `title` and `text`. The adapter `Sources/Mac/MacAdapters/Accessibility/AXPointReader.swift` is Recording's in Wave 1 (V3).
-
-### 3.3 Permissions
-
-```swift
-// Sources/BugeyeCore/Ports/MediaPermissions.swift (new)
+// Sources/BugeyeCore/Ports/Recording/MediaPermissions.swift
 public enum MediaPermission: String, Hashable, Sendable, CaseIterable { case microphone, camera, accessibility }
 public enum PermissionState: String, Hashable, Sendable { case granted, denied, notDetermined }
 
@@ -112,199 +100,18 @@ public protocol MediaPermissions: Sendable {
     /// Accessibility returns its current state at once; the user grants it later in System Settings.
     func request(_ permission: MediaPermission) async -> PermissionState
 }
-```
 
-- **(moved)** Capture's `ScreenCapturePermission` port (C8) and the shell's Screen Recording alert (Capture §5.5), exposed as `AppServices.permissionAlerts.showScreenRecordingMissing()` (§3.9). Capture implements both; Recording calls them.
-- `Resources/Info.plist` gains:
-  - `NSMicrophoneUsageDescription`: `Bugeye records your microphone only when you turn on Mic for a recording.`
-  - `NSCameraUsageDescription`: `Bugeye shows your camera only when you turn on Cam for a recording.`
-- No Input Monitoring, no entitlements (the app isn't sandboxed or hardened-runtime signed).
-- Adapter `Sources/Mac/MacAdapters/Permissions/SystemMediaPermissions.swift`, Recording's in Wave 1. Fake `FakeMediaPermissions` in `BugeyeTestSupport`.
-
-### 3.4 Bus events and `CaptureKind`
-
-```swift
-// CaptureItem gains a duration; the initializer keeps working for screenshots.
-public struct CaptureItem {
-    …
-    /// Seconds, for recordings and GIFs; nil for stills. Quick Access draws "▶ mm:ss" from it.
-    public var duration: Double?
-    public init(id: CaptureID, fileURL: URL, isSaved: Bool, kind: CaptureKind, createdAt: Date,
-                pixelsPerPoint: Double, duration: Double? = nil)
-}
-
-// Sources/BugeyeCore/Captures/MediaTime.swift (new): one formatter for the ● timer and the ▶ badge.
+// RecordingCore: one formatter for the ● timer and the ▶ badge.
 public enum MediaTime {
     /// "00:07", "12:34", "1:02:03" (h:mm:ss from one hour). Truncates to whole seconds.
     public static func text(seconds: Double) -> String
 }
 ```
 
-- **No new `CaptureKind` case.** A recording is `.recording` whether its file is `.mp4` or the `.mov` fallback. Contract rule, documented on `fileExtension`: *the extension of `fileURL` is authoritative; `fileExtension` is only the default for new files*, so Quick Access Save keeps `.mov` (`design/02` §2.10).
-- A recording publishes `CaptureEvent(change: .created, item:, preview:, origin: "recording")`, with `pixelsPerPoint` = the stream's pixel scale and `preview` = the first frame at most 480 px wide (nil if it can't be read: Quick Access shows the generic movie icon).
-- Recording subscribes for `deleted` of `.recording` items to delete their timeline (V5). No new `CaptureChange`.
-
-### 3.5 Shared output: writer, namer, folders, keys
-
-```swift
-// CaptureFileWriter (moved: Capture C8's create) plus adopt, both in the contracts PR so no two epics edit it.
-extension CaptureFileWriter {
-    /// Capture C8. Never replaces an existing file.
-    public func create(_ data: Data, named name: String, in folder: URL, identity: CaptureID) throws -> URL
-    /// Moves a finished file into `folder` under `name` without replacing anything (rename with
-    /// RENAME_EXCL; across volumes: copy to a temp name in `folder`, then exclusive rename, then remove
-    /// the source), and writes the identity xattr. On a clash it throws `.exists` and the caller asks
-    /// the namer for the next suffix. The source is untouched on failure.
-    public func adopt(fileAt source: URL, named name: String, in folder: URL, identity: CaptureID) throws -> URL
-}
-
-// Sources/BugeyeCore/Captures/CaptureFileNamer.swift (moved from CaptureCore's FileNamer)
-public enum CaptureFileNamer {
-    /// "<prefix> YYYY-MM-DD at HH.MM.SS[ (n)].<ext>", local time zone, en_US_POSIX; n = attempt + 1, from 2.
-    public static func name(kind: CaptureKind, date: Date, fileExtension: String, attempt: Int,
-                            timeZone: TimeZone) -> String
-}
-
-// Sources/BugeyeCore/Captures/CaptureFolders.swift (moved: Capture C11's constant)
-public enum CaptureFolders {
-    public static let bundleID = "dev.msenechal.bugeye"
-    /// ~/Library/Caches/dev.msenechal.bugeye/Captures/ (purged by Capture's janitor).
-    public static func temp(home: String) -> URL
-    /// ~/Library/Caches/dev.msenechal.bugeye/Recordings/ (takes in progress; the janitor never touches it).
-    public static func recordingsInProgress(home: String) -> URL
-    /// ~/Library/Application Support/dev.msenechal.bugeye/
-    public static func applicationSupport(home: String) -> URL
-}
-
-// Sources/BugeyeCore/Captures/OutputSettingKeys.swift (new): the Capture pane keys others read (V12).
-public enum OutputSettingKeys {
-    public static let copyToClipboard = "capture.copyToClipboard"   // default true
-    public static let saveToFolder = "capture.saveToFolder"         // default true
-}
-```
-
-### 3.6 The selector (V2)
-
-```swift
-// Sources/BugeyeCore/Selection/AreaSelector.swift (new). Capture implements it; Recording, and later
-// scrolling and text capture, call it.
-public enum SelectionPurpose: String, Hashable, Sendable { case screenshot, recording, scrolling, text }
-
-/// An area remembered for Return: display-local, top-left origin, points (Capture C9's JSON shape).
-public struct StoredArea: Hashable, Codable, Sendable {
-    public var display: DisplayID
-    public var rect: Rect2D
-    public var displaySize: Size2D
-    public init(display: DisplayID, rect: Rect2D, displaySize: Size2D)
-}
-
-public struct SelectionRequest: Hashable, Sendable {
-    public var purpose: SelectionPurpose
-    public var startInWindowMode: Bool
-    /// Drawn at the top of each display; nil for none.
-    public var hint: String?
-    /// A click without a drag, or a selection under 4 × 4 pt, selects the display under it.
-    public var clickSelectsDisplay: Bool
-    /// In window mode, a window whose centre is on no display beeps and the overlay stays.
-    public var windowNeedsDisplayCentre: Bool
-    /// What Return / keypad Enter returns; beeps when nil, its display is gone or changed size.
-    public var lastArea: StoredArea?
-    public init(purpose: SelectionPurpose, startInWindowMode: Bool = false, hint: String? = nil,
-                clickSelectsDisplay: Bool = false, windowNeedsDisplayCentre: Bool = false, lastArea: StoredArea? = nil)
-}
-
-public enum SelectionResult: Hashable, Sendable {
-    case area(DisplayID, Rect2D)                         // display-local, top-left, points
-    case display(DisplayID)
-    case window(WindowID, display: DisplayID, frame: Rect2D)  // frame in Cocoa global points
-    case cancelled
-    case busy                                            // another selection or capture is in progress
-}
-
-@MainActor
-public protocol AreaSelector: AnyObject {
-    /// Opens the overlay for `request` and returns once it closes. Purposes other than `.screenshot`
-    /// never deliver, store a last area, or capture a window: they only return the result.
-    func select(_ request: SelectionRequest) async -> SelectionResult
-    /// Cancels a selection opened with this purpose (no-op otherwise); `select` returns `.cancelled`.
-    func cancel(_ purpose: SelectionPurpose)
-}
-```
-
-What this asks of Capture's flow (rows its §6 marked for later purposes): the hint is drawn; `mouseUp` under 4 × 4 pt with `clickSelectsDisplay` → *leave*, result `.display`; a window click checks `windowNeedsDisplayCentre`; Return uses `request.lastArea`; a new event `externalCancel` → *leave* with `cancelled`; I5's results gain `display`. A screenshot overlay already up answers `.busy`. Fake: `FakeAreaSelector` (scripted results, records requests and cancels).
-
-### 3.7 Cross-module gating
-
-```swift
-// Sources/BugeyeCore/Selection/ScreenActivity.swift (new): design/01 §1.2's HotkeyRoute, shared.
-@MainActor
-public final class ScreenActivity {
-    public enum Activity: String, Hashable, Sendable {
-        case screenshotSelection   // Capture: from request to idle, purpose .screenshot only
-        case recordingSetup        // Recording: selecting, configuring, countingDown, starting
-        case recording             // Recording: recording, paused, finishing
-    }
-    public enum Request: Hashable, Sendable { case screenshot, captureText, startRecording, findCapture }
-    public init()
-    public private(set) var active: Set<Activity>
-    public func begin(_ activity: Activity)     // idempotent
-    public func end(_ activity: Activity)       // idempotent
-    /// screenshot: not during recordingSetup. captureText: not during recordingSetup or recording.
-    /// startRecording: not during screenshotSelection. findCapture: always.
-    public func allows(_ request: Request) -> Bool
-}
-```
-
-Capture checks `allows(.screenshot)` before every request and holds `.screenshotSelection` while its flow isn't idle for a screenshot; this is a new rule for Capture (design/01 §1.2). Stopping a recording is never gated.
-
-### 3.8 Status item override
-
-```swift
-// Sources/BugeyeFeatures/StatusItemOverride.swift (new)
-public struct StatusItemOverride: Hashable, Sendable {
-    public enum Badge: Hashable, Sendable {
-        case recording(elapsed: String)   // red "● " + elapsed, monospaced digits
-        case paused(elapsed: String)      // "❙❙ " + elapsed
-        case finishing                    // the hourglass SF Symbol
-    }
-    public var badge: Badge
-    public var accessibilityLabel: String
-    /// Replaces the whole status menu while set. A nil id is a separator.
-    public var menu: [Entry]
-    public struct Entry: Hashable, Sendable {
-        public var id: String?
-        public var title: String
-        public var shownKey: KeyCombo?
-        public var isEnabled: Bool
-        public init(id: String?, title: String, shownKey: KeyCombo? = nil, isEnabled: Bool = true)
-        public static let separator: Entry
-    }
-    public init(badge: Badge, accessibilityLabel: String, menu: [Entry])
-}
-
-// BugeyeApp
-@MainActor protocol StatusItemControlling: AnyObject {
-    /// nil restores the glyph and the module menu. A second owner's override is refused and logged.
-    func setOverride(_ override: StatusItemOverride?, owner: String)
-}
-```
-
-`MenuBarController` implements it: variable-length item while overridden, square otherwise; chosen entry ids go through the action router (§3.9). The shell's own timers stay out of it: Recording's ticker runs in `.common` modes.
-
-### 3.9 App-shell edits
-
-All in the contracts PR, so no epic edits these files again:
-
-- **(moved)** Capture C12's action router: `AppServices.actions: ActionRouter`, `register(_ id: String, _ action: @escaping @MainActor () -> Void)`, looked up by `AppDelegate` for menu items, hotkeys and override-menu entries.
-- **Per-epic wiring files**, created empty: `Sources/BugeyeApp/Wiring/{Capture,QuickAccess,Editor,Recording,Text}Wiring.swift`, each declaring `extension AppServices { static let <epic>Modules: [any FeatureModule] = []; func wire<Epic>() {} }`. `AppServices.modules` becomes `[GeneralModule()] + captureModules + quickAccessModules + editorModules + recordingModules + textModules`, and `AppDelegate` calls each `wire…()` once at launch. An epic joins by editing only its own wiring file (Capture C12's "last PR" rule holds).
-- **Settings pane registry**: `@MainActor enum SettingsPaneViews { static func register(_ sectionID: String, _ make: @escaping @MainActor () -> AnyView) }`, consulted by `SettingsWindowController` instead of a switch.
-- **New `AppServices` members**: `captureEvents` (Capture C1), `screenActivity: ScreenActivity`, `areaSelector: any AreaSelector` (a stub answering `.cancelled` until Capture's lands), `statusItem: any StatusItemControlling`, `permissionAlerts` (`showScreenRecordingMissing()`), `mediaPermissions: any MediaPermissions`, `axReader: any AXReader`, `termination: TerminationCoordinator`.
-- **Termination**: `@MainActor final class TerminationCoordinator { func register(_ participant: @escaping @MainActor (_ done: @escaping @MainActor () -> Void) -> Bool) }`. A participant returns true to allow quitting now, or false and calls `done` later. `applicationShouldTerminate` answers `.terminateLater` while any participant is pending, then `reply(toApplicationShouldTerminate: true)`.
-- **Recording's registrations**, through `RecordingModule` (in `RecordingCore`) and `wireRecording()`: menu item `recording.record` `Record Screen`, slot `.record` order 0, showing the current binding (order 10 stays free for Record Guide); `HotkeySpec(id: "recording.toggle", title: "Record Screen", defaultKey: ⇧⌘5, settingKey: "recording.hotkey.toggle")`, which also puts it in Capture's Shortcuts pane and its macOS-conflict check (entry 184); settings section `recording` `Recording`, order 30.
-
-### 3.10 The timeline schema
-
-`Sources/BugeyeCore/Timeline/EventTimeline.swift` (new): the Codable line types of §7, `TimelineKey`, `TimelineElement`, `TimelineModifier`, and `EventTimeline.url(for: CaptureID, home: String) -> URL`. It is in `BugeyeCore` because `MotionCore` (Wave 3) and `GuideCore` (Wave 4) read it and area cores can't depend on `RecordingCore` (Wave 0 P14). Recording owns the file in Wave 1.
+- Rule test: an `AXElementInfo` with `isSecure: true` has nil `title` and `text`. Adapters: `Sources/Mac/MacAdapters/Accessibility/AXPointReader.swift` (V3) and `Sources/Mac/MacAdapters/Permissions/SystemMediaPermissions.swift`. Fakes: `FakeMediaPermissions` (`Sources/BugeyeTestSupport/Recording/`) and `FakeAXReader` with scripted delays (`Sources/BugeyeTestSupport/Accessibility/`).
+- No Input Monitoring, no entitlements (the app isn't sandboxed or hardened-runtime signed).
+- **The timeline schema** (`Sources/BugeyeCore/Timeline/EventTimeline.swift`, Recording-owned): the Codable line types of §7, `TimelineKey`, `TimelineElement`, `TimelineModifier`, and `EventTimeline.url(for: CaptureID, home: String) -> URL` under `CaptureFolders.applicationSupport`. It is in `BugeyeCore` because `MotionCore` (Wave 3) and `GuideCore` (Wave 4) read it and area cores can't depend on `RecordingCore` (Wave 0 P14); no other Wave 1 epic reads it, so it isn't contract.
+- **Registrations**, through `RecordingModule` (in `RecordingCore`) and `RecordingWiring`: menu item `recording.record` `Record Screen`, slot `.record` order 0, `hotkeyID: "recording.toggle"` so it shows the current binding (order 10 stays free for Record Guide); `HotkeySpec(id: "recording.toggle", title: "Record Screen", defaultKey: ⇧⌘5, settingKey: "recording.hotkey.toggle")`, which also puts it in Capture's Shortcuts pane, its registrar and its macOS-conflict check (entry 184); settings section `recording` `Recording`, order 30. The status-item badge is drawn by the shell from the override (contracts §4.5); the ticker runs in `.common` modes.
 
 ## 4. Settings
 
@@ -332,7 +139,7 @@ Invalid stored values fall back to defaults. Settings are read fresh when the ba
 
 ### 5.1 Starting
 
-1. **⇧⌘5** or **Record Screen**. Ignored (logged `busy`) when `ScreenActivity` refuses `.startRecording`. Without Screen Recording: Capture's alert, nothing else.
+1. **⇧⌘5** or **Record Screen**. Ignored (logged `busy`) when `ScreenActivity` refuses `.startRecording`. Without Screen Recording (`ScreenCapturePermission.preflight`): Capture's alert (`screenRecordingAlert.show()`), nothing else.
 2. Recording calls `select` with: purpose `.recording`, hint `Drag an area · Click to record this display · Space: pick a window · Esc to cancel` (`design/02` §1.2), `clickSelectsDisplay` and `windowNeedsDisplayCentre` true, `lastArea` = `recording.lastArea`. So: drag an area, click for the whole display, Return for the last recording area, Space for window mode, Esc / right-click / ⇧⌘5 to cancel.
 3. An area result (dragged or Return) is stored as `recording.lastArea`. A window result becomes the display holding its centre, with its frame followed (§5.5).
 4. A **border** marks the target: 2 pt white dashed (6 on, 4 off) while configuring, solid `systemRed` 2 pt while recording, 3 pt outside the area (inset 3 pt for a whole display). Borderless, click-through, `.statusBar` level, never in the video.
@@ -367,7 +174,7 @@ What is recorded is `effectiveOptions(options, permissions, devices)`: mic off w
 - **⇧⌘5** stops. **⌘Q** stops and saves first, and waits for a recording that is finishing.
 - Paused time is cut from the file and the timeline.
 - **Disk:** starting needs 1 GB free on the in-progress folder's volume; below 300 MB (checked every 5 s) the recording stops and keeps what was recorded.
-- During set-up (selecting to the end of the countdown), screenshots are refused; during a recording ⇧⌘3/⇧⌘4 still work (§3.7).
+- During set-up (selecting to the end of the countdown), screenshots are refused; during a recording ⇧⌘3/⇧⌘4 still work (`ScreenActivity`, contracts §4.1.8).
 
 ### 5.4 Overlays
 
@@ -383,8 +190,8 @@ Records the window, its child windows (V10) and Bugeye's overlays; windows in fr
 ### 5.6 The result
 
 - `.mov` in `~/Library/Caches/dev.msenechal.bugeye/Recordings/Take-<uuid>.mov`, 2 s fragments, H.264 or HEVC with BT.709 tags, one AAC track per audio source; then converted to `.mp4` (video passthrough, one mixed AAC 48 kHz stereo 160 kbit/s track), with the V8 deadline. Codec limits, even dimensions, bitrate (`w × h × fps × 0.06` Standard, `0.12` High, clamped 2–100 Mbit/s) as `design/04` §2.6–2.7.
-- **Name** `Recording YYYY-MM-DD at HH.MM.SS.mp4` from the first frame's time, ` (2)` etc. on a clash (`CaptureFileNamer`). `createdAt` is the same moment.
-- **Delivery**, in order: adopt into the save folder (or the temp folder when "Save to folder" is off, or with Capture's `Couldn't save to folder` notice when the folder is unusable) with a new `CaptureID`; the file reference on the clipboard if "Copy to clipboard" is on; the timeline moved to its store under that id; `created` published (§3.4).
+- **Name** `Recording YYYY-MM-DD at HH.MM.SS.mp4` from the first frame's time (`CaptureFileNamer`), ` (2)` etc. on a clash (added by `CaptureFileWriter.move`). `createdAt` is the same moment.
+- **Delivery**, in order: `CaptureFileWriter.move` into the save folder (or the temp folder when "Save to folder" is off, or with Capture's `Couldn't save to folder` notice, `OutputStrings`, when the folder is unusable) with a new `CaptureID`; the file reference on the clipboard if "Copy to clipboard" is on; the timeline moved to its store under that id; the `▶` badge decoration set; `created` published (§3).
 
 ### 5.7 Notices
 
@@ -533,12 +340,12 @@ The privacy test (Linux, through `TimelineRecorder` and the writer, reading the 
 
 | Target | Platform | Recording's content |
 |---|---|---|
-| `BugeyeCore` | portable | Contracts PR only (§3): `AXElementInfo` fields, `MediaPermissions`, `CaptureItem.duration`, `MediaTime`, writer `adopt`, `CaptureFileNamer`, `CaptureFolders`, `OutputSettingKeys`, `AreaSelector` types, `ScreenActivity`, `WindowID`, `EventTimeline` schema |
-| `BugeyeFeatures` | portable | Contracts PR: `StatusItemOverride` |
-| `BugeyeTestSupport` | portable | Contracts PR: `FakeMediaPermissions`, `FakeAreaSelector`; `FakeAXReader` gains scripted delays |
-| `RecordingCore` | portable | `RecordingModule`; `RecordingFlow` (§6); `RecordingTarget`; `RecordingOptions`, `RecordingSettings`, `effectiveOptions`; `RecordingClock`; `RecordingGeometry` (output size, codec limits, even sizes, bitrate); `DiskGuard`; `OptionsBarPlacement`; `WindowFollow` and `ChildWindowFilter`; `BubbleLayout`, `BubbleChange`; `KeystrokeFormatter` (with the US base table), `KeystrokeBadge`, `ClickRings`, each drawing as a display list; `TimelineRecorder`, `TimelineWriter`, `TimelineStore` (move by `CaptureID`, delete on `deleted`); `TakeRecovery` (decides what a leftover take is); `RecordingStrings` |
+| `BugeyeCore` | portable | Only its own folders (§3.1): `Ports/Accessibility/` (`AXElementInfo` fields), `Ports/Recording/` (`MediaPermissions`), `Timeline/` (`EventTimeline` schema). Everything else it uses is contract (§3) |
+| `BugeyeFeatures` | portable | None: `StatusItemOverride`, `ActionRouter`, `TerminationGate` are contract |
+| `BugeyeTestSupport` | portable | `Recording/`: `FakeMediaPermissions`; `Accessibility/`: `FakeAXReader` gains scripted delays. `FakeAreaSelector`, `FakeScreenCapturePermission`, `FakeTextMeasurer` are contract |
+| `RecordingCore` | portable | `RecordingModule`; `MediaTime`; `RecordingFlow` (§6); `RecordingTarget`; `RecordingOptions`, `RecordingSettings`, `effectiveOptions`; `RecordingClock`; `RecordingGeometry` (output size, codec limits, even sizes, bitrate); `DiskGuard`; `OptionsBarPlacement`; `WindowFollow` and `ChildWindowFilter`; `BubbleLayout`, `BubbleChange`; `KeystrokeFormatter` (with the US base table), `KeystrokeBadge`, `ClickRings`, each drawing as a display list; `TimelineRecorder`, `TimelineWriter`, `TimelineStore` (move by `CaptureID`, delete on `deleted`); `TakeRecovery` (decides what a leftover take is); `RecordingStrings` |
 | `MacAdapters` | macOS | `AXPointReader` (V3), `SystemMediaPermissions` |
-| `BugeyeApp` | macOS | `Recording/`: `RecordingController` (executes effects, feeds events, owns sessions); `StreamRecorder` (SCK stream + `AVAssetWriter`, one serial sample queue, complete-frame filter, follow timer and child windows, pause stamps, failure latch, injectable `now` / sample entry); `MovieConverter` (passthrough + audio mix, concurrent pumps, deadline, progress); `FirstFrame`; `InputMonitor` (global monitors for mouse down/up, scroll, key down; 30 Hz cursor sampler; focus watcher); `BorderWindow`, `OptionsPanel` (SwiftUI), `CountdownPanel`, `OverlayWindow` (executes the display list, 60 Hz timer in `.common` modes, invalidated on close and deinit), `WebcamBubble`; `CaptureDevices`; `DiskSpace`; the Recording pane. `Wiring/RecordingWiring.swift` |
+| `BugeyeApp` | macOS | `Recording/`: `RecordingController` (executes effects, feeds events, owns sessions); `StreamRecorder` (SCK stream + `AVAssetWriter`, one serial sample queue, complete-frame filter, follow timer and child windows, pause stamps, failure latch, injectable `now` / sample entry); `MovieConverter` (passthrough + audio mix, concurrent pumps, deadline, progress); `FirstFrame`; `InputMonitor` (global monitors for mouse down/up, scroll, key down; 30 Hz cursor sampler; focus watcher); `BorderWindow`, `OptionsPanel` (SwiftUI), `CountdownPanel`, `OverlayWindow` (draws the display list through the Editor's executor, 60 Hz timer in `.common` modes, invalidated on close and deinit), `WebcamBubble`; `CaptureDevices`; `DiskSpace`; the Recording pane. `Wiring/RecordingWiring.swift` |
 
 Main thread: only `RecordingFlow`, the windows and the bus. The stream, writer, converter, AX lookups, disk checks and timeline writes run off it.
 
@@ -551,9 +358,9 @@ Main thread: only `RecordingFlow`, the windows and the bus. The stream, writer, 
 
 ## 9. Done when
 
-1. The contracts PR (§3) has merged with tests for every rule in it (`ScreenActivity` table, `AXElementInfo` secure rule, `CaptureFileWriter.adopt` with the Linux fake including a clash and a failed copy, `CaptureFileNamer`, `MediaTime`, the timeline schema's decoding and refusals).
+1. The Wave 1 contracts PR has merged before this epic's first PR (it tests `ScreenActivity`, `CaptureFileWriter.move` including a clash and a failed cross-volume copy, `CaptureFileNamer`), and the session has checked §3's names against it.
 2. On every recording PR, marked ready for review (R10: drafts get no CI; the session's own `make test-core` is the check), `linux` and `macos` are green and `claude-review` has posted. Pushes are batched.
-   - **Linux** covers §6 with R1–R9 and the named regressions; `effectiveOptions`; the clock (pause, samples captured in a pause, before the first frame); geometry, codec limits, bitrate; disk thresholds; bar placement; window follow and child windows; bubble layout and change; keystroke labels on US, AZERTY, German and Russian tables; ring and badge display lists (golden JSON); the timeline writer (every kind, sampling, coalescing, caps, `end` after a cap, crash-truncated reading); the §7.4 privacy test; take recovery; every string in §4–§5, character for character.
+   - **Linux** covers §6 with R1–R9 and the named regressions; the `AXElementInfo` secure rule; `MediaTime`; the timeline schema's decoding and refusals; `effectiveOptions`; the clock (pause, samples captured in a pause, before the first frame); geometry, codec limits, bitrate; disk thresholds; bar placement; window follow and child windows; bubble layout and change; keystroke labels on US, AZERTY, German and Russian tables; ring and badge display lists (golden JSON); the timeline writer (every kind, sampling, coalescing, caps, `end` after a cap, crash-truncated reading); the §7.4 privacy test; take recovery; every string in §4–§5, character for character.
    - **macOS CI** covers the panel, border, countdown, overlay and bubble window properties; Esc through `keyDown` and `cancelOperation` after clicking a toggle; the status item's badge, labels and its ticker running while the menu is open; `StreamRecorder` with synthetic sample buffers (retiming, pause, dropped non-advancing frames, a failed writer's `finish` not raising, `noFrames`); `MovieConverter` on a generated `.mov` with two audio tracks (one AAC track out, video untouched, BT.709 kept, the deadline delivering the `.mov`); `FirstFrame`; the Recording pane; `NSEvent` → timeline input translation. One experiment: a 1 s `SCStream` recording, reported as skipped if the runner has no Screen Recording.
 3. The final review's Critical and Important findings are fixed, each with a test that failed first.
 4. The Mac batch (`needs-mac-check`) passes, driven by the fixture app:
@@ -565,4 +372,4 @@ Main thread: only `RecordingFlow`, the windows and the bus. The stream, writer, 
    6. Permissions after `tccutil reset Microphone|Camera|Accessibility dev.msenechal.bugeye`: prompts on first use, disabled toggles with their tooltips after denial; global key monitoring works with Accessibility alone (V13).
    7. Kill Bugeye mid-recording, relaunch: the take is recovered (V15).
 5. Your manual pass, `docs/checklists/wave-1-recording.md` (`design/11` §5 format): Before you start (quit the old app; Screen Recording granted; turn off macOS's ⇧⌘5) · Shortcuts table · How to check (`ls ~/Pictures/Bugeye`, `ls ~/Library/Caches/dev.msenechal.bugeye/Recordings`, `ls ~/Library/Application\ Support/dev.msenechal.bugeye/Timelines`, `log show --last 10m --predicate 'subsystem == "dev.msenechal.bugeye"'`) · A. Start: drag, click a display, Return, Space and a window, cancel each way · B. Bar: every toggle, devices, ⚙, placement, Esc · C. Countdown and cancelling it · D. Recording: timer, Pause, Resume, Stop, ⇧⌘5, ⌘Q while finishing · E. Restart and Discard, under and over 10 s · F. Overlays: rings, badge with "Show all keystrokes" off and on, bubble drag, snap, sizes, camera switch · G. Window recording · H. Result: names, save off, clipboard paste into Finder and Slack, `.mov` fallback (fill the disk), Quick Access thumbnail · I. Gating: ⇧⌘4 during set-up and during a recording · J. Recording pane.
-6. You say "all good", and the last PR, which adds `RecordingModule` to `recordingModules`, merges after Capture's `AreaSelector`, permission alert and hotkey registrar are on `main`.
+6. You say "all good", and the last PR, which adds `RecordingModule` to `RecordingWiring.modules` and fills `RecordingWiring.install`, merges after Capture's `AreaSelector`, permission alert and hotkey registrar are on `main`. The overlay PR merges after the Editor's executor PR (contracts K10).
