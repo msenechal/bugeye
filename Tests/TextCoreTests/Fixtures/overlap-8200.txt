@@ -1,0 +1,6 @@
+Header
+Inside the overlap
+Cut by the edge
+Middle
+Second overlap
+Footer

@@ -1,0 +1,601 @@
+{
+ "pixelsPerPoint": 2,
+ "width": 1600,
+ "height": 340,
+ "strips": [
+  [
+   {
+    "text": "Traceback (most recent call last):",
+    "bounds": {
+     "origin": {
+      "x": 20,
+      "y": 20
+     },
+     "size": {
+      "width": 544,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       9
+      ],
+      "bounds": {
+       "origin": {
+        "x": 20,
+        "y": 20
+       },
+       "size": {
+        "width": 144,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       10,
+       15
+      ],
+      "bounds": {
+       "origin": {
+        "x": 180,
+        "y": 20
+       },
+       "size": {
+        "width": 80,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       16,
+       22
+      ],
+      "bounds": {
+       "origin": {
+        "x": 276,
+        "y": 20
+       },
+       "size": {
+        "width": 96,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       23,
+       27
+      ],
+      "bounds": {
+       "origin": {
+        "x": 388,
+        "y": 20
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       28,
+       34
+      ],
+      "bounds": {
+       "origin": {
+        "x": 468,
+        "y": 20
+       },
+       "size": {
+        "width": 96,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "File \"/app/main.py\", line 12, in <module>",
+    "bounds": {
+     "origin": {
+      "x": 52,
+      "y": 60
+     },
+     "size": {
+      "width": 656,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       4
+      ],
+      "bounds": {
+       "origin": {
+        "x": 52,
+        "y": 60
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       5,
+       20
+      ],
+      "bounds": {
+       "origin": {
+        "x": 132,
+        "y": 60
+       },
+       "size": {
+        "width": 240,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       21,
+       25
+      ],
+      "bounds": {
+       "origin": {
+        "x": 388,
+        "y": 60
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       26,
+       29
+      ],
+      "bounds": {
+       "origin": {
+        "x": 468,
+        "y": 60
+       },
+       "size": {
+        "width": 48,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       30,
+       32
+      ],
+      "bounds": {
+       "origin": {
+        "x": 532,
+        "y": 60
+       },
+       "size": {
+        "width": 32,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       33,
+       41
+      ],
+      "bounds": {
+       "origin": {
+        "x": 580,
+        "y": 60
+       },
+       "size": {
+        "width": 128,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "main()",
+    "bounds": {
+     "origin": {
+      "x": 84,
+      "y": 100
+     },
+     "size": {
+      "width": 96,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 84,
+        "y": 100
+       },
+       "size": {
+        "width": 96,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "File \"/app/main.py\", line 8, in main",
+    "bounds": {
+     "origin": {
+      "x": 52,
+      "y": 140
+     },
+     "size": {
+      "width": 576,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       4
+      ],
+      "bounds": {
+       "origin": {
+        "x": 52,
+        "y": 140
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       5,
+       20
+      ],
+      "bounds": {
+       "origin": {
+        "x": 132,
+        "y": 140
+       },
+       "size": {
+        "width": 240,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       21,
+       25
+      ],
+      "bounds": {
+       "origin": {
+        "x": 388,
+        "y": 140
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       26,
+       28
+      ],
+      "bounds": {
+       "origin": {
+        "x": 468,
+        "y": 140
+       },
+       "size": {
+        "width": 32,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       29,
+       31
+      ],
+      "bounds": {
+       "origin": {
+        "x": 516,
+        "y": 140
+       },
+       "size": {
+        "width": 32,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       32,
+       36
+      ],
+      "bounds": {
+       "origin": {
+        "x": 564,
+        "y": 140
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "return parse(data[0])",
+    "bounds": {
+     "origin": {
+      "x": 84,
+      "y": 180
+     },
+     "size": {
+      "width": 336,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       6
+      ],
+      "bounds": {
+       "origin": {
+        "x": 84,
+        "y": 180
+       },
+       "size": {
+        "width": 96,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       7,
+       21
+      ],
+      "bounds": {
+       "origin": {
+        "x": 196,
+        "y": 180
+       },
+       "size": {
+        "width": 224,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "^^^^^^^^^^^^^^",
+    "bounds": {
+     "origin": {
+      "x": 196,
+      "y": 220
+     },
+     "size": {
+      "width": 224,
+      "height": 30
+     }
+    },
+    "confidence": 0.6,
+    "words": [
+     {
+      "range": [
+       0,
+       14
+      ],
+      "bounds": {
+       "origin": {
+        "x": 196,
+        "y": 220
+       },
+       "size": {
+        "width": 224,
+        "height": 30
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "ValueError: invalid literal for int() with base 10: 'x'",
+    "bounds": {
+     "origin": {
+      "x": 20,
+      "y": 260
+     },
+     "size": {
+      "width": 880,
+      "height": 30
+     }
+    },
+    "confidence": 0.95,
+    "words": [
+     {
+      "range": [
+       0,
+       11
+      ],
+      "bounds": {
+       "origin": {
+        "x": 20,
+        "y": 260
+       },
+       "size": {
+        "width": 176,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       12,
+       19
+      ],
+      "bounds": {
+       "origin": {
+        "x": 212,
+        "y": 260
+       },
+       "size": {
+        "width": 112,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       20,
+       27
+      ],
+      "bounds": {
+       "origin": {
+        "x": 340,
+        "y": 260
+       },
+       "size": {
+        "width": 112,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       28,
+       31
+      ],
+      "bounds": {
+       "origin": {
+        "x": 468,
+        "y": 260
+       },
+       "size": {
+        "width": 48,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       32,
+       37
+      ],
+      "bounds": {
+       "origin": {
+        "x": 532,
+        "y": 260
+       },
+       "size": {
+        "width": 80,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       38,
+       42
+      ],
+      "bounds": {
+       "origin": {
+        "x": 628,
+        "y": 260
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       43,
+       47
+      ],
+      "bounds": {
+       "origin": {
+        "x": 708,
+        "y": 260
+       },
+       "size": {
+        "width": 64,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       48,
+       51
+      ],
+      "bounds": {
+       "origin": {
+        "x": 788,
+        "y": 260
+       },
+       "size": {
+        "width": 48,
+        "height": 30
+       }
+      }
+     },
+     {
+      "range": [
+       52,
+       55
+      ],
+      "bounds": {
+       "origin": {
+        "x": 852,
+        "y": 260
+       },
+       "size": {
+        "width": 48,
+        "height": 30
+       }
+      }
+     }
+    ]
+   }
+  ]
+ ]
+}
