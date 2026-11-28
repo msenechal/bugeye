@@ -18,6 +18,8 @@ import Testing
             DisplayInfo(id: DisplayID(1), frame: Rect2D(x: 0, y: 0, width: 400, height: 300), scale: 2)
         ])
         let installed: CaptureWiring.Installed
+        /// This test's own center: a post on `.default` would reach every parallel test's controller.
+        let notifications = NotificationCenter()
 
         init(taken: Set<GlobalKey> = [], system: [Int: SymbolicHotkey]? = nil) throws {
             dir = try TempDirectory()
@@ -33,7 +35,8 @@ import Testing
                 context,
                 adapters: CaptureWiring.Adapters(
                     screenSource: source, windowList: FakeWindowListReader(), pipeline: FakeImagePipeline(),
-                    registrar: registrar, systemShortcuts: FakeSystemShortcutReader(hotkeys: system ?? off)))
+                    registrar: registrar, systemShortcuts: FakeSystemShortcutReader(hotkeys: system ?? off),
+                    notifications: notifications))
         }
     }
 
@@ -126,7 +129,7 @@ import Testing
         defer { s.installed.launch.stop() }
         #expect(s.context.router.performMenuItem("capture.area"))
         await s.installed.controller.waitUntil(.selecting)
-        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        s.notifications.post(name: NSApplication.didChangeScreenParametersNotification, object: nil)
         // The observer runs on the main queue, now or on its next turn.
         await s.installed.controller.waitUntil(.idle)
         #expect(s.installed.controller.phase == .idle)

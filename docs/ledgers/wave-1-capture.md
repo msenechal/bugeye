@@ -91,6 +91,8 @@ Slice 5 (wiring), final review of PR #28 (fresh reviewer): 0 Critical, 2 Importa
 - Ruling (review M1): the live `CarbonHotkeyRegistrar` is created in `install`, so building `AppServices` in shell tests installs a Carbon event handler (no hotkey, window or timer, so contracts §4.5 holds). Accepted; backlog item below. (cost if wrong: none; a handler with nothing registered.)
 - Ruling (review M3): checklist fixed (I.7 named, F.3 rewritten, the macOS-conflict row message quoted in full, one Expected line per test). (cost if wrong: none.)
 
+- Ruling (PR #28's macos job, run 46126846133): `launchRegistersEveryHotkeyAndAPressStartsACapture` failed once because `aDisplayChangeCancelsTheSelection` posted the screen-change notification on the shared `NotificationCenter.default`, which every parallel test's controller observes, so it cancelled another test's selection. Root cause fixed: `CaptureWiring.Adapters.notifications` (`.default` in the app) lets each test observe its own center. (cost if wrong: none.)
+
 ## Waiting on user
 
 - The Mac batch on the wiring PR (`needs-mac-check`, contracts §9): needs the user's Mac, after #6, #20, #21 and #27 are on `main`.

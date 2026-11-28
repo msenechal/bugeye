@@ -19,6 +19,9 @@ enum CaptureWiring {
         var pipeline: any ImagePipeline
         var registrar: any HotkeyRegistrar
         var systemShortcuts: any SystemShortcutReader
+        /// Where display changes are observed (`.default` in the app; tests pass their own, since a post on the
+        /// shared center would reach every parallel test's controller).
+        var notifications: NotificationCenter = .default
 
         @MainActor static func live() -> Adapters {
             Adapters(
@@ -38,15 +41,20 @@ enum CaptureWiring {
     /// What the launch step started: the launch purge, the hourly purge timer and the display-change observer.
     @MainActor
     final class LaunchHandles {
+        private let notifications: NotificationCenter
         fileprivate(set) var purge: Task<Int, Never>?
         fileprivate(set) var timer: Timer?
         fileprivate(set) var observer: (any NSObjectProtocol)?
+
+        init(notifications: NotificationCenter) {
+            self.notifications = notifications
+        }
 
         /// Stops the timer and the observer (tests; the app keeps them for its life).
         func stop() {
             timer?.invalidate()
             timer = nil
-            if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let observer { notifications.removeObserver(observer) }
             observer = nil
         }
     }
@@ -104,7 +112,8 @@ enum CaptureWiring {
         context.settingsPanes.register(SettingsLayout.shortcutsPane.id) { AnyView(ShortcutsPane(model: shortcutsPane)) }
 
         let notifier = context.notifier
-        let launch = LaunchHandles()
+        let notifications = adapters.notifications
+        let launch = LaunchHandles(notifications: notifications)
         context.retain(launch)
         context.onLaunch {
             shortcuts.registerAll()
@@ -117,7 +126,7 @@ enum CaptureWiring {
                 }
             }
             launch.timer = timer
-            let observer = NotificationCenter.default.addObserver(
+            let observer = notifications.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
             ) { _ in
                 MainActor.assumeIsolated { controller.send(.displaysChanged) }
