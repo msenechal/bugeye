@@ -83,13 +83,14 @@ public struct TimelineElement: Hashable, Sendable {
     /// Points, relative to the recorded area's top-left at the click.
     public let frame: Rect2D
 
-    /// Ignores `info.text`. Nil for a secure element (written as `withheld`).
+    /// Ignores `info.text`. Nil for a secure element (written as `withheld`). A text-entry element keeps no
+    /// title: some apps put the typed value in AXTitle.
     public init?(info: AXElementInfo, origin: Point2D) {
         guard !info.isSecure else { return nil }
         let frame = Rect2D(
             x: info.frame.origin.x - origin.x, y: info.frame.origin.y - origin.y, width: info.frame.size.width,
             height: info.frame.size.height)
-        self.init(role: info.role, subrole: info.subrole, title: info.title, frame: frame)
+        self.init(role: info.role, subrole: info.subrole, title: info.isTextEntry ? nil : info.title, frame: frame)
     }
 
     /// Nil for the `AXSecureTextField` subrole, so a hand-written line can't carry a secure field's title.

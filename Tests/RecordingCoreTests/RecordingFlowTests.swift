@@ -207,8 +207,6 @@ enum FlowTesting {
     }
 
     @Test func noTimelineWhenTheHiddenKeyIsOff() {
-        let flow = F.recordingFlow(options: RecordingOptions(timeline: false))
-        _ = flow
         var other = RecordingFlow()
         F.drive(
             &other,
@@ -405,7 +403,8 @@ enum FlowTesting {
         // Late readiness for every abandoned session.
         for n in 1...5 { run(.recorderReady(SessionID(n))) }
         #expect(prepared == (1...5).map(SessionID.init))
-        #expect(ended == prepared)
+        // Each cancelled at its toggle, and again when its late ready arrives (review I4).
+        #expect(ended == prepared + prepared)
         #expect(flow.state == .idle)
     }
 

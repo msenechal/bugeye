@@ -34,7 +34,7 @@ public struct RecordingClock: Hashable, Sendable {
     /// Output seconds for something captured at `host`; nil before the origin and for anything captured
     /// inside a pause, even when it is handled after the resume, so the output never goes backwards.
     public func outputTime(for host: Double) -> Double? {
-        guard let origin, host >= origin else { return nil }
+        guard let origin, !host.isNaN, host >= origin else { return nil }
         var cut = 0.0
         for pause in pauses {
             if host < pause.start { break }
@@ -51,8 +51,10 @@ public struct RecordingClock: Hashable, Sendable {
     }
 
     /// `seconds` as whole milliseconds, as `milliseconds(for:)` rounds.
+    /// Not-a-number and negatives read 0; values are capped at 10¹⁵ ms so the conversion can't trap.
     public static func milliseconds(_ seconds: Double) -> Int {
-        Int((seconds * 1000 + 0.001).rounded(.down))
+        guard seconds.isFinite || seconds == .infinity, seconds > 0 else { return 0 }
+        return Int(min(seconds * 1000 + 0.001, 1e15).rounded(.down))
     }
 
     /// Output seconds recorded by `host`: 0 before the origin, frozen while paused.
