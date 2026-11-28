@@ -479,7 +479,7 @@ public struct RecordingFlow: Sendable {
         case (.finishing(let s, .stopping, _, _, _), .stopped(_, .noFrames)):
             state = .idle
             return closeTimeline(.discard) + [.notify(RecordingStrings.Notice.nothingRecorded)] + done(s)
-        case (.finishing(let s, .converting, _, _, _), .conversionProgress(_, let fraction)):
+        case (.finishing(_, .converting, _, _, _), .conversionProgress(_, let fraction)):
             progress = min(max(fraction, 0), 1)
             return [.statusItem(finishingOverride)]
         case (
