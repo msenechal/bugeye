@@ -27,6 +27,7 @@ public final class CaptureController: AreaSelector {
     private var pendingSettings: CaptureSettings?
     private var overlayNumbers: [SessionID: [Int]] = [:]
     private var inFlight: [Int: Task<Void, Never>] = [:]
+    private var phaseWaiters: [(CaptureFlow.Phase, CheckedContinuation<Void, Never>)] = []
     private var nextTask = 0
 
     public init(
@@ -71,7 +72,22 @@ public final class CaptureController: AreaSelector {
             for effect in effects { perform(effect) }
             updateActivity()
             if let wasSession, flow.session != wasSession { forget(wasSession) }
+            resumePhaseWaiters()
         }
+    }
+
+    /// Returns once the flow is in `phase` (now, or after a later event). Tests and the debug channel use it instead
+    /// of polling.
+    public func waitUntil(_ phase: CaptureFlow.Phase) async {
+        guard flow.phase != phase else { return }
+        await withCheckedContinuation { phaseWaiters.append((phase, $0)) }
+    }
+
+    private func resumePhaseWaiters() {
+        let current = flow.phase
+        let ready = phaseWaiters.filter { $0.0 == current }
+        phaseWaiters.removeAll { $0.0 == current }
+        for (_, continuation) in ready { continuation.resume() }
     }
 
     public func select(_ request: SelectionRequest) async -> SelectionResult {

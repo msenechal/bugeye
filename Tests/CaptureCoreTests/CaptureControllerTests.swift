@@ -288,7 +288,7 @@ final class ControllerHarness {
     @Test func aRecordingSelectionAnswersTheAreaAndNeverDeliversOrHoldsTheScreenshotActivity() async throws {
         let h = ControllerHarness()
         let task = Task { await h.controller.select(recording) }
-        while h.controller.phase != .selecting { await Task.yield() }
+        await h.controller.waitUntil(.selecting)
         #expect(h.activity.active.isEmpty)
         #expect(h.controller.overlay(for: primary.id)?.hint == "hint")
         h.drag(DisplayPoint(x: 100, y: 50), DisplayPoint(x: 300, y: 150))
@@ -315,7 +315,7 @@ final class ControllerHarness {
     @Test func anExternalCancelWhileFreezingAnswersCancelledAndNoOverlayEverShows() async {
         let h = ControllerHarness()
         let task = Task { await h.controller.select(recording) }
-        while h.controller.phase != .freezing { await Task.yield() }
+        await h.controller.waitUntil(.freezing)
         h.controller.cancel(.recording)
         #expect(await task.value == .cancelled)
         await h.controller.settle()
@@ -326,7 +326,7 @@ final class ControllerHarness {
     @Test func anExternalCancelWhileSelectingClosesTheOverlays() async {
         let h = ControllerHarness()
         let task = Task { await h.controller.select(recording) }
-        while h.controller.phase != .selecting { await Task.yield() }
+        await h.controller.waitUntil(.selecting)
         h.controller.cancel(.recording)
         #expect(await task.value == .cancelled)
         #expect(h.shell.open.isEmpty && h.registrar.registered.isEmpty)
@@ -342,7 +342,7 @@ final class ControllerHarness {
     @Test func aClickAnswersTheDisplay() async {
         let h = ControllerHarness()
         let task = Task { await h.controller.select(recording) }
-        while h.controller.phase != .selecting { await Task.yield() }
+        await h.controller.waitUntil(.selecting)
         h.drag(DisplayPoint(x: 100, y: 50), DisplayPoint(x: 100, y: 50))
         #expect(await task.value == .display(primary.id))
     }

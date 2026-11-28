@@ -103,8 +103,13 @@ public final class FakeScreenSource: ScreenSource {
         return try displays.filter { wanted?.contains($0.id) ?? true }.map { display in
             let width = Int((display.frame.width * display.scale).rounded())
             let height = Int((display.frame.height * display.scale).rounded())
-            let fill = RGBA8(red: UInt8(truncatingIfNeeded: display.id.rawValue), green: 0, blue: 0)
-            let buffer = try PixelBuffer(width: width, height: height, fill: fill)
+            // Row by row: `PixelBuffer(fill:)` appends pixel by pixel, seconds for a 6K frame in a debug build.
+            let row = [UInt8](
+                repeatElement([UInt8(truncatingIfNeeded: display.id.rawValue), 0, 0, 255], count: width).joined())
+            var bytes: [UInt8] = []
+            bytes.reserveCapacity(row.count * height)
+            for _ in 0..<height { bytes.append(contentsOf: row) }
+            let buffer = try PixelBuffer(width: width, height: height, bytesPerRow: width * 4, bytes: bytes)
             return FrozenDisplay(display: display, image: CapturedImage(pixelBuffer: buffer), time: time)
         }
     }
