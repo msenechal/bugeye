@@ -19,6 +19,9 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
     private var boundsObserver: (any NSObjectProtocol)?
     /// Set once the unsaved-changes prompt (or a clean document) allows the close.
     private var closeAllowed = false
+    /// The close prompt in flight: a second ⌘W while it is up doesn't start another (final review C, I3).
+    private var closeTask: Task<Void, Never>?
+    private var lastMagnification: CGFloat = 0
 
     init(session: EditorSession, capture: CGImage, blurCache: BlurCache, manager: EditorManager) {
         self.session = session
@@ -74,7 +77,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
 
         scrollView.contentView.postsBoundsChangedNotifications = true
         boundsObserver = NotificationCenter.default.addObserver(
-            forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main
+            forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.zoomChanged() }
         }
@@ -99,8 +102,12 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
         window.center()
     }
 
+    /// Activates Bugeye too: from the second editor on, `DocumentWindows` doesn't, and Quick Access's panel
+    /// doesn't activate the app (final review C, I2). Lays out first so Zoom to Fit sees the real viewport.
     func show() {
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+        window.layoutIfNeeded()
         window.makeFirstResponder(canvas)
         zoomToFit(nil)
     }
@@ -186,16 +193,24 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
         selectTool(tool)
     }
 
+    func canvasUndo() { undo(nil) }
+    func canvasRedo() { redo(nil) }
+
     func selectTool(_ tool: EditorTool) {
         canvas.commitText()
         controller.setTool(tool)
         canvas.refresh()
+        window.makeFirstResponder(canvas)
     }
 
     // MARK: Zoom (§5.7)
 
+    /// Every clip-view bounds change, smart magnify included (`c1db340`); scrolling alone doesn't redraw.
     private func zoomChanged() {
-        controller.zoom = Double(scrollView.magnification)
+        let magnification = scrollView.magnification
+        guard magnification != lastMagnification else { return }
+        lastMagnification = magnification
+        controller.zoom = Double(magnification)
         canvas.needsDisplay = true
     }
 
@@ -285,8 +300,12 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
         if closeAllowed || !controller.document.isDirty { return true }
         guard let manager else { return true }
         let id = session.id
-        Task { [weak self] in
-            guard await manager.sessions.shouldClose(id), let self else { return }
+        guard closeTask == nil else { return false }
+        closeTask = Task { [weak self] in
+            let allowed = await manager.sessions.shouldClose(id)
+            guard let self else { return }
+            closeTask = nil
+            guard allowed else { return }
             closeAllowed = true
             window.close()
         }

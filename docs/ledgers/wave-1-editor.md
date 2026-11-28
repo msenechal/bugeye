@@ -10,7 +10,7 @@ Trust this file and `git log` over memory.
 |---|---|---|---|
 | A executor | `feat/wave1-editor-executor` | https://github.com/msenechal/bugeye/pull/7 | draft; final review done |
 | B core | `feat/wave1-editor-core` | https://github.com/msenechal/bugeye/pull/14 | draft; final review done, fix pass below |
-| C app | `feat/wave1-editor-app` | | |
+| C app | `feat/wave1-editor-app` | https://github.com/msenechal/bugeye/pull/18 | draft; final review done, fix pass below |
 | D wiring | `feat/wave1-editor-wiring` | | |
 
 ## Tasks
@@ -27,7 +27,8 @@ Trust this file and `git log` over memory.
 | 10 | done | 2113672 | code written before its tests (see ruling); goldens recorded on Linux and checked by eye |
 | 11–13 | done | 560aaa6 | tests first, seen failing to compile |
 | 14–16 | done | 69d98c5 | tests written after the code (see ruling) |
-| 17–21 | in progress | | not compiled here; first macOS run pending |
+| 17–21 | done | 3cb0e49, ed354f1 | not compiled here; macOS runs 46123425797 and the run on ed354f1 green; draft PR #18 |
+| C review | done | (next commit) | fresh final review: 1 Critical, 6 Important, 10 Minor; fix pass below |
 
 ## Rulings
 
@@ -83,6 +84,31 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 
   Tests failed first, at compile time for the new names. (cost if wrong: none.)
 
+- Ruling (final review C, C1, Critical): ⌘Z, ⇧⌘Z and Edit ▸ Undo and Redo now reach the document. `NSWindow` answers `undo:` and `redo:` itself with its own empty undo manager, ahead of its delegate, so the canvas now answers and validates them: while typing they go to the text's undo manager, otherwise to the controller. A responder-chain test (`tryToPerform`) covers it; it can't be seen failing on Linux. (cost if wrong: none.)
+- Ruling (final review C, Important):
+  - I1: committing or cancelling text gives the canvas back its focus before the text view hides.
+  - I2: opening an editor activates Bugeye every time.
+  - I3: a second ⌘W while the close prompt is up doesn't start another; this works with the core's one-prompt-per-editor rule.
+  - I4: the active annotation's blur comes from the cache only. The base is re-rasterised only when a blur it was drawn without is ready; a result that can't be computed never triggers a redraw.
+  - I5: the render-failure message is the settled `EditorStrings.renderFailed`.
+  - I6: added tests for the responder-chain undo, Return, Esc and ⌥Return with focus and the typing undo manager, the base-cache count, zoom through the clip view's bounds, Zoom to Fit after layout, the double-close guard, the edited dot after a save from a prompt, and a leak test that types while a second editor is open.
+
+  (cost if wrong: none.)
+- Ruling (final review C, Minors): fixed:
+  - layout before Zoom to Fit;
+  - the edited dot after every save (`documentSaved`);
+  - `unmarkText` before a commit (IME);
+  - the text view's min and max size, with spell checking and autocorrection off;
+  - redraw only when the magnification changes;
+  - focus back to the canvas after a tool change;
+  - a logged fault if a window can't be shown.
+
+  Not changed:
+  - the drag handle's stale-task race. A stale result can only start a drag of an older render of the same capture during a later press; noted in the backlog.
+  - the redundant ⌥Return check (harmless).
+
+  (cost if wrong: low.)
+
 ## Waiting on
 
 - Capture's and Quick Access's wiring PRs, before slice D merges and before the manual pass (contracts §9).
@@ -90,3 +116,4 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 ## Backlog
 
 - Executor tests: a non-isolated group's single-fill alpha, line joins, a vertical gradient (final review A, Minor 6).
+- Drag handle: cancel the export on mouse-up and ignore a stale result by generation (final review C, Minor).

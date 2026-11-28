@@ -132,7 +132,10 @@ final class EditorManager: EditorHost {
     }
 
     func showWindow(for session: EditorSession) {
-        guard let capture = captures[session.id], let cache = blurCaches[session.id] else { return }
+        guard let capture = captures[session.id], let cache = blurCaches[session.id] else {
+            Self.logger.fault("show without a decoded image for \(session.name, privacy: .public)")
+            return
+        }
         let controller = EditorWindowController(session: session, capture: capture, blurCache: cache, manager: self)
         windows[session.id] = controller
         controller.show()
@@ -141,6 +144,7 @@ final class EditorManager: EditorHost {
     func bringForward(_ id: CaptureID) { windows[id]?.bringForward() }
     func retitle(_ session: EditorSession) { windows[session.id]?.retitle() }
     func commitPendingEdits(_ session: EditorSession) { windows[session.id]?.canvas.commitText() }
+    func documentSaved(_ session: EditorSession) { windows[session.id]?.canvasDidChange() }
 
     func export(_ session: EditorSession, state: EditorState) async throws -> ExportedImage {
         guard let capture = captures[session.id], let cache = blurCaches[session.id] else {

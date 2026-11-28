@@ -263,17 +263,19 @@ final class EditorAppFixture {
         weak var weakEditor: EditorWindowController?
         weak var weakWindow: NSWindow?
         weak var weakCanvas: EditorCanvasView?
+        // The first build's canvas leak needed typing while another editor window was open (design/03 §3).
+        _ = try await f.open(try f.makeCapture("Other.png"))
         do {
             let editor = try await f.open(try f.makeCapture())
-            // type in it, as the first build's leak needed
             editor.selectTool(.text)
-            if case .beginTextEntry(let entry) = editor.controller.mouseDown(
-                at: Point2D(x: 4, y: 4), clickCount: 1, shift: false)
-            {
-                editor.canvas.showTextView(entry)
-                editor.canvas.textView?.string = "Hi"
-                editor.canvas.commitText()
+            let result = editor.controller.mouseDown(at: Point2D(x: 4, y: 4), clickCount: 1, shift: false)
+            guard case .beginTextEntry(let entry) = result else {
+                Issue.record("no text entry")
+                return
             }
+            editor.canvas.showTextView(entry)
+            editor.canvas.textView?.string = "Hi"
+            editor.canvas.commitText()
             weakEditor = editor
             weakWindow = editor.window
             weakCanvas = editor.canvas
@@ -286,5 +288,125 @@ final class EditorAppFixture {
         #expect(weakEditor == nil)
         #expect(weakWindow == nil)
         #expect(weakCanvas == nil)
+    }
+
+    // MARK: Final review C
+
+    @Test func undoAndRedoThroughTheResponderChainReachTheDocument() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        f.edit(editor)
+        let undo = NSSelectorFromString("undo:")
+        var responder: NSResponder? = editor.canvas
+        while let current = responder, !current.responds(to: undo) { responder = current.nextResponder }
+        #expect(responder === editor.canvas)
+        #expect(editor.canvas.validateMenuItem(NSMenuItem(title: "", action: undo, keyEquivalent: "")))
+        #expect(editor.canvas.tryToPerform(undo, with: nil))
+        #expect(editor.controller.document.state.annotations.isEmpty)
+        #expect(editor.canvas.tryToPerform(NSSelectorFromString("redo:"), with: nil))
+        #expect(editor.controller.document.state.annotations.count == 1)
+    }
+
+    func startTyping(_ editor: EditorWindowController) throws -> NSTextView {
+        editor.selectTool(.text)
+        let result = editor.controller.mouseDown(at: Point2D(x: 4, y: 4), clickCount: 1, shift: false)
+        guard case .beginTextEntry(let entry) = result else { throw FakeFailure() }
+        editor.canvas.showTextView(entry)
+        return try #require(editor.canvas.textView)
+    }
+
+    @Test func returnCommitsAndGivesTheCanvasItsFocusBack() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        let text = try startTyping(editor)
+        #expect(editor.window.firstResponder === text)
+        text.string = "Hi"
+        #expect(editor.canvas.textView(text, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+        #expect(!editor.canvas.isEditingText)
+        #expect(editor.window.firstResponder === editor.canvas)
+        #expect(editor.controller.document.state.annotations.count == 1)
+    }
+
+    @Test func escapeCancelsAndOptionReturnAddsALine() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        let text = try startTyping(editor)
+        text.string = "one"
+        text.setSelectedRange(NSRange(location: 3, length: 0))
+        #expect(editor.canvas.textView(text, doCommandBy: #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:))))
+        #expect(text.string == "one\n")
+        #expect(editor.canvas.isEditingText)
+        #expect(editor.canvas.undoManager(for: text) !== editor.window.undoManager)
+        #expect(editor.canvas.textView(text, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+        #expect(!editor.canvas.isEditingText)
+        #expect(editor.window.firstResponder === editor.canvas)
+        #expect(editor.controller.document.state.annotations.isEmpty)
+    }
+
+    @Test func theBaseIsRasterisedOnlyWhenItsListChanges() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        let canvas = editor.canvas
+        _ = canvas.baseImage(for: canvas.currentLists().base)
+        let count = canvas.baseRenderCount
+        _ = canvas.baseImage(for: canvas.currentLists().base)
+        #expect(canvas.baseRenderCount == count)
+        editor.selectTool(.rectangle)
+        _ = editor.controller.mouseDown(at: Point2D(x: 2, y: 2), clickCount: 1, shift: false)
+        editor.controller.mouseDragged(to: Point2D(x: 20, y: 20), shift: false)
+        _ = canvas.baseImage(for: canvas.currentLists().base)
+        #expect(canvas.baseRenderCount == count)  // the draft is drawn live, not in the base
+        editor.controller.mouseUp(at: Point2D(x: 20, y: 20), shift: false)
+        _ = canvas.baseImage(for: canvas.currentLists().base)
+        #expect(canvas.baseRenderCount == count + 1)
+    }
+
+    @Test func pinchAndSmartMagnifyReachTheControllerThroughTheClipView() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        editor.scrollView.magnification = 2
+        #expect(editor.controller.zoom == 2)
+    }
+
+    @Test func openingZoomsToFitAfterLayout() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        #expect(editor.scrollView.magnification == 1)  // a 20 × 15 pt canvas fits at 100 %
+    }
+
+    @Test func aSecondCloseWhileThePromptIsUpAsksOnce() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        f.edit(editor)
+        f.prompts.saveAnswers = [.cancel, .cancel]
+        #expect(!editor.windowShouldClose(editor.window))
+        #expect(!editor.windowShouldClose(editor.window))
+        for _ in 0..<200 { await Task.yield() }
+        #expect(f.prompts.asked == ["ask Shot.png"])
+        #expect(editor.window.isVisible)
+    }
+
+    @Test func aSaveFromTheClosePromptClearsTheEditedDot() async throws {
+        let f = try EditorAppFixture()
+        defer { f.tearDown() }
+        let editor = try await f.open(try f.makeCapture())
+        f.edit(editor)
+        #expect(editor.window.isDocumentEdited)
+        f.prompts.saveAnswers = [.save, .cancel]
+        _ = try await f.open(try f.makeCapture("Other.png"))
+        f.edit(try #require(f.manager.windows.values.first { $0 !== editor }))
+        #expect(await f.manager.sessions.shouldTerminate() == false)
+        #expect(!editor.window.isDocumentEdited)
+    }
+
+    @Test func theRenderFailureMessageIsTheSettledString() {
+        #expect(EditorImages.ExportFailed().localizedDescription == "The image couldn't be rendered.")
     }
 }

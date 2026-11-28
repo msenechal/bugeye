@@ -11,13 +11,16 @@ protocol EditorCanvasDelegate: AnyObject {
     func canvasDidChange()
     /// A letter key chose a tool.
     func canvasSelect(_ tool: EditorTool)
+    /// ⌘Z, ⇧⌘Z or Edit ▸ Undo / Redo on the canvas.
+    func canvasUndo()
+    func canvasRedo()
 }
 
 /// The flipped canvas (§4, §8.1): one view point per canvas point (canvas pixels / ppp), the scroll view's
 /// magnification does the zoom. Draws the cached base, then the active annotation and the overlay live (E10).
 /// Owns the one reusable text view (E6).
 @MainActor
-final class EditorCanvasView: NSView, NSTextViewDelegate {
+final class EditorCanvasView: NSView, NSTextViewDelegate, NSMenuItemValidation {
     let controller: InteractionController
     let capture: CGImage
     let blurCache: BlurCache
@@ -25,6 +28,8 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
 
     /// The rasterised base and the list it was made from (`645eecd`).
     private var cachedBase: (list: DisplayList, image: CGImage)?
+    /// Blur results the cached base was drawn without; one arriving re-rasterises the base (final review C, I4).
+    private var missedBlurs: Set<BlurCache.Key> = []
     /// How many times the base was rasterised: a test hook.
     private(set) var baseRenderCount = 0
 
@@ -69,6 +74,8 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
             zoom: controller.zoom)
     }
 
+    /// The live executor (active annotation, overlay): blur results come from the cache only, never computed while
+    /// a blur is being drawn or resized (final review C, I4).
     private func executor() -> DisplayListExecutor {
         let capture = self.capture
         let cache = blurCache
@@ -81,23 +88,39 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
                 default: nil
                 }
             },
-            blur: { _, rect, effect in
-                cache.imageOrSchedule(capture, rect: rect, effect: effect) { [weak self] in
-                    self?.cachedBase = nil
-                    self?.needsDisplay = true
-                }
-            })
+            blur: { _, rect, effect in cache.cached(rect: rect, effect: effect) })
     }
 
-    /// The base, rasterised again only when its list changed.
+    /// The base, rasterised again only when its list changed, or when a blur it was drawn without is ready. A
+    /// missing blur result is computed off the main actor (plan review A, Minor 8).
     func baseImage(for list: DisplayList) -> CGImage? {
         if let cachedBase, cachedBase.list == list { return cachedBase.image }
-        guard let image = executor().render(list, colorSpace: EditorImages.workingSpace(of: capture)) else {
+        let capture = self.capture
+        let cache = blurCache
+        let missed = MissedBlurs()
+        let executor = DisplayListExecutor(
+            images: { $0 == EditorRenderer.captureImageID ? capture : nil },
+            blur: { _, rect, effect in
+                let hit = cache.imageOrSchedule(capture, rect: rect, effect: effect) { [weak self] key in
+                    self?.blurReady(key)
+                }
+                if hit == nil { missed.keys.insert(BlurCache.Key(rect: rect, effect: effect)) }
+                return hit
+            })
+        guard let image = executor.render(list, colorSpace: EditorImages.workingSpace(of: capture)) else {
             return nil
         }
         baseRenderCount += 1
+        missedBlurs = missed.keys
         cachedBase = (list, image)
         return image
+    }
+
+    private func blurReady(_ key: BlurCache.Key) {
+        guard missedBlurs.contains(key) else { return }
+        missedBlurs.remove(key)
+        cachedBase = nil
+        needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -198,6 +221,7 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
         view.frame = NSRect(origin: origin, size: NSSize(width: max(80, bounds.width - origin.x), height: 10))
         view.sizeToFit()
         view.isHidden = false
+        window?.layoutIfNeeded()
         window?.makeFirstResponder(view)
         view.selectAll(nil)
         needsDisplay = true
@@ -216,6 +240,10 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
             width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
         view.isHorizontallyResizable = true
         view.isVerticallyResizable = true
+        view.minSize = NSSize(width: 2, height: 2)
+        view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        view.isContinuousSpellCheckingEnabled = false
+        view.isAutomaticSpellingCorrectionEnabled = false
         view.isAutomaticQuoteSubstitutionEnabled = false
         view.isAutomaticDashSubstitutionEnabled = false
         view.isAutomaticTextReplacementEnabled = false
@@ -230,6 +258,7 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
     /// tool change). Returns true when a text view was up.
     @discardableResult func commitText() -> Bool {
         guard let view = textView, !view.isHidden else { return false }
+        view.unmarkText()  // an unfinished IME composition is committed as shown
         let string = view.string
         hideTextView()
         controller.commitText(string)
@@ -244,11 +273,33 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
         refresh()
     }
 
+    /// Focus returns to the canvas before the view hides: hiding the first responder would send it elsewhere and
+    /// the tool keys would stop working (final review C, I1).
     private func hideTextView() {
         guard let view = textView else { return }
+        if window?.firstResponder === view { window?.makeFirstResponder(self) }
         view.isHidden = true
         view.string = ""
-        if window?.firstResponder === view { window?.makeFirstResponder(self) }
+    }
+
+    // MARK: Undo (final review C, C1)
+
+    /// The canvas answers ⌘Z and ⇧⌘Z before `NSWindow`, which would otherwise take them with its own empty undo
+    /// manager. While typing, they undo the typing only (§5.4).
+    @objc func undo(_ sender: Any?) {
+        if isEditingText { textUndoManager.undo() } else { delegate?.canvasUndo() }
+    }
+
+    @objc func redo(_ sender: Any?) {
+        if isEditingText { textUndoManager.redo() } else { delegate?.canvasRedo() }
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(undo(_:)): isEditingText ? textUndoManager.canUndo : controller.canUndo
+        case #selector(redo(_:)): isEditingText ? textUndoManager.canRedo : controller.canRedo
+        default: true
+        }
     }
 
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -277,6 +328,12 @@ final class EditorCanvasView: NSView, NSTextViewDelegate {
 
     /// ⌘Z while typing undoes the typing, not the document (§5.4).
     func undoManager(for view: NSTextView) -> UndoManager? { textUndoManager }
+}
+
+/// Collects the blur results a base render drew without. Only touched inside one synchronous render on the main
+/// actor, so the unchecked conformance is safe.
+private final class MissedBlurs: @unchecked Sendable {
+    var keys: Set<BlurCache.Key> = []
 }
 
 /// Centres a document smaller than the viewport (`design/03` §1.6).
