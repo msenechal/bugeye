@@ -28,13 +28,16 @@ public enum StatusMenu {
     }
 }
 
-/// The Settings window's panes: the modules' sections, then the AI pane, which the shell owns because
-/// the key it holds serves every AI feature.
+/// The Settings window's panes: the modules' sections, then Shortcuts (Capture builds its view, C5), then the AI
+/// pane, which the shell owns because the key it holds serves every AI feature. The shell shows a pane only when it
+/// has a view for it.
 public enum SettingsLayout {
+    public static let shortcutsPane = SettingsSectionSpec(
+        id: "shortcuts", title: ShellStrings.shortcutsPane, order: 900)
     public static let aiPane = SettingsSectionSpec(id: "ai", title: ShellStrings.aiPane, order: 1000)
 
     public static func panes(for registry: FeatureRegistry) -> [SettingsSectionSpec] {
-        registry.settingsSections + [aiPane]
+        registry.settingsSections + [shortcutsPane, aiPane]
     }
 }
 
@@ -56,6 +59,7 @@ public enum ShellStrings {
     public static let settingsWindowTitle = "Bugeye Settings"
     public static let generalPane = "General"
     public static let aiPane = "AI"
+    public static let shortcutsPane = "Shortcuts"
     public static let saveCapturesTo = "Save captures to"
     public static let choose = "Choose…"
     public static let apiKeyField = "Anthropic API key"

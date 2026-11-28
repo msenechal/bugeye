@@ -67,3 +67,21 @@ public enum MainMenu {
         MainMenuItemSpec(id: "mainMenu.\(name)", title: title, key: key, group: group, order: order, action: action)
     }
 }
+
+extension MainMenu {
+    /// The shell's fixed items with module items placed by group and order. On a tie, the shell's entry comes first,
+    /// then module items in registration order (plan P8). Every group is present.
+    public static func entries(for registry: FeatureRegistry) -> [MainMenuGroup: [MainMenuEntry]] {
+        // (order, rank, entry): rank 0 = the shell's, 1… = module items in registry order.
+        var placed: [MainMenuGroup: [(order: Int, rank: Int, entry: MainMenuEntry)]] = [:]
+        for group in MainMenuGroup.allCases { placed[group] = [] }
+        for item in shellItems { placed[item.group]!.append((item.order, 0, .item(item))) }
+        for separator in shellSeparators { placed[separator.group]!.append((separator.order, 0, .separator)) }
+        for (index, item) in registry.mainMenuItems.enumerated() {
+            placed[item.group]!.append((item.order, index + 1, .item(item)))
+        }
+        return placed.mapValues { list in
+            list.sorted { ($0.order, $0.rank) < ($1.order, $1.rank) }.map(\.entry)
+        }
+    }
+}
