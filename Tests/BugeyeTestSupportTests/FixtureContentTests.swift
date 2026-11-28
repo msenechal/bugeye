@@ -1,3 +1,4 @@
+import BugeyeCore
 import BugeyeTestSupport
 import Testing
 
@@ -39,5 +40,17 @@ import Testing
             return total + (doubled > 9 ? doubled - 9 : doubled)
         }
         return values.count == 16 && sum % 10 == 0
+    }
+}
+
+/// What the Wave 1 Mac batches drive in the fixture app (contracts §4.6).
+@Suite struct FixtureWaveOneContentTests {
+    @Test func theNewControlsHaveTheirLabels() {
+        #expect(FixtureContent.passwordPlaceholder == "Password")
+        #expect(FixtureContent.playClickButton == "Play Click")
+        #expect(FixtureContent.windowMenu == "Window")
+        #expect(FixtureContent.smallWindowItem == "Small Window")
+        #expect(FixtureContent.smallWindowTitle == "Bugeye Fixture Small")
+        #expect(FixtureContent.smallWindowSize == Size2D(width: 400, height: 300))
     }
 }
