@@ -59,9 +59,31 @@ Each code task: write the tests, run `swift test --filter <Suite>` and see them 
 
 17. `RecordingGeometry` (output size, codec limits, even sizes, bitrate). 18. `OptionsBarPlacement`. 19. `WindowFollow`, `ChildWindowFilter`. 20. `BubbleLayout`, `BubbleChange`. 21. `KeystrokeFormatter.label`, `KeystrokeBadge`, `ClickRings` display lists (golden JSON). 22. `TakeRecovery`.
 
-### Slices 4–8 (macOS)
+### Slice 4 — `feat/wave1-recording-adapters` (macOS, PR #17)
 
-Described in P2; each gets its own task list in this file when it starts, from spec §8 and §9 item 2's macOS list.
+23. `AXPointReader` (point queries on a GCD queue, messaging timeout 250 ms, no value ever read, secure subrole) and `SystemMediaPermissions`; tests of the info rules, untrusted → nil, `unsupported`, status mapping, a real query returning.
+
+### Slice 5 — `feat/wave1-recording-recorder` (macOS, PR #22)
+
+24. `MovieWriter` with synthetic samples: pause cut, BT.709 tags, frames before `arm` discarded, non-advancing frames dropped, a failed writer's `finish` throwing, a pause before the first frame.
+25. `StreamRecorder`: filter, configuration, complete-frame filter, failure latch, follow timer and child windows (V10/V23), test entry points; tests through `attach` / `handle`.
+26. `MovieConverter` (two audio tracks → one AAC, video untouched, BT.709 kept, the deadline keeping the `.mov`), `FirstFrame`, `CaptureDevices`, `DiskSpace`.
+27. `InputTranslation` and `InputMonitor`; tests with synthesized `NSEvent`s.
+
+### Slice 6 — `feat/wave1-recording-controller` (PR #23)
+
+28. `RecordingDelivery` (portable, Linux): save or temp folder, Capture's notice, clipboard, timeline, badge, `created`; a refused temp folder keeps the take with its notice.
+29. `RecordingController` (macOS): executes every effect, owns recorders, timers, monitor and timeline; tests with fakes from toggle to delivery, the `.mov` fallback, quit, a cancelled selection, Stop's shown key.
+30. `RecordingWindows` (border, options bar, countdown, bubble, alerts) and the Recording pane; window-property tests.
+
+### Slice 7 — `feat/wave1-recording-overlay` (PR #24, after the Editor's #7)
+
+31. `RecordingOverlay` through `DisplayListExecutor`; tests of the area mapping, the show-all-keys rule, the lists and the window properties.
+
+### Slice 8 — `feat/wave1-recording-wiring` (PR #25, after Capture's and Quick Access's wiring)
+
+32. `RecordingWiring` (module, router entries, pane, quit participant, timeline store, crash recovery, `recording.state`); tests through `AppContext.testing`.
+33. `docs/checklists/wave-1-recording.md`; the PR's `CLAUDE.md changes` block; `needs-mac-check` once its predecessors are on `main`.
 
 ## Review Focus
 
