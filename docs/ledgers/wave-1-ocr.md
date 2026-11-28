@@ -23,6 +23,10 @@ Trust this file and `git log` over memory.
 | 15 | done | 8efe060 | |
 | 16 | done | 7438a05 | goldens generated with `BUGEYE_UPDATE_GOLDENS=1` and checked by eye |
 | 17 | done | (see rulings) | fresh final review of slice 2: 0 Critical, 2 Important, 8 Minor; all fixed in the fix pass |
+| 18 | done | 30b7c56 | branch `feat/wave1-ocr-store`, stacked on the reader branch |
+| 19 | done | 00bf617 | 27 tests, one or more per Q1–Q9; 25 repeated runs without a failure |
+| 20 | done | 8a03fdd | |
+| 21 | done | 0daf33a | slice 3 code complete |
 
 ## Rulings
 
@@ -42,6 +46,10 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 - Ruling (slice 2 review I2, Important; **deviates from spec §5.3.1**): a line that starts in a strip's top band and ends below it replaces only kept lines it overlaps **and is on the same line with** (§4.2's `sameLine`: vertical overlap ≥ half the smaller height). The spec's "every kept line it intersects" removed a neighbouring line that touched it by a few pixels, and that line's own copy in the band had already been dropped, so it vanished from the map. Vision boxes of tightly spaced text (terminals, code) often overlap by 1–3 px. Test failed first. (cost if wrong: low; a cut line that overlaps its own uncut copy by less than half its height would be kept twice.)
 - Ruling (slice 2 review M1–M8, Minor): all fixed: the band-drop and band-edge rules have a test that kills their mutants; the timeout is shown to be per strip; `enlarged2x` traps instead of returning the 1× buffer; the clock tests wait with a bound; the fingerprint test is named for the sub-microsecond step `Date` can hold; the traceback fixture's caret line is the real one (14 carets at column 11) and its goldens were regenerated. (cost if wrong: none.)
 - Ruling (PR #5 claude-review, Minor): `TextLayout.lines` indents nothing when the median character width is under 1 px (`TextLayout.minimumCharacterWidth`), instead of §4.6's "none if `charWidth ≤ 0`": a bad recogniser result could otherwise make tens of thousands of spaces per row. No real text is narrower than 1 image pixel per character. Test failed first. (cost if wrong: none.)
+- Ruling: the store's read runs in a `@concurrent` static function, so it leaves the actor explicitly (T9) rather than relying on the default for `nonisolated async`, which a later language-mode change (`NonisolatedNonsendingByDefault`) would flip. `LatestReading` does the same. (cost if wrong: none.)
+- Ruling: `saved` and `moved` for a capture that is only cached don't evict its map: a rename keeps the file's size and modification date, so the fingerprint still matches and the map is still right; `map(for:)` checks the fingerprint at the new URL anyway. `edited` for a capture the store has never seen is ignored, like the bus's own mirror (contracts plan P5). (cost if wrong: none.)
+- Ruling: the Q5b strip check (`checkURL`) has no public path that reaches it without an event having cancelled the read first (every URL change arrives through `handle`, on the same actor), so it is tested directly; likewise the `dropped <id>: gone` branch of Q6 is kept as a guard but can't be reached while `deleted` cancels the running read. (cost if wrong: none.)
+- Ruling: `TextServices` drains its stream in a detached task, and an `isolated deinit` cancels the subscription and the task. (cost if wrong: none.)
 
 ## Waiting on
 
