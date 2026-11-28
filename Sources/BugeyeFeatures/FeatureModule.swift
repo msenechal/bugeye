@@ -1,3 +1,5 @@
+import BugeyeCore
+
 /// A modifier key in a shortcut.
 public enum KeyModifier: String, Hashable, Sendable, CaseIterable, Comparable {
     case control, option, shift, command
@@ -57,23 +59,30 @@ public struct MenuItemSpec: Hashable, Sendable {
     /// Shown in the menu only; global hotkeys are registered from `HotkeySpec`.
     public var shownKey: KeyCombo?
     public var slot: MenuSlot
+    /// The menu shows this hotkey's current binding instead of `shownKey` (K13), e.g. "capture.area" (a
+    /// `HotkeySpec.id`, not its settings key, K33). No key is shown while that hotkey isn't registered (K34).
+    public var hotkeyID: String?
 
-    public init(id: String, title: String, shownKey: KeyCombo? = nil, slot: MenuSlot) {
+    public init(id: String, title: String, shownKey: KeyCombo? = nil, slot: MenuSlot, hotkeyID: String? = nil) {
         self.id = id
         self.title = title
         self.shownKey = shownKey
         self.slot = slot
+        self.hotkeyID = hotkeyID
     }
 }
 
 public struct HotkeySpec: Hashable, Sendable {
     public var id: String
+    /// The Shortcuts pane's row label (Capture C5), e.g. "Capture Area".
+    public var title: String
     public var defaultKey: KeyCombo
     /// The settings key the user's own binding is stored under.
     public var settingKey: String
 
-    public init(id: String, defaultKey: KeyCombo, settingKey: String) {
+    public init(id: String, title: String, defaultKey: KeyCombo, settingKey: String) {
         self.id = id
+        self.title = title
         self.defaultKey = defaultKey
         self.settingKey = settingKey
     }
@@ -92,15 +101,33 @@ public struct SettingsSectionSpec: Hashable, Sendable {
     }
 }
 
+public enum QuickAccessPlacement: String, Hashable, Sendable {
+    /// The yellow strip button; double-click runs it too. At most one per kind across all modules.
+    case primary
+    /// An item of the ⋯ menu, sorted by `order` (Quick Access Q13).
+    case menu
+    /// Replaces the selection host's strip with one yellow button "<title> (N)". At most one.
+    case selection
+}
+
 public struct QuickAccessActionSpec: Hashable, Sendable {
+    /// Unique across modules, e.g. "editor.edit".
     public var id: String
     public var title: String
     public var order: Int
+    public var placement: QuickAccessPlacement
+    /// The kinds it is offered for.
+    public var kinds: Set<CaptureKind>
 
-    public init(id: String, title: String, order: Int) {
+    public init(
+        id: String, title: String, order: Int, placement: QuickAccessPlacement = .menu,
+        kinds: Set<CaptureKind> = Set(CaptureKind.allCases)
+    ) {
         self.id = id
         self.title = title
         self.order = order
+        self.placement = placement
+        self.kinds = kinds
     }
 }
 
@@ -112,6 +139,8 @@ public protocol FeatureModule: Sendable {
     func hotkeys() -> [HotkeySpec]  // default keys, setting key
     func settingsSection() -> SettingsSectionSpec?
     func quickAccessActions() -> [QuickAccessActionSpec]
+    /// Items for the main menu shown while a document window is open (contracts §4.2.5).
+    func mainMenuItems() -> [MainMenuItemSpec]
 }
 
 extension FeatureModule {
@@ -119,4 +148,5 @@ extension FeatureModule {
     public func hotkeys() -> [HotkeySpec] { [] }
     public func settingsSection() -> SettingsSectionSpec? { nil }
     public func quickAccessActions() -> [QuickAccessActionSpec] { [] }
+    public func mainMenuItems() -> [MainMenuItemSpec] { [] }
 }

@@ -1,3 +1,5 @@
+import BugeyeCore
+
 /// Why a set of modules can't be registered together.
 public enum FeatureConflict: Hashable, Sendable {
     case duplicateModule(String)
@@ -8,6 +10,14 @@ public enum FeatureConflict: Hashable, Sendable {
     case settingKeyTaken(String, ids: [String])
     case duplicateSettingsSection(String)
     case duplicateQuickAccessAction(String)
+    /// Two `.primary` Quick Access actions are offered for the same kind.
+    case quickAccessPrimaryTaken(CaptureKind, ids: [String])
+    /// More than one `.selection` Quick Access action.
+    case quickAccessSelectionTaken(ids: [String])
+    /// A main-menu item id used twice, or reusing one of the shell's (plan P8).
+    case duplicateMainMenuItem(String)
+    /// A menu item names a hotkey no module declares.
+    case unknownHotkey(menuItem: String, hotkeyID: String)
 }
 
 public struct FeatureRegistryError: Error, Hashable, Sendable {
@@ -42,6 +52,17 @@ public struct FeatureRegistry: Sendable {
         modules.flatMap { $0.quickAccessActions() }.sorted { $0.order < $1.order }
     }
 
+    /// Every module main-menu item, sorted by group then order (registration order on a tie).
+    public var mainMenuItems: [MainMenuItemSpec] {
+        modules.flatMap { $0.mainMenuItems() }.enumerated()
+            .sorted {
+                ($0.element.group.rawValue, $0.element.order, $0.offset) < (
+                    $1.element.group.rawValue, $1.element.order, $1.offset
+                )
+            }
+            .map(\.element)
+    }
+
     /// Every conflict, in a stable order (the order modules and their specs were given).
     public static func conflicts(in modules: [any FeatureModule]) -> [FeatureConflict] {
         var conflicts: [FeatureConflict] = []
@@ -61,6 +82,22 @@ public struct FeatureRegistry: Sendable {
 
         let actions = modules.flatMap { $0.quickAccessActions() }
         conflicts += duplicates(actions.map(\.id)).map { .duplicateQuickAccessAction($0) }
+        for kind in CaptureKind.allCases {
+            let ids = actions.filter { $0.placement == .primary && $0.kinds.contains(kind) }.map(\.id)
+            if ids.count > 1 { conflicts.append(.quickAccessPrimaryTaken(kind, ids: ids)) }
+        }
+        let selections = actions.filter { $0.placement == .selection }.map(\.id)
+        if selections.count > 1 { conflicts.append(.quickAccessSelectionTaken(ids: selections)) }
+
+        let mainMenu = modules.flatMap { $0.mainMenuItems() }
+        conflicts += duplicates(MainMenu.shellItemIDs + mainMenu.map(\.id)).map { .duplicateMainMenuItem($0) }
+
+        let hotkeyIDs = Set(hotkeys.map(\.id))
+        for item in menu {
+            if let hotkeyID = item.hotkeyID, !hotkeyIDs.contains(hotkeyID) {
+                conflicts.append(.unknownHotkey(menuItem: item.id, hotkeyID: hotkeyID))
+            }
+        }
         return conflicts
     }
 

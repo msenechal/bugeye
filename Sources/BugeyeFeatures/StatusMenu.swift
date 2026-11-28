@@ -22,7 +22,7 @@ public enum StatusMenu {
         entries += [
             .item(id: settingsID, title: ShellStrings.settings, key: KeyCombo(",", [.command])),
             .separator,
-            .item(id: quitID, title: ShellStrings.quit, key: KeyCombo("q", [.command])),
+            .item(id: quitID, title: ShellStrings.quit, key: ShellStrings.quitKey),
         ]
         return entries
     }
@@ -61,6 +61,41 @@ public enum ShellStrings {
     public static let apiKeyField = "Anthropic API key"
     public static let saveKey = "Save"
     public static let testKey = "Test key"
+    public static let quitKey = KeyCombo("q", [.command])
+
+    // The main menu (contracts §4.2.5, from the Editor spec).
+    public static let appMenu = "Bugeye"
+    public static let fileMenu = "File"
+    public static let editMenu = "Edit"
+    public static let viewMenu = "View"
+    public static let menuSave = "Save"
+    public static let menuSaveAs = "Save As\u{2026}"
+    public static let menuClose = "Close"
+    public static let menuUndo = "Undo"
+    public static let menuRedo = "Redo"
+    public static let menuCut = "Cut"
+    public static let menuCopy = "Copy"
+    public static let menuPaste = "Paste"
+    public static let menuDelete = "Delete"
+    public static let menuSelectAll = "Select All"
+    public static let menuZoomIn = "Zoom In"
+    public static let menuZoomOut = "Zoom Out"
+    public static let menuActualSize = "Actual Size"
+    public static let menuZoomToFit = "Zoom to Fit"
+    public static let saveMenuKey = KeyCombo("s", [.command])
+    public static let saveAsMenuKey = KeyCombo("s", [.shift, .command])
+    public static let closeMenuKey = KeyCombo("w", [.command])
+    public static let undoMenuKey = KeyCombo("z", [.command])
+    public static let redoMenuKey = KeyCombo("z", [.shift, .command])
+    public static let cutMenuKey = KeyCombo("x", [.command])
+    public static let copyMenuKey = KeyCombo("c", [.command])
+    public static let pasteMenuKey = KeyCombo("v", [.command])
+    public static let selectAllMenuKey = KeyCombo("a", [.command])
+    public static let zoomInMenuKey = KeyCombo("=", [.command])
+    public static let zoomOutMenuKey = KeyCombo("-", [.command])
+    public static let actualSizeMenuKey = KeyCombo("1", [.command])
+    public static let zoomToFitMenuKey = KeyCombo("0", [.command])
+
     public static let aiPrivacyNote =
         "Bugeye only sends data to Claude for features you turn on. Each one is off until you enable it."
 }
