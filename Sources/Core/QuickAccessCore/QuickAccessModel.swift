@@ -22,7 +22,13 @@ public final class QuickAccessModel {
     public struct PendingSaveAs: Hashable, Sendable {
         public var item: CaptureItem
         public var preview: PixelBuffer?
+        /// The copy has started: a `deleted` of its source no longer cancels it (Q17, rule 11).
+        public var isCopying = false
     }
+
+    /// The Editor's module id (contracts §4.1.1's origins); its `created` copies get no thumbnail (Q19). Area cores
+    /// can't import EditorCore (Wave 0 P14), so the value is restated here.
+    public static let editorOrigin = "editor"
 
     public static let origin = QuickAccessModule.moduleID
 
@@ -185,7 +191,7 @@ public final class QuickAccessModel {
         case .edited:
             if saving[id] != nil { saving[id] = event.item }
         case .deleted:
-            pendingSaveAs[id] = nil
+            cancelSaveAsUnlessCopying(id)
             deleting[id] = nil  // someone else published it; a Delete finishing later publishes nothing more
             if saving.removeValue(forKey: id) != nil { savesOfDeleted.insert(id) }
         default:
@@ -193,7 +199,7 @@ public final class QuickAccessModel {
         }
 
         if event.change == .created {
-            guard event.origin != Self.origin, event.origin != "editor", !isShown(id) else { return }
+            guard event.origin != Self.origin, event.origin != Self.editorOrigin, !isShown(id) else { return }
             show(event, anchor: anchor ?? self.anchor, settings: settings ?? QuickAccessSettings(), now: now, &out)
             return
         }
@@ -313,7 +319,7 @@ public final class QuickAccessModel {
             renderAll(&out)
         }
         if keyPanel == id { returnFocus(&out) }
-        if reason == .deleted { pendingSaveAs[id] = nil }
+        if reason == .deleted { cancelSaveAsUnlessCopying(id) }
         out.append(.log("dismiss \(id) \(reason.rawValue)"))
         out.append(.fadeOut(id))
         fading.insert(id)
@@ -427,6 +433,7 @@ public final class QuickAccessModel {
             busy.remove(id)
             return
         }
+        pendingSaveAs[id]?.isCopying = true
         out.append(.runFileAction(id, .saveAs(pending.item, to: url, newID: makeID())))
     }
 
@@ -505,6 +512,11 @@ public final class QuickAccessModel {
     }
 
     /// `logged` replaces `body` in the log when the body names a folder: spec §7 logs file names only.
+    /// A `deleted` cancels a Save As… whose panel is open, not one whose copy is running (claude-review on #10).
+    private func cancelSaveAsUnlessCopying(_ id: CaptureID) {
+        if pendingSaveAs[id]?.isCopying != true { pendingSaveAs[id] = nil }
+    }
+
     private func fail(
         _ action: String, _ id: CaptureID, _ title: String, _ body: String, logged: String? = nil,
         _ out: inout [QuickAccessEffect]
