@@ -33,13 +33,21 @@ public struct DisplayListExecutor: Sendable {
         return scale > 0 ? scale : 1
     }
 
-    /// Draws `list` into `context`, whose current user space maps one unit to one list pixel. With
-    /// `contextIsFlipped` false (a bitmap context, y up) the executor flips once; with true (a flipped `NSView`'s
-    /// context, already y down) it draws as is. The context's graphics state is restored afterwards. Drawing stops
-    /// at a `popGroup` with no matching push; groups left open at the end are closed.
-    public func execute(_ list: DisplayList, in context: CGContext, contextIsFlipped: Bool = false) {
+    /// Draws `list` into `context`, whose current user space maps one unit to one list pixel with the list's
+    /// top-left at the user-space origin. With `contextIsFlipped` false (y up, e.g. a bitmap context) the executor
+    /// flips once about `list.size.height`, so the list must span the context's height; with true (a flipped
+    /// `NSView`'s context, already y down) it draws as is. The graphics state, text matrix and text position are
+    /// restored afterwards. Drawing stops at a `popGroup` with no matching push; groups left open at the end are
+    /// closed; a `clip` outside any group is ignored (`DisplayList.isBalanced` rejects it).
+    public func execute(_ list: DisplayList, in context: CGContext, contextIsFlipped: Bool) {
         context.saveGState()
-        defer { context.restoreGState() }
+        let textMatrix = context.textMatrix
+        let textPosition = context.textPosition
+        defer {
+            context.restoreGState()
+            context.textMatrix = textMatrix
+            context.textPosition = textPosition
+        }
         if !contextIsFlipped {
             context.translateBy(x: 0, y: CGFloat(list.size.height))
             context.scaleBy(x: 1, y: -1)
@@ -132,20 +140,24 @@ public struct DisplayListExecutor: Sendable {
     /// Renders `list` into a new RGBA8 premultiplied-last bitmap of `list.size` (rounded up) in `colorSpace`
     /// (nil or a non-RGB space: sRGB). Nil when the size is empty or the context can't be made.
     public func render(_ list: DisplayList, colorSpace: CGColorSpace? = nil) -> CGImage? {
+        let maximum = 1 << 16
+        guard list.size.width.isFinite, list.size.height.isFinite, list.size.width > 0, list.size.height > 0,
+            list.size.width <= Double(maximum), list.size.height <= Double(maximum)
+        else { return nil }
         let width = Int(list.size.width.rounded(.up))
         let height = Int(list.size.height.rounded(.up))
-        guard width > 0, height > 0 else { return nil }
-        let space =
-            colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
-        guard
-            let context = CGContext(
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        func makeContext(_ space: CGColorSpace) -> CGContext? {
+            CGContext(
                 data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
-        else { return nil }
+        }
+        let requested = colorSpace.flatMap { $0.model == .rgb && $0.supportsOutput ? $0 : nil }
+        guard let context = requested.flatMap(makeContext) ?? makeContext(sRGB) else { return nil }
         context.interpolationQuality = .high
         // A list smaller than the rounded-up bitmap still starts at its top-left.
         context.translateBy(x: 0, y: CGFloat(Double(height) - list.size.height))
-        execute(list, in: context)
+        execute(list, in: context, contextIsFlipped: false)
         return context.makeImage()
     }
 
