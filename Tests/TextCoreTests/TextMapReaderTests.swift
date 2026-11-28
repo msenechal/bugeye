@@ -293,3 +293,19 @@ final class Completion: Sendable {
         #expect(text.calls.isEmpty)
     }
 }
+
+/// Throws `CancellationError` for its own reasons, with its task not cancelled.
+struct SelfCancellingReader: TextReader {
+    func recognizeText(in image: PixelBuffer) async throws -> [OCRLine] { throw CancellationError() }
+}
+
+@Suite struct TextMapReaderSpuriousCancellationTests {
+    @Test func aRecogniserThatCancelsItselfIsARecognitionFailure() async throws {
+        // claude-review on #9: only a cancellation of the read itself is a cancellation.
+        let image = try PixelBuffer(width: 4, height: 4, fill: RGBA8(red: 0, green: 0, blue: 0))
+        await #expect(throws: TextMapError.recognitionFailed(String(describing: CancellationError()))) {
+            try await TextMapReader(reader: SelfCancellingReader(), files: FakeImageFileReader())
+                .read(.buffer(image), pixelsPerPoint: 2)
+        }
+    }
+}
