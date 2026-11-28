@@ -17,11 +17,23 @@ Trust this file and `git log` over memory.
 
 | Task | Status | Commit | CI / notes |
 |---|---|---|---|
-| 1 | done | (this commit) | |
+| 1 | done | 5d15cd0 | |
+| 2 | done | 71938f6 | |
+| 3 | done | 0394a15 | |
+| 4 | done | fab2308 | code written before the first red run; seen failing by moving the code aside, see ruling |
+| 5 | done | 886777e | |
+| 6 | done | d6b6db6 | |
+| 7 | done | 49f39d3 | `QuickAccessModule`'s two specs landed here because the builder tests use them |
+| 8 | done | fe9d77f | |
+| 9 | done | ae58b1d | |
 
 ## Rulings
 
 Plan rulings P1–P18 are in the plan. Every later deviation is recorded here as `Ruling: <what and why> (cost if wrong: …)`.
+
+- Ruling: Task 4's `DismissTimer` code was written before its tests were first run; the tests were then seen failing (compile failure) with the file moved aside, and passing with it back. (cost if wrong: none.)
+- Ruling: `QuickAccessFileResult.saved` carries the moved item and its `previousURL`, so the model publishes `saved` without recomputing the item; `QuickAccessFileActions.delete(_:using:)` is a static helper the controller calls with Trash (saved) or remove (temp), so "already gone counts as done" is tested on Linux although Trash is macOS-only. (cost if wrong: none.)
+- Ruling: the unwritable-folder branch of P14 (`isWritableFile` false) has no Linux test: tests run as root in the `linux` job, where every folder is writable. The folder-is-a-file branch, which takes the same notice, is tested. (cost if wrong: low.)
 
 ## Waiting on
 
