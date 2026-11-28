@@ -1,0 +1,527 @@
+{
+  "commands" : [
+    {
+      "fillLinearGradient" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 0,
+                  "y" : 0
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 392,
+                  "y" : 0
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 392,
+                  "y" : 342
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 0,
+                  "y" : 342
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        },
+        "end" : {
+          "x" : 392,
+          "y" : 342
+        },
+        "start" : {
+          "x" : 0,
+          "y" : 0
+        },
+        "stops" : [
+          {
+            "color" : {
+              "alpha" : 1,
+              "blue" : 0.75,
+              "green" : 0.8,
+              "red" : 0.2
+            },
+            "location" : 0
+          },
+          {
+            "color" : {
+              "alpha" : 1,
+              "blue" : 0.9,
+              "green" : 0.42,
+              "red" : 0.16
+            },
+            "location" : 1
+          }
+        ]
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "isolated" : true,
+          "opacity" : 1,
+          "shadow" : {
+            "blur" : 40,
+            "color" : {
+              "alpha" : 0.4,
+              "blue" : 0,
+              "green" : 0,
+              "red" : 0
+            },
+            "offset" : {
+              "x" : 0,
+              "y" : 12
+            }
+          }
+        }
+      }
+    },
+    {
+      "clip" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 120,
+                  "y" : 96
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 272,
+                  "y" : 96
+                }
+              }
+            },
+            {
+              "curve" : {
+                "control1" : {
+                  "x" : 285.2548339952,
+                  "y" : 96
+                },
+                "control2" : {
+                  "x" : 296,
+                  "y" : 106.7451660048
+                },
+                "to" : {
+                  "x" : 296,
+                  "y" : 120
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 296,
+                  "y" : 222
+                }
+              }
+            },
+            {
+              "curve" : {
+                "control1" : {
+                  "x" : 296,
+                  "y" : 235.2548339952
+                },
+                "control2" : {
+                  "x" : 285.2548339952,
+                  "y" : 246
+                },
+                "to" : {
+                  "x" : 272,
+                  "y" : 246
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 120,
+                  "y" : 246
+                }
+              }
+            },
+            {
+              "curve" : {
+                "control1" : {
+                  "x" : 106.7451660048,
+                  "y" : 246
+                },
+                "control2" : {
+                  "x" : 96,
+                  "y" : 235.2548339952
+                },
+                "to" : {
+                  "x" : 96,
+                  "y" : 222
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 96,
+                  "y" : 120
+                }
+              }
+            },
+            {
+              "curve" : {
+                "control1" : {
+                  "x" : 96,
+                  "y" : 106.7451660048
+                },
+                "control2" : {
+                  "x" : 106.7451660048,
+                  "y" : 96
+                },
+                "to" : {
+                  "x" : 120,
+                  "y" : 96
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "isolated" : false,
+          "opacity" : 1
+        }
+      }
+    },
+    {
+      "clip" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 96,
+                  "y" : 96
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 296,
+                  "y" : 96
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 296,
+                  "y" : 246
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 96,
+                  "y" : 246
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "image" : {
+        "imageID" : "capture",
+        "rect" : {
+          "origin" : {
+            "x" : 46,
+            "y" : 46
+          },
+          "size" : {
+            "height" : 300,
+            "width" : 400
+          }
+        }
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "bounds" : {
+            "origin" : {
+              "x" : 74,
+              "y" : 74
+            },
+            "size" : {
+              "height" : 124,
+              "width" : 154
+            }
+          },
+          "isolated" : true,
+          "opacity" : 1,
+          "shadow" : {
+            "blur" : 12,
+            "color" : {
+              "alpha" : 0.45,
+              "blue" : 0,
+              "green" : 0,
+              "red" : 0
+            },
+            "offset" : {
+              "x" : 0,
+              "y" : 4
+            }
+          }
+        }
+      }
+    },
+    {
+      "strokePath" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 106,
+                  "y" : 106
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 179.69181423097825,
+                  "y" : 155.1278761539855
+                }
+              }
+            }
+          ]
+        },
+        "cap" : "round",
+        "color" : {
+          "alpha" : 1,
+          "blue" : 0.19,
+          "green" : 0.23,
+          "red" : 1
+        },
+        "dash" : [
+
+        ],
+        "join" : "round",
+        "lineWidth" : 8
+      }
+    },
+    {
+      "fillPath" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 196,
+                  "y" : 166
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 165.71336928610248,
+                  "y" : 160.9522282143504
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 179.69181423097825,
+                  "y" : 139.98456079703678
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        },
+        "color" : {
+          "alpha" : 1,
+          "blue" : 0.19,
+          "green" : 0.23,
+          "red" : 1
+        }
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "bounds" : {
+            "origin" : {
+              "x" : 74,
+              "y" : 154
+            },
+            "size" : {
+              "height" : 64,
+              "width" : 184
+            }
+          },
+          "isolated" : true,
+          "opacity" : 0.4
+        }
+      }
+    },
+    {
+      "strokePath" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 106,
+                  "y" : 186
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 226,
+                  "y" : 186
+                }
+              }
+            }
+          ]
+        },
+        "cap" : "round",
+        "color" : {
+          "alpha" : 1,
+          "blue" : 0.19,
+          "green" : 0.23,
+          "red" : 1
+        },
+        "dash" : [
+
+        ],
+        "join" : "round",
+        "lineWidth" : 24
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    },
+    {
+      "pushGroup" : {
+        "_0" : {
+          "bounds" : {
+            "origin" : {
+              "x" : 84,
+              "y" : 84
+            },
+            "size" : {
+              "height" : 112,
+              "width" : 121.6
+            }
+          },
+          "isolated" : true,
+          "opacity" : 1,
+          "shadow" : {
+            "blur" : 12,
+            "color" : {
+              "alpha" : 0.45,
+              "blue" : 0,
+              "green" : 0,
+              "red" : 0
+            },
+            "offset" : {
+              "x" : 0,
+              "y" : 4
+            }
+          }
+        }
+      }
+    },
+    {
+      "textRun" : {
+        "_0" : "Hi",
+        "color" : {
+          "alpha" : 1,
+          "blue" : 0.19,
+          "green" : 0.23,
+          "red" : 1
+        },
+        "font" : {
+          "name" : "system",
+          "size" : 48,
+          "weight" : 0.4
+        },
+        "origin" : {
+          "x" : 116,
+          "y" : 154.4
+        }
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    }
+  ],
+  "size" : {
+    "height" : 342,
+    "width" : 392
+  }
+}

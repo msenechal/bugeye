@@ -1,0 +1,81 @@
+{
+  "commands" : [
+    {
+      "pushGroup" : {
+        "_0" : {
+          "isolated" : false,
+          "opacity" : 1
+        }
+      }
+    },
+    {
+      "clip" : {
+        "_0" : {
+          "elements" : [
+            {
+              "move" : {
+                "to" : {
+                  "x" : 0,
+                  "y" : 0
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 400,
+                  "y" : 0
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 400,
+                  "y" : 300
+                }
+              }
+            },
+            {
+              "line" : {
+                "to" : {
+                  "x" : 0,
+                  "y" : 300
+                }
+              }
+            },
+            {
+              "close" : {
+
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "image" : {
+        "imageID" : "capture",
+        "rect" : {
+          "origin" : {
+            "x" : 0,
+            "y" : 0
+          },
+          "size" : {
+            "height" : 300,
+            "width" : 400
+          }
+        }
+      }
+    },
+    {
+      "popGroup" : {
+
+      }
+    }
+  ],
+  "size" : {
+    "height" : 300,
+    "width" : 400
+  }
+}
