@@ -42,9 +42,11 @@ enum ShortcutKeyInput: Equatable {
     /// `charactersIgnoringModifiers` keeps ⇧: ⇧⌘4 arrives as "$". Keys without an ANSI letter or digit fall back to
     /// the characters, so the model can say they're invalid; a key with no character is ignored.
     static func from(keyCode: UInt16, characters: String?, flags: NSEvent.ModifierFlags) -> ShortcutKeyInput {
+        // Bare Esc and Delete only: with a modifier they're typed combos, which the model calls invalid.
+        let bare = flags.isDisjoint(with: [.command, .option, .control, .shift])
         switch keyCode {
-        case 53: return .escape
-        case 51, 117: return .delete
+        case 53 where bare: return .escape
+        case 51 where bare, 117 where bare: return .delete
         default: break
         }
         let key: String

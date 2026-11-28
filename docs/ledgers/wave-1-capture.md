@@ -81,6 +81,8 @@ Slice 4 (app layer), final review of PR #27 (fresh reviewer): 1 Critical, 3 Impo
 - Ruling (review I3, I4): crosshair and loupe show only on the overlay under the pointer and hide on `mouseExited`; the overlay view takes every click inside it (the crosshair lines and loupe never hit-test), so `acceptsFirstMouse` is the overlay's. Tests failed first. (cost if wrong: none.)
 - Ruling (review M5–M9): a held Space or Return doesn't repeat and stray keys don't beep; recording ends when the field resigns or the pane disappears, and `performKeyEquivalent` takes a combo only while the field is first responder; `ShortcutsPaneModel` sets (not chains) a weak `onChange`; a view draws only for the live session, so a leftover's `mouseEntered` guard holds; the view removes only its own tracking area. (cost if wrong: none.)
 
+- Ruling (claude-review on PR #27, Minor): only bare Esc and Delete cancel or clear while recording; with a modifier they're typed combos, which the model refuses as invalid. Carried in the next push, as the review rules ask. (cost if wrong: none.)
+
 Slice 5 (wiring), final review of PR #28 (fresh reviewer): 0 Critical, 2 Important, 6 Minor. Fix pass:
 
 - Ruling (review I1, Important): the same Shortcuts defect as slice 4's C1/I2; fixed there and merged here.
