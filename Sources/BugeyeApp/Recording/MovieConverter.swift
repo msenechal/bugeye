@@ -10,8 +10,11 @@ import Synchronization
 /// AAC 48 kHz stereo 160 kbit/s track. Both pumps run concurrently (pumping one after the other deadlocks the
 /// interleaving writer). A deadline, a failure or a refused start keeps the `.mov` and deletes the partial
 /// `.mp4`. Runs off the main actor.
+///
+/// The deadline is a hard limit: `convert` returns when it passes even if the job is stuck in AVFoundation
+/// (PR #22 review I6). The job is aborted and deletes its own `.mp4` whenever it actually ends.
 enum MovieConverter {
-    enum Outcome: Equatable {
+    enum Outcome: Equatable, Sendable {
         /// The `.mov` is deleted.
         case converted(URL)
         case keptMovie(reason: String)
@@ -21,17 +24,22 @@ enum MovieConverter {
         _ movie: URL, to output: URL, deadline: Duration, progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async -> Outcome {
         let job = Job(movie: movie, output: output, progress: progress)
-        let outcome = await withTaskGroup(of: Outcome?.self) { group in
-            group.addTask { await job.run() }
-            group.addTask {
+        let first = FirstResult()
+        let outcome = await withCheckedContinuation { (continuation: CheckedContinuation<Outcome, Never>) in
+            first.set(continuation)
+            let timer = Task {
                 try? await Task.sleep(for: deadline)
-                return Task.isCancelled ? nil : .keptMovie(reason: "timed out")
+                guard !Task.isCancelled, first.resume(.keptMovie(reason: "timed out")) else { return }
+                job.abort()
             }
-            var first: Outcome?
-            while first == nil, let next = await group.next() { first = next }
-            group.cancelAll()
-            if case .keptMovie = first { job.abort() }
-            return first ?? .keptMovie(reason: "no result")
+            Task {
+                let outcome = await job.run()
+                timer.cancel()
+                if !first.resume(outcome) {
+                    // The deadline won: whatever the job made is not delivered.
+                    try? FileManager.default.removeItem(at: output)
+                }
+            }
         }
         switch outcome {
         case .converted: try? FileManager.default.removeItem(at: movie)
@@ -40,7 +48,29 @@ enum MovieConverter {
         return outcome
     }
 
-    /// One conversion. Its AVFoundation objects are used from its own queues only.
+    /// Resumes the continuation once: the first of the job and the deadline wins.
+    private final class FirstResult: Sendable {
+        private let state = Mutex<(continuation: CheckedContinuation<Outcome, Never>?, done: Bool)>((nil, false))
+
+        func set(_ continuation: CheckedContinuation<Outcome, Never>) {
+            state.withLock { $0.continuation = continuation }
+        }
+
+        /// True when this call resumed it.
+        func resume(_ outcome: Outcome) -> Bool {
+            let continuation = state.withLock { state -> CheckedContinuation<Outcome, Never>? in
+                guard !state.done else { return nil }
+                state.done = true
+                defer { state.continuation = nil }
+                return state.continuation
+            }
+            continuation?.resume(returning: outcome)
+            return continuation != nil
+        }
+    }
+
+    /// One conversion. Its AVFoundation objects are used from its own queues only; `abort()` cancels them once
+    /// they are running.
     private final class Job: @unchecked Sendable {
         let movie: URL
         let output: URL
@@ -84,19 +114,11 @@ enum MovieConverter {
             let audioTracks = try await asset.loadTracks(withMediaType: .audio)
             let formatHint = try await videoTrack.load(.formatDescriptions).first
             let transform = try await videoTrack.load(.preferredTransform)
+            if isAborted { return .keptMovie(reason: "timed out") }
 
             try? FileManager.default.removeItem(at: output)
             let reader = try AVAssetReader(asset: asset)
             let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
-            let readerBox = UncheckedBox(reader)
-            let writerBox = UncheckedBox(writer)
-            let abortedEarly = state.withLock { state -> Bool in
-                guard !state.aborted else { return true }
-                state.reader = readerBox
-                state.writer = writerBox
-                return false
-            }
-            if abortedEarly { return .keptMovie(reason: "timed out") }
 
             let videoOut = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: nil)
             videoOut.alwaysCopiesSampleData = false
@@ -136,11 +158,36 @@ enum MovieConverter {
                 return .keptMovie(reason: writer.error?.localizedDescription ?? "couldn't write the MP4")
             }
             writer.startSession(atSourceTime: .zero)
+            // Registered only now: cancelling a writer before `add` or `startWriting` raises an Objective-C
+            // exception (review I6). An abort that came first cancels both here.
+            let readerBox = UncheckedBox(reader)
+            let writerBox = UncheckedBox(writer)
+            let abortedEarly = state.withLock { state -> Bool in
+                guard !state.aborted else { return true }
+                state.reader = readerBox
+                state.writer = writerBox
+                return false
+            }
+            if abortedEarly {
+                reader.cancelReading()
+                writer.cancelWriting()
+                return .keptMovie(reason: "timed out")
+            }
 
+            let percent = Mutex(-1)
             let progress = progress
-            async let videoDone: Void = Self.pump(
-                videoOut, into: videoIn, label: "video",
-                onTime: { time in if duration > 0 { progress(min(time / duration, 1)) } })
+            // Whole percents only: a fast conversion has thousands of samples a second (review M5).
+            let onTime: @Sendable (Double) -> Void = { time in
+                guard duration > 0 else { return }
+                let value = Int((min(time / duration, 1) * 100).rounded(.down))
+                let changed = percent.withLock { last -> Bool in
+                    guard value > last else { return false }
+                    last = value
+                    return true
+                }
+                if changed { progress(Double(value) / 100) }
+            }
+            async let videoDone: Void = Self.pump(videoOut, into: videoIn, label: "video", onTime: onTime)
             if let (mix, audioIn) = audioPair {
                 async let audioDone: Void = Self.pump(mix, into: audioIn, label: "audio", onTime: { _ in })
                 _ = await (videoDone, audioDone)
@@ -149,7 +196,7 @@ enum MovieConverter {
             }
 
             if reader.status == .failed || writer.status == .failed || isAborted {
-                writer.cancelWriting()
+                if writer.status == .writing { writer.cancelWriting() }
                 return .keptMovie(
                     reason: (reader.error ?? writer.error)?.localizedDescription ?? "the conversion stopped")
             }
