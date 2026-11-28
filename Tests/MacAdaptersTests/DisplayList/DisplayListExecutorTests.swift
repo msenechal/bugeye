@@ -195,7 +195,8 @@ import Testing
         context.scaleBy(x: 2, y: 2)
         #expect(DisplayListExecutor.deviceScale(of: context) == 2)
         DisplayListExecutor().execute(list, in: context)
-        let buffer = try #require(PixelBufferImages.pixelBuffer(try #require(context.makeImage())))
+        let image = try #require(context.makeImage())
+        let buffer = try #require(PixelBufferImages.pixelBuffer(image))
         // Scaled, the shadow covers list y 16…26 (device 32…52); unscaled it would stop at list y 23.
         #expect((buffer.pixel(x: 30, y: 49)?.alpha ?? 0) > 200)
         #expect(buffer.pixel(x: 30, y: 49)?.red == 0)
