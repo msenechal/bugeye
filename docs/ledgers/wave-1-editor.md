@@ -66,6 +66,12 @@ Plan rulings P1–P13 are in the plan. Every later deviation is recorded here as
 
   (cost if wrong: low.)
 
+- Ruling (claude-review on #14, two Minors): fixed, with tests that failed first.
+  - Every successful write publishes `edited`, even when a newer save is queued. A queued save that then writes nothing (it fails, or the gone alert is cancelled) used to leave Quick Access's preview stale. Only the latest save marks the document saved. This replaces plan P9's "one `edited` instead of two".
+  - Save As does nothing once its window closed while the panel or the render was in progress.
+
+  (cost if wrong: none; at most one extra `edited` event.)
+
 ## Waiting on
 
 - Capture's and Quick Access's wiring PRs, before slice D merges and before the manual pass (contracts §9).

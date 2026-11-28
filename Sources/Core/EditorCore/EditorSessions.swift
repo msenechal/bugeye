@@ -253,10 +253,10 @@ public final class EditorSessions {
         }
         let elapsed = start.duration(to: .now)
         environment.log(EditorLog.saved(session.name, milliseconds: Int((elapsed / .milliseconds(1)).rounded())))
-        // S6: a newer save was requested meanwhile; it marks and publishes for its own snapshot. A save that finishes
-        // after its window closed still publishes `edited`: the file changed (final review B, I2).
-        guard generation == session.saveGeneration else { return .saved }
-        if !session.isClosed { document.markSaved(snapshot) }
+        // Every successful write publishes `edited`, even after the window closed or when a newer save is queued:
+        // the file changed, and the newer save may write nothing (final review B, I2; claude-review on #14).
+        // Only the latest requested save marks the document saved (S6).
+        if generation == session.saveGeneration && !session.isClosed { document.markSaved(snapshot) }
         publish(.edited, session, preview: exported.preview)
         return .saved
     }
@@ -301,11 +301,12 @@ public final class EditorSessions {
     public func saveAs(_ id: CaptureID) async -> SaveOutcome {
         guard let session = sessions[id], let document = session.document, let host else { return .failed }
         host.commitPendingEdits(session)
-        guard let chosen = await host.chooseSaveAsURL(session) else { return .cancelled }
+        guard let chosen = await host.chooseSaveAsURL(session), !session.isClosed else { return .cancelled }
         // Onto its own file, Save As is a Save: it must keep the capture's ID (final review B, I1).
         if Self.samePath(chosen, session.item.fileURL) { return await save(id) }
         do {
             let exported = try await host.export(session, state: document.state)
+            guard !session.isClosed else { return .cancelled }
             try await write(
                 exported.png, to: chosen, attributesFrom: session.item.fileURL, identity: .new(CaptureID()),
                 requireExisting: false)

@@ -19,6 +19,7 @@ final class FakeEditorHost: EditorHost {
     var onExport: (() -> Void)?
     var blockExports = false
     var onAsk: ((String) -> Void)?
+    var onPanel: (() -> Void)?
     var blockLoads = false
     private var loadGate: CheckedContinuation<Void, Never>?
     var loadPending: Bool { loadGate != nil }
@@ -61,6 +62,7 @@ final class FakeEditorHost: EditorHost {
     }
     func chooseSaveAsURL(_ session: EditorSession) async -> URL? {
         log.append("panel")
+        onPanel?()
         return saveAsURLs.isEmpty ? nil : saveAsURLs.removeFirst()
     }
     func showSaveFailed(_ session: EditorSession, name: String, message: String) async {
@@ -332,7 +334,7 @@ final class SessionFixture {
         #expect(f.logLines.last?.hasPrefix("save failed Shot.png: ") == true)
     }
 
-    @Test func savesAreSerialisedAndOnlyTheLatestMarksAndPublishes() async throws {
+    @Test func savesAreSerialisedAndOnlyTheLatestMarks() async throws {
         let f = try SessionFixture()
         let session = await f.openAndEdit()
         f.host.blockExports = true
@@ -349,7 +351,7 @@ final class SessionFixture {
         #expect(await first.value == .saved)
         #expect(await second.value == .saved)
         #expect(f.contents(f.item.fileURL) == "png-2-2")
-        #expect(f.recorder.changes.filter { $0 == .edited }.count == editedBefore + 1)
+        #expect(f.recorder.changes.filter { $0 == .edited }.count == editedBefore + 2)
         #expect(session.document?.isDirty == false)
     }
 
@@ -605,5 +607,35 @@ extension SessionFixture {
         #expect(!f.host.log.contains { $0.hasPrefix("retitle") })
         #expect(f.sessions.session(f.id)?.item.fileURL.lastPathComponent == "Moved.png")
         #expect(f.host.log.last == "show Moved.png")
+    }
+
+    @Test func closingWhileTheSaveAsPanelIsUpWritesNothing() async throws {
+        let f = try SessionFixture()
+        _ = await f.openAndEdit()
+        let copy = f.dir.url.appendingPathComponent("Copy.png")
+        f.host.saveAsURLs = [copy]
+        f.host.onPanel = { [unowned f] in f.sessions.didClose(f.id) }
+        #expect(await f.sessions.saveAs(f.id) == .cancelled)
+        #expect(!FileManager.default.fileExists(atPath: copy.path))
+    }
+
+    @Test func aSupersededSaveStillPublishesEditedWhenTheNewerOneWritesNothing() async throws {
+        let f = try SessionFixture()
+        let session = await f.openAndEdit()
+        f.host.blockExports = true
+        f.host.onExport = { [unowned f] in if f.host.exportCount == 2 { f.host.exportError = FakeFailure() } }
+        let first = Task { await f.sessions.save(f.id) }
+        while f.host.pendingExports < 1 { await Task.yield() }
+        session.document!.apply { $0.annotations.append(Annotation(shape: .step(center: .zero))) }
+        let second = Task { await f.sessions.save(f.id) }
+        let edited = f.recorder.changes.filter { $0 == .edited }.count
+        f.host.releaseExport()
+        while f.host.pendingExports < 1 { await Task.yield() }
+        f.host.releaseExport()
+        #expect(await first.value == .saved)
+        #expect(await second.value == .failed)
+        #expect(f.contents(f.item.fileURL) == "png-1-1")
+        #expect(f.recorder.changes.filter { $0 == .edited }.count == edited + 1)
+        #expect(session.document?.isDirty == true)
     }
 }
