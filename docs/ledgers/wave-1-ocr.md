@@ -16,7 +16,12 @@ Trust this file and `git log` over memory.
 | 7 | done | 88585d7 | |
 | 8 | done | 89e4238 | see ruling |
 | 9 | done | ec94103 | slice 1 code complete; `make test-core lint guards ownership` green |
-| 10 | done | (see rulings) | fresh final review of slice 1: 0 Critical, 2 Important, 7 Minor; fix pass below |
+| 10 | done | (see rulings) | fresh final review of slice 1: 0 Critical, 2 Important, 7 Minor; fix pass below; PR #5 marked ready |
+| 11 | done | 7900a39 | branch `feat/wave1-ocr-reader`, stacked on PR #5 |
+| 12 | done | 0217667 | |
+| 13–14 | done | 872f26a | bilinear expectations computed independently (floating point, round half up) |
+| 15 | done | 8efe060 | |
+| 16 | done | 7438a05 | goldens generated with `BUGEYE_UPDATE_GOLDENS=1` and checked by eye |
 
 ## Rulings
 
@@ -28,6 +33,10 @@ Plan rulings P1–P14 are in the plan. Every later deviation is recorded here as
 
 - Ruling (slice 1 final review I1, I2, Important): both findings were untested spec rules, not bugs, so their new tests (2.5 → 3 spaces; indentation from the leftmost row, not the first) pass on the correct code. Each was seen failing against the mutant the review named (`.toNearestOrEven`; `rowMinX.first`) before being committed. (cost if wrong: none.)
 - Ruling (slice 1 final review M1, M3, M6, Minor): fixed in the fix pass because each was a line or two: unboxed slices are tested with the line off x = 0 (seen failing on the mutant); `summary` splits on any newline (`\r\n` is one `Character`) and its tab trimming is tested (seen failing first); `union` became an internal `Rect2D` method. The other Minor findings are under `Backlog:`. (cost if wrong: none.)
+- Ruling: `PixelResample.rows` throws `PixelBuffer.Error.emptySize` when no row is left, instead of silently returning something; `TextMapReader` only ever passes non-empty strips. (cost if wrong: none.)
+- Ruling: `TextMapReader` checks cancellation again **after** `beforeStrip`, not only before it, so a cancellation that arrives while the hook awaits (the store's URL check, Q5b) stops the read before decoding the strip. The test that found this failed first. (cost if wrong: none.)
+- Ruling: `TextMapError` is `CustomStringConvertible` with the log texts of plan P9 now (slice 2), since the reader throws it; its test was written with the code, not run red first. (cost if wrong: low; each assertion is a literal from P9.)
+- Ruling: the hand-made `french` fixture leaves its second word (`vu,`) unboxed, so the goldens cover a word Vision couldn't box; `label-fields` uses `user@example.com`, no personal data. (cost if wrong: none.)
 
 ## Waiting on
 
