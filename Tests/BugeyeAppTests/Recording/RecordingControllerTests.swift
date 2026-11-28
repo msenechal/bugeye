@@ -292,8 +292,10 @@ final class FakeSurfaces: RecordingSurfaces {
         // At go-live the border is where the window went, not where it was selected (review I2).
         #expect(rig.surfaces.borders.last == CGRect(x: 10, y: 982 - 320, width: 400, height: 300))
         #expect(rig.surfaces.calls.count > before)
-        rig.controller.send(.cancel(s1()))
+        // Stop ends the take (Cancel isn't an event while recording); the session's late moves change nothing.
+        rig.controller.toggle()
         await settle { rig.controller.flow.state == .idle }
+        #expect(rig.controller.flow.state == .idle)
         let after = rig.surfaces.calls.count
         recorder.callbacks.areaMoved(CGRect(x: 50, y: 50, width: 400, height: 300))
         #expect(rig.surfaces.calls.count == after)
