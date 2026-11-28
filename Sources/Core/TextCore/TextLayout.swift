@@ -38,7 +38,7 @@ public enum TextLayout {
     /// The first line, spaces trimmed, cut to 60 characters plus `…` when longer, then ` (N lines)` when the text
     /// has more than one line (`design/05` B2), e.g. `Traceback (most recent call last): (12 lines)`.
     public static func summary(_ text: String) -> String {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
         var first = Substring(lines.first ?? "")
         while let c = first.first, c == " " || c == "\t" { first.removeFirst() }
         while let c = first.last, c == " " || c == "\t" { first.removeLast() }

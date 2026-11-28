@@ -70,6 +70,11 @@ import Testing
         #expect(TextLayout.summary("  Save  ") == "Save")
     }
 
+    @Test func summaryTrimsTabsAndCountsAnyNewline() {
+        #expect(TextLayout.summary("\tSave\t") == "Save")
+        #expect(TextLayout.summary("a\r\nb") == "a (2 lines)")
+    }
+
     @Test func summaryCutsAtSixtyCharactersWithAnEllipsis() {
         let long = String(repeating: "a", count: 61)
         #expect(TextLayout.summary(long) == String(repeating: "a", count: 60) + "…")

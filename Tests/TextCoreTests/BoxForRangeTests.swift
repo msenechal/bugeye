@@ -45,6 +45,11 @@ import Testing
         #expect(line.box(for: 0..<5) == rect(0, 0, 50, 20))
     }
 
+    @Test func unboxedCharactersAreSlicedFromTheLinesOwnLeftEdge() {
+        let line = textLine(ocr("go go", rect(100, 0, 50, 20), words: [word(3..<5, rect(130, 0, 20, 20))]))
+        #expect(line.box(for: 0..<2) == rect(100, 0, 20, 20))
+    }
+
     @Test func outOfRangeRangesAreClamped() {
         let line = textLine(boxedLine("abc", x: 0, y: 0))
         #expect(line.box(for: 1..<99) == rect(10, 0, 20, 20))
