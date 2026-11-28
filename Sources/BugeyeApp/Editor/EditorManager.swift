@@ -82,13 +82,20 @@ final class EditorManager: EditorHost {
 
     let sessions: EditorSessions
     let prompts: any EditorPrompts
+    /// Brings Bugeye to the front (`NSApp.activate()`). Tests pass a recorder: activating the test runner stalls
+    /// its main thread on hosted CI (macos run 46124668545).
+    let activate: @MainActor () -> Void
     private(set) var windows: [CaptureID: EditorWindowController] = [:]
     private var captures: [CaptureID: CGImage] = [:]
     private var blurCaches: [CaptureID: BlurCache] = [:]
 
-    init(environment: EditorEnvironment, prompts: any EditorPrompts = SheetPrompts()) {
+    init(
+        environment: EditorEnvironment, prompts: any EditorPrompts = SheetPrompts(),
+        activate: @escaping @MainActor () -> Void = { NSApp.activate() }
+    ) {
         sessions = EditorSessions(environment: environment)
         self.prompts = prompts
+        self.activate = activate
         sessions.host = self
     }
 

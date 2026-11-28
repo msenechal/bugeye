@@ -105,7 +105,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
     /// Activates Bugeye too: from the second editor on, `DocumentWindows` doesn't, and Quick Access's panel
     /// doesn't activate the app (final review C, I2). Lays out first so Zoom to Fit sees the real viewport.
     func show() {
-        NSApp.activate()
+        manager?.activate()
         window.makeKeyAndOrderFront(nil)
         window.layoutIfNeeded()
         window.makeFirstResponder(canvas)
@@ -113,7 +113,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, NSMenuItemValida
     }
 
     func bringForward() {
-        NSApp.activate()
+        manager?.activate()
         window.makeKeyAndOrderFront(nil)
     }
 

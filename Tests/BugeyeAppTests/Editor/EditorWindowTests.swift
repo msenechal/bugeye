@@ -43,6 +43,7 @@ final class EditorAppFixture {
     let clipboard = FakeClipboard()
     let notifier = FakeNotifier()
     var policies: [ActivationPolicy] = []
+    var activations = 0
     var documentWindows: DocumentWindows!
     var manager: EditorManager!
 
@@ -56,7 +57,7 @@ final class EditorAppFixture {
                 bus: bus, documentWindows: documentWindows, writer: CaptureFileWriter(metadata: metadata),
                 clipboard: clipboard, notifier: notifier, saveFolder: { folder },
                 dragFolder: dir.url.appendingPathComponent("Bugeye-Drag", isDirectory: true)),
-            prompts: prompts)
+            prompts: prompts, activate: { [unowned self] in self.activations += 1 })
     }
 
     /// A 40 × 30 PNG with an ID and a provenance attribute, announced on the bus.
@@ -107,6 +108,10 @@ final class EditorAppFixture {
         #expect(editor.window.contentMinSize == NSSize(width: 640, height: 420))
         #expect(editor.controller.tool == .arrow)
         #expect(f.policies == [.regular])
+        #expect(f.activations == 1)
+        _ = try await f.open(try f.makeCapture("Second.png"))
+        #expect(f.activations == 2)  // every editor activates Bugeye, not only the first (final review C, I2)
+        f.manager.windows.values.filter { $0 !== editor }.forEach { $0.window.close() }
         editor.window.close()
         #expect(f.policies == [.regular, .accessory])
         #expect(f.manager.windows.isEmpty)
