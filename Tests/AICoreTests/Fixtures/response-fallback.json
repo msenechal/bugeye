@@ -1,0 +1,14 @@
+{
+  "id": "msg_01FallbackExample",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-8",
+  "content": [
+    {"type": "fallback", "from": {"model": "claude-opus-5-5"}, "to": {"model": "claude-opus-4-8"}},
+    {"type": "text", "text": "Here is the caption."}
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "stop_details": null,
+  "usage": {"input_tokens": 30, "output_tokens": 9}
+}

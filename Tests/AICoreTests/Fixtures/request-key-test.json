@@ -1,0 +1,19 @@
+{
+  "fallbacks": "default",
+  "max_tokens": 32,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Reply with OK.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-opus-5-5",
+  "output_config": {
+    "effort": "low"
+  }
+}
